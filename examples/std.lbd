@@ -1,0 +1,17 @@
+-- booleans and conditions
+true: Bool = \x: Any. \y: Any. x
+false: Bool = \x: Any. \y: Any. y
+
+ifthen: Any = \condition: Any.
+    \then_clause: Any. \else_clause: Any.
+    (condition then_clause else_clause)
+
+-- pairs
+pair: Any = \x: Any. \y: Any. \fn: Any. (fn x y)
+
+first: Any = \x: Any. \y: Any. x
+second: Any = \x: Any. \y: Any. y
+
+-- misc
+float_eq: Float -> Float -> Bool = \x: Float. \y: Float.
+    (ifzero (cmp x y) true false)

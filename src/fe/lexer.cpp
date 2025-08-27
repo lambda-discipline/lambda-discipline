@@ -1,0 +1,158 @@
+#include <fstream>
+#include <lbd/fe/lexer.h>
+#include <sstream>
+
+namespace fe::lexer {
+    char Lexer::peek() const {
+        return pos < source.size() ? source[pos] : '\0';
+    }
+
+    char Lexer::get() {
+        const char c = peek();
+        if (c != '\0') {
+            ++pos;
+            if (c == '\n') {
+                ++row;
+                col = 1;
+            } else {
+                ++col;
+            }
+        }
+        return c;
+    }
+
+    bool Lexer::is_eof() const {
+        return pos >= source.size();
+    }
+
+    loc::Loc Lexer::get_cur_loc() const {
+        return {row, col, filepath};
+    }
+
+    Lexer::Lexer(const std::string &filepath) : filepath(filepath) {
+        std::ifstream ifs(filepath);
+        if (!ifs) {
+            std::cerr << "error: could not open file "
+                    << filepath
+                    << std::endl;
+            exit(EXIT_FAILURE);
+        }
+        std::ostringstream ss;
+        ss << ifs.rdbuf();
+        source = ss.str();
+    }
+
+    token::Token Lexer::next_token() {
+        char c = peek();
+        // Skip whitespace
+        while (std::isspace(c)) {
+            get(); // Consume ' '
+            c = peek();
+        }
+        const loc::Loc cur_loc = get_cur_loc();
+        if (is_eof()) {
+            return {token::Eof(), cur_loc};
+        }
+        // Identifiers [a-zA-Z_][a-zA-Z0-9_]*
+        if (std::isalpha(c) || c == '_') {
+            const size_t start = pos;
+            while (std::isalnum(c) || c == '_') {
+                get();
+                c = peek();
+            }
+            const std::string value = source.substr(start, pos - start);
+            return {token::Iden{value}, cur_loc};
+        }
+        // Float
+        if (std::isdigit(c)) {
+            const size_t start = pos;
+            while (std::isdigit(c)) {
+                get();
+                c = peek();
+            }
+            if (c == '.') {
+                get(); // Consume '.'
+                c = peek();
+                while (std::isdigit(c)) {
+                    get();
+                    c = peek();
+                }
+            }
+            const double value = std::stod(source.substr(start, pos - start));
+            return {token::Float{value}, cur_loc};
+        }
+        // String Literal: " ... "
+        if (c == '"') {
+            get(); // Consume '"'
+            const size_t start = pos;
+            c = peek();
+            while (c != '"' && !is_eof()) {
+                get();
+                c = peek();
+            }
+            const std::string value = source.substr(start, pos - start);
+            if (c != '"') {
+                std::cerr << cur_loc << ": syntax error: unbalanced quote"
+                        << std::endl;
+                std::exit(EXIT_FAILURE);
+            }
+            get(); // Consume '"'
+            return {token::String{value}, cur_loc};
+        }
+        // Symbols
+        switch (c) {
+            case ':':
+                get();
+                return {token::Colon{}, cur_loc};
+            case '=':
+                get();
+                return {token::Equal{}, cur_loc};
+            case '\\':
+                get();
+                return {token::BackwardSlash{}, cur_loc};
+            case '.':
+                get();
+                return {token::Dot{}, cur_loc};
+            case '(':
+                get();
+                return {token::OpenParen{}, cur_loc};
+            case ')':
+                get();
+                return {token::CloseParen{}, cur_loc};
+            case '-':
+                get();
+                c = peek();
+                if (c == '>') {
+                    get();
+                    return {token::Arrow{}, cur_loc};
+                }
+                if (c == '-') {
+                    // Comment
+                    while (c != '\n' && !is_eof()) {
+                        c = get();
+                    }
+                    // After skipping comment, return the next token
+                    return next_token();
+                }
+                break;
+            default:
+                break;
+        }
+        std::cerr << cur_loc << ": syntax error: unexpected character "
+                << c
+                << std::endl;
+        std::exit(EXIT_FAILURE);
+    }
+
+    std::vector<token::Token> Lexer::lex_all() {
+        std::vector<token::Token> tokens;
+        while (true) {
+            token::Token tok = next_token();
+            tokens.push_back(tok);
+            if (std::holds_alternative<token::Eof>(tok.typ)) {
+                break;
+            }
+        }
+        return tokens;
+    }
+}
