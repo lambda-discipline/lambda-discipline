@@ -6,6 +6,12 @@
 #include <vector>
 
 namespace fe::lexer {
+    struct FromFile {
+    };
+
+    struct FromRepl {
+    };
+
     struct Lexer {
         std::string source;
         size_t pos = 0;
@@ -13,7 +19,9 @@ namespace fe::lexer {
         size_t col = 1;
         std::string filepath;
 
-        explicit Lexer(const std::string &filepath);
+        explicit Lexer(const std::string &filepath, FromFile);
+
+        explicit Lexer(const std::string &str, FromRepl);
 
         token::Token next_token();
 

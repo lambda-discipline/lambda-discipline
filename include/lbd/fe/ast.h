@@ -1,6 +1,5 @@
 #pragma once
 
-#include <iostream>
 #include <lbd/fe/loc.h>
 #include <lbd/intp/types.h>
 #include <string>
@@ -36,6 +35,8 @@ namespace fe::ast {
         intp::types::Type arg_type;
         std::unique_ptr<Expression> expr;
         loc::Loc loc;
+        /// Maybe, this is redundant
+        /// TODO: Remove after checking
         intp::types::CompoundType lmd_expr_type; // Lambda Expression Type
 
         void print(std::ostream &os, size_t indent) const;

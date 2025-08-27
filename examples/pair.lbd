@@ -1,0 +1,9 @@
+pair: Any = \x: Any. \y: Any. \fn: Any. (fn x y)
+
+first: Any = \x: Any. \y: Any. x
+second: Any = \x: Any. \y: Any. y
+
+p1: Any = (pair 1.0 2.0)
+
+(print (p1 first))
+(print (p1 second))

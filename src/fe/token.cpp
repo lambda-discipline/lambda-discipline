@@ -52,7 +52,7 @@ namespace fe::token {
         } else if constexpr (std::is_same_v<T, Eof>) {
             return {"EOF"};
         } else {
-            STATIC_ASSERT_UNREACHABLE_T(T, "Unhandled type!");
+            STATIC_ASSERT_UNREACHABLE_T(T, "unhandled token");
             return {"UNKNOWN_TOKEN"}; // Unreachable
         }
     }

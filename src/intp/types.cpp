@@ -13,7 +13,7 @@ namespace intp::types {
             case PrimitiveType::Type::Any:
                 return os << "Any";
             default:
-                UNREACHABLE("Unhandled Type!");
+                UNREACHABLE("unhandled type");
         }
     }
 
@@ -29,7 +29,7 @@ namespace intp::types {
             } else if constexpr (std::is_same_v<T, std::shared_ptr<CompoundType> >) {
                 os << *arg;
             } else {
-                STATIC_ASSERT_UNREACHABLE_T(T, "Unhandled Type!");
+                STATIC_ASSERT_UNREACHABLE_T(T, "unhandled type");
             }
         }, typ);
         return os;

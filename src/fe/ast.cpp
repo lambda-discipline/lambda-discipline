@@ -1,6 +1,8 @@
 #include <lbd/error.h>
 #include <lbd/fe/ast.h>
 
+#include "lbd/string_escape.h"
+
 namespace fe::ast {
     static void print_indent(std::ostream &os, const size_t indent) {
         for (size_t i = 0; i < indent; ++i) {
@@ -12,8 +14,8 @@ namespace fe::ast {
         return os << node.value;
     }
 
-    std::ostream &operator<<(std::ostream &os, const StringAstNode &node) {
-        return os << "\"" << node.value << "\"";
+    std::ostream &operator<<(std::ostream &os, const StringAstNode &node) {\
+        return os << "\"" << escape(node.value) << "\"";
     }
 
     std::ostream &operator<<(std::ostream &os, const FloatAstNode &node) {
@@ -63,14 +65,15 @@ namespace fe::ast {
     void Expression::print(std::ostream &os, size_t indent) const {
         std::visit([&]<typename T0>(T0 &&arg) {
             using T = std::decay_t<T0>;
-            if constexpr (std::is_same_v<T, IdenAstNode> || std::is_same_v<T, StringAstNode> || std::is_same_v<T,
-                              FloatAstNode>) {
+            if constexpr (std::is_same_v<T, IdenAstNode>
+                          || std::is_same_v<T, StringAstNode>
+                          || std::is_same_v<T, FloatAstNode>) {
                 print_indent(os, indent);
                 os << arg;
             } else if constexpr (std::is_same_v<T, LambdaExpression> || std::is_same_v<T, FunctionApplication>) {
                 arg.print(os, indent);
             } else {
-                STATIC_ASSERT_UNREACHABLE_T(T, "Unhandled Type!");
+                STATIC_ASSERT_UNREACHABLE_T(T, "unhandled expression");
             }
         }, value);
     }

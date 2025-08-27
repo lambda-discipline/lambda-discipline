@@ -1,5 +1,6 @@
 #include <lbd/fe/loc.h>
 #include <lbd/fe/parser.h>
+#include <lbd/string_escape.h>
 
 namespace fe::parser {
     Parser::Parser(const std::vector<token::Token> &tokens) {
@@ -82,7 +83,7 @@ namespace fe::parser {
             }
             if (std::is_same_v<T, token::String>) {
                 ++i;
-                const auto value = std::get<token::String>(tok.typ).value;
+                const auto value = unescape_string(std::get<token::String>(tok.typ).value);
                 return ast::Expression(ast::StringAstNode{value, loc});
             }
             if (std::is_same_v<T, token::Float>) {

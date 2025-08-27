@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 4.0)
-project(lambda_discipline)
+project(lambda-discipline)
 
 set(CMAKE_CXX_STANDARD 20)
 
@@ -17,10 +17,17 @@ add_library(fe STATIC
 
 add_library(intp STATIC
     ${CMAKE_SOURCE_DIR}/src/intp/types.cpp
+    ${CMAKE_SOURCE_DIR}/src/intp/interpreter.cpp
+    ${CMAKE_SOURCE_DIR}/src/intp/builtins.cpp
 )
 
-add_executable(lambda_discipline ${CMAKE_SOURCE_DIR}/src/main.cpp)
-target_link_libraries(lambda_discipline PRIVATE fe intp)
+add_executable(lbd
+    ${CMAKE_SOURCE_DIR}/src/main.cpp
+    ${CMAKE_SOURCE_DIR}/src/cmd.cpp
+    ${CMAKE_SOURCE_DIR}/src/repl.cpp
+)
+
+target_link_libraries(lbd PRIVATE fe intp)
 
 # TODO: Add build tests
 # EXAMPLE: add_executable(lexer_test ../tests/lexer_test.cc)

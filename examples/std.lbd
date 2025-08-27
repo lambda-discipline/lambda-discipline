@@ -1,8 +1,10 @@
+-- TODO: Support for `use`
+
 -- booleans and conditions
 true: Bool = \x: Any. \y: Any. x
 false: Bool = \x: Any. \y: Any. y
 
-ifthen: Any = \condition: Any.
+if_then: Any = \condition: Any.
     \then_clause: Any. \else_clause: Any.
     (condition then_clause else_clause)
 
@@ -14,4 +16,4 @@ second: Any = \x: Any. \y: Any. y
 
 -- misc
 float_eq: Float -> Float -> Bool = \x: Float. \y: Float.
-    (ifzero (cmp x y) true false)
+    (if_zero (cmp x y) true false)

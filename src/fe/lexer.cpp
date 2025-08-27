@@ -29,7 +29,7 @@ namespace fe::lexer {
         return {row, col, filepath};
     }
 
-    Lexer::Lexer(const std::string &filepath) : filepath(filepath) {
+    Lexer::Lexer(const std::string &filepath, FromFile) : filepath(filepath) {
         std::ifstream ifs(filepath);
         if (!ifs) {
             std::cerr << "error: could not open file "
@@ -40,6 +40,9 @@ namespace fe::lexer {
         std::ostringstream ss;
         ss << ifs.rdbuf();
         source = ss.str();
+    }
+
+    Lexer::Lexer(const std::string &str, FromRepl) : source(str) {
     }
 
     token::Token Lexer::next_token() {
@@ -64,6 +67,7 @@ namespace fe::lexer {
             return {token::Iden{value}, cur_loc};
         }
         // Float
+        // TODO: Negative numbers
         if (std::isdigit(c)) {
             const size_t start = pos;
             while (std::isdigit(c)) {
