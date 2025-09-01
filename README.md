@@ -1,24 +1,47 @@
 ## Getting Started
 
+### Prerequisites
+
+- **CMake** (version 3.16+ recommended)
+- **Python 3.8+** (for development environment and tooling)
+- A C++17 capable compiler (e.g. `g++`, `clang++`, or MSVC on Windows)
+
+### Setup
+
+#### GNU/Linux
+
 ```bash
-mkdir build
-cd build
-cmake ..
-make
+bash ./scripts/setup.sh
 ```
+
+#### Windows (PowerShell)
+
+```powershell
+. .\scripts\setup.ps1
+```
+
+---
 
 ## Usage
 
-```bash
-usage: lbd [options]
+After building, you can run the interpreter with:
 
-options:
+```bash
+lbd [options]
+```
+
+### Options
+
+```
 -f, --file <filename>   Specify input source file to run
 -h, --help              Show this help message and exit
 -d, --debug             Enable debug mode
--r, --repl              Run in interactive REPL node
+-r, --repl              Run in interactive REPL mode
 ```
 
-> TODO: Add build instructions for Windows as well.
+---
 
-> TODO: Add small script to print all TODOs and there Loc.
+### TODO
+
+- TODO: Add build instructions for Windows (MSVC toolchain).
+- TODO: Provide better examples (e.g., Advent of Code snippets).
