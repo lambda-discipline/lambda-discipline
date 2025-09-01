@@ -33,7 +33,7 @@ lbd [options]
 ### Options
 
 ```
--f, --file <filename>   Specify input source file to run
+-f, --file <filepath>   Specify input source filepath to run
 -h, --help              Show this help message and exit
 -d, --debug             Enable debug mode
 -r, --repl              Run in interactive REPL mode

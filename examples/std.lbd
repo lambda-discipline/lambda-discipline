@@ -1,5 +1,3 @@
--- TODO: Support for `use`
-
 -- booleans and conditions
 true: Bool = \x: Any. \y: Any. x
 false: Bool = \x: Any. \y: Any. y

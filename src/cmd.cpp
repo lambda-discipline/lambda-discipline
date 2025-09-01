@@ -4,7 +4,7 @@ namespace cmd {
     void print_help(std::ostream &os, const std::string &program_name) {
         os << "usage: " << program_name << " [options]\n\n"
                 << "options:\n"
-                << "  -f, --file <filename>   Specify input source file to run\n"
+                << "  -f, --file <filepath>   Specify input source filepath to run\n"
                 << "  -h, --help              Show this help message and exit\n"
                 << "  -d, --debug             Enable debug mode\n"
                 << "  -r, --repl              Run in interactive REPL node" << std::endl;

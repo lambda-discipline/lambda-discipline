@@ -1,14 +1,27 @@
 #include <lbd/intp/interpreter.h>
 #include <lbd/intp/builtins.h>
 #include <lbd/error.h>
+#include <sstream>
 
 namespace intp::interp {
+    [[nodiscard]] std::string Closure::to_string() const {
+        std::ostringstream oss;
+        oss << "<closure: " << param << ">";
+        return oss.str();
+    }
+
     std::ostream &operator<<(std::ostream &os, const Closure &closure) {
-        return os << "<closure: " << closure.param << ">";
+        return os << closure.to_string();
+    }
+
+    [[nodiscard]] std::string NativeFunction::to_string() const {
+        std::ostringstream oss;
+        oss << "<native_fn: " << name << " " << arity << ">";
+        return oss.str();
     }
 
     std::ostream &operator<<(std::ostream &os, const NativeFunction &native_fn) {
-        return os << "<native_fn: " << native_fn.name << " " << native_fn.arity << ">";
+        return os << native_fn.to_string();
     }
 
     static std::ostream &print_loc_prefix(std::ostream &os, const std::optional<fe::loc::Loc> &loc) {
@@ -16,6 +29,22 @@ namespace intp::interp {
             return os << loc.value() << ": ";
         }
         return os;
+    }
+
+    std::string val_to_string(const Value &value) {
+        return std::visit([&]<typename T0>(T0 &&arg) {
+            using T = std::decay_t<T0>;
+            if constexpr (std::is_same_v<T, double>) {
+                return std::to_string(arg);
+            } else if constexpr (std::is_same_v<T, std::string>) {
+                return arg;
+            } else if constexpr (std::is_same_v<T, Closure> ||
+                                 std::is_same_v<T, NativeFunction>) {
+                return arg.to_string();
+            } else {
+                STATIC_ASSERT_UNREACHABLE_T(T, "unhandled runtime value");
+            }
+        }, value);
     }
 
     std::ostream &operator<<(std::ostream &os, const Value &value) {
@@ -91,29 +120,29 @@ namespace intp::interp {
         table[name] = std::move(thunk);
     }
 
-    void Env::dump(std::ostream &os, const bool force) const {
+    std::vector<std::vector<std::string> > Env::to_vector(const bool force) const {
+        std::vector<std::vector<std::string> > vec;
+        vec.reserve(table.size());
         for (const auto &[name, thunk]: table) {
-            os << "  " << name << " = ";
+            std::string val_str = "<thunk: unevaluated>";
             try {
                 if (force) {
                     const Value &val = thunk->force();
-                    os << val;
-                } else {
-                    if (thunk->cached) {
-                        os << *(thunk->cached); // already computed
-                    } else {
-                        os << "<thunk: unevaluated>";
-                    }
+                    val_str = val_to_string(val);
+                } else if (thunk->cached) {
+                    val_str = val_to_string(*thunk->cached); // already computed
                 }
-            } catch (const std::exception &ex) {
-                os << "<thunk: unevaluated>";
+            } catch (const std::exception &) {
+                val_str = "<thunk: error>";
             }
-            os << std::endl;
+            vec.push_back({name, val_str});
         }
         if (parent) {
-            os << "info: parent environment" << std::endl;
-            parent->dump(os, force);
+            auto parent_vec = parent->to_vector(force);
+            vec.insert(vec.end(), std::make_move_iterator(parent_vec.begin()),
+                       std::make_move_iterator(parent_vec.end()));
         }
+        return vec;
     }
 
     static Value eval_iden_ast_node(const fe::ast::IdenAstNode &iden_ast_node, const std::shared_ptr<Env> &env) {

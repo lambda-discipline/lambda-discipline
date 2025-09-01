@@ -1,17 +1,3 @@
--- Define Pi as constant
-pi: Float = 3.14
+use "examples/std.lbd"
 
--- Define function to calculate square
-square: Float -> Float = \x: Float. (mul x x)
-
--- Define function to calculate area of circle
-area_of_circle: Float -> Float = \r: Float.
-    (mul pi (square r))
-
--- Define function to calculate volume of cylinder
-volume_of_cylinder: Float -> Float -> Float = \r: Float.
-	\h: Float. (mul (area_of_circle r) h)
-
--- Calculate the volume of a cylinder
-(print "Volume of cylinder is: ")
-(print (volume_of_cylinder 5.0 10.0))
+(print (eq 1 0))

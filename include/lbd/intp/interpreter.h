@@ -18,6 +18,8 @@ namespace intp::interp {
         std::shared_ptr<Env> env; /// Environment at the time of Lambda Expression creation
 
         friend std::ostream &operator<<(std::ostream &os, const Closure &closure);
+
+        [[nodiscard]] std::string to_string() const;
     };
 
     using Value = std::variant<double, std::string, Closure, NativeFunction>;
@@ -31,9 +33,13 @@ namespace intp::interp {
         Impl impl;
 
         friend std::ostream &operator<<(std::ostream &os, const NativeFunction &native_fn);
+
+        [[nodiscard]] std::string to_string() const;
     };
 
     /// Pretty print a runtime value for REPL/diagnostics
+    std::string val_to_string(const Value &value);
+
     std::ostream &operator<<(std::ostream &os, const Value &value);
 
     /// Lazy Thunk (call-by-need)
@@ -71,7 +77,7 @@ namespace intp::interp {
 
         void bind(const std::string &name, std::shared_ptr<Thunk> thunk);
 
-        void dump(std::ostream &os, bool force) const;
+        std::vector<std::vector<std::string> > to_vector(bool force) const;
     };
 
     Value eval_expr(const fe::ast::Expression &expr, std::shared_ptr<Env> env);
