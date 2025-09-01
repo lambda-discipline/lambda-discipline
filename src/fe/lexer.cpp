@@ -66,9 +66,7 @@ namespace fe::lexer {
             const std::string value = source.substr(start, pos - start);
             return {token::Iden{value}, cur_loc};
         }
-        // Float
-        // TODO: Negative numbers
-        if (std::isdigit(c)) {
+        auto lex_float = [this, &c]() -> double {
             const size_t start = pos;
             while (std::isdigit(c)) {
                 get();
@@ -83,7 +81,11 @@ namespace fe::lexer {
                 }
             }
             const double value = std::stod(source.substr(start, pos - start));
-            return {token::Float{value}, cur_loc};
+            return value;
+        };
+        // Positive Float
+        if (std::isdigit(c)) {
+            return {token::Float(lex_float()), cur_loc};
         }
         // String Literal: " ... "
         if (c == '"') {
@@ -137,6 +139,10 @@ namespace fe::lexer {
                     }
                     // After skipping comment, return the next token
                     return next_token();
+                }
+                // Negative Float
+                if (std::isdigit(c)) {
+                    return {token::Float(-lex_float()), cur_loc};
                 }
                 break;
             default:

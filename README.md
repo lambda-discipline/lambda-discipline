@@ -49,5 +49,4 @@ lbd [options]
 
 ## TODO
 
-- TODO: Add build instructions for Windows (MSVC toolchain).
 - TODO: Provide better examples (e.g., Advent of Code snippets).

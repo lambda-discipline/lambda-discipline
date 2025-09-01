@@ -5,6 +5,9 @@
 #include "lbd/fe/parser.h"
 #include "lbd/intp/interpreter.h"
 
+// TODO: Implement loading a file to repl
+//       syntax: :load <filepath> or :l <filepath>
+
 namespace repl {
     static bool force_on_env_dump = false;
     static bool debug_enabled = false;

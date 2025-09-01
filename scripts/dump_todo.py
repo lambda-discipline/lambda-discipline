@@ -23,7 +23,9 @@ if os.path.exists(GITIGNORE_PATH):
     with open(GITIGNORE_PATH, "r", encoding="utf-8") as f:
         spec = pathspec.PathSpec.from_lines("gitwildmatch", f)
 
+root: str
 for root, _, files in os.walk(BASE_DIR):
+    filename: str
     for filename in files:
         filepath: str = os.path.join(root, filename)
         rel_path: str = os.path.relpath(filepath, BASE_DIR)

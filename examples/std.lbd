@@ -6,7 +6,7 @@ false: Bool = \x: Any. \y: Any. y
 
 if_then: Any = \condition: Any.
     \then_clause: Any. \else_clause: Any.
-    (condition then_clause else_clause)
+        (condition then_clause else_clause)
 
 -- pairs
 pair: Any = \x: Any. \y: Any. \fn: Any. (fn x y)
@@ -14,6 +14,18 @@ pair: Any = \x: Any. \y: Any. \fn: Any. (fn x y)
 first: Any = \x: Any. \y: Any. x
 second: Any = \x: Any. \y: Any. y
 
--- misc
-float_eq: Float -> Float -> Bool = \x: Float. \y: Float.
+-- Relational Operators
+eq: Float -> Float -> Bool = \x: Float. \y: Float.
     (if_zero (cmp x y) true false)
+
+lt: Float -> Float -> Bool = \x: Float. \y: Float.
+    (if_zero (cmp (cmp x y) -1) true false)
+
+gt: Float -> Float -> Bool = \x: Float. \y: Float.
+    (if_zero (cmp (cmp x y) 1) true false)
+
+lte: Float -> Float -> Bool = \x: Float. \y: Float.
+    (if_zero (cmp x y) true (if_zero (cmp (cmp x y) -1) true false))
+
+gte: Float -> Float -> Bool = \x: Float. \y: Float.
+    (if_zero (cmp x y) true (if_zero (cmp (cmp x y) 1) true false))
