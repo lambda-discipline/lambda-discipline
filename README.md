@@ -41,7 +41,13 @@ lbd [options]
 
 ---
 
-### TODO
+## Editor Plugins
+
+1. [GNU Emacs](./editor-plugins/emacs)
+
+---
+
+## TODO
 
 - TODO: Add build instructions for Windows (MSVC toolchain).
 - TODO: Provide better examples (e.g., Advent of Code snippets).
