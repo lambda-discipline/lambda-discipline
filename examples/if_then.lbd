@@ -5,6 +5,5 @@ if_then: Any = \condition: Any.
     \then_clause: Any. \else_clause: Any.
         (condition then_clause else_clause)
 
-
 (print (if_then true "True" "False"))
 (print (if_then false "True" "False"))
