@@ -1,0 +1,7 @@
+a: List = (list "Hello")
+(print a)
+
+(list_append a "World")
+(print a)
+
+-- TODO: Add support for list_get or nth NativeFunction

@@ -58,7 +58,7 @@ namespace repl {
                 break; // EOF (C-d / C-z)
             }
             if (line == ":q" || line == ":quit" || line == ":exit") {
-                std::cout << colors::BLUE << "exiting REPL" << colors::RESET << std::endl;
+                std::cout << "\n" << colors::BLUE << "exiting REPL" << colors::RESET << std::endl;
                 break;
             }
             if (line == ":c" || line == ":clear" || line == ":cls") {

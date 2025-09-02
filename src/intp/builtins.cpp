@@ -8,7 +8,7 @@ namespace intp::interp {
         return {
             1, name, [](const std::vector<std::shared_ptr<Thunk> > &args, const std::shared_ptr<Env> &) -> Value {
                 const Value &value = args[0]->force();
-                std::cout << value << std::endl;
+                std::cout << value.to_string() << std::endl;
                 return value;
             }
         };
@@ -78,7 +78,7 @@ namespace intp::interp {
                 }
                 const double num1 = std::get<double>(value1);
                 const double num2 = std::get<double>(value2);
-                const int result = (num1 < num2) ? -1 : num1 > num2 ? 1 : 0;
+                const int result = num1 < num2 ? -1 : num1 > num2 ? 1 : 0;
                 return Value{static_cast<double>(result)};
             }
         };
@@ -104,6 +104,43 @@ namespace intp::interp {
         };
     }
 
+    static std::shared_ptr<List> make_list_obj(const std::vector<Value> &elements) {
+        return std::make_shared<List>(List{elements});
+    }
+
+    static Value list_get(const std::shared_ptr<List> &lst, size_t index) {
+        if (index >= lst->elements.size())
+            throw std::out_of_range("list index out of range");
+        return lst->elements[index];
+    }
+
+    static void list_append(std::shared_ptr<List> &lst, Value val) {
+        lst->elements.push_back(std::move(val));
+    }
+
+    static NativeFunction make_list() {
+        const std::string name = "list";
+        // TODO: Make this variadic
+        return {
+            1, name, [](const std::vector<std::shared_ptr<Thunk> > &args, const std::shared_ptr<Env> &) -> Value {
+                std::vector<Value> vals;
+                for (auto &th: args) vals.push_back(th->force());
+                return make_list_obj(vals);
+            }
+        };
+    }
+
+    static NativeFunction make_list_append() {
+        const std::string name = "list_append";
+        return {
+            2, name, [](const std::vector<std::shared_ptr<Thunk> > &args, const std::shared_ptr<Env> &) -> Value {
+                // TODO: Add error handling
+                auto lst = std::get<std::shared_ptr<List> >(args[0]->force());
+                list_append(lst, args[1]->force());
+                return lst;
+            }
+        };
+    }
 
     std::vector<NativeFunction> get_builtins() {
         return {
@@ -112,7 +149,9 @@ namespace intp::interp {
             {make_sub()},
             {make_mul()},
             {make_cmp()},
-            {make_if_zero()}
+            {make_if_zero()},
+            {make_list()},
+            {make_list_append()}
         };
     }
 }

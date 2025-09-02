@@ -14,6 +14,45 @@ namespace intp::interp {
         return os << closure.to_string();
     }
 
+    [[nodiscard]] std::string List::to_string() const {
+        std::ostringstream oss;
+        oss << "[";
+        for (size_t i = 0; i < elements.size(); ++i) {
+            oss << elements[i].to_string();
+            if (i + 1 != elements.size()) {
+                oss << ", ";
+            }
+        }
+        oss << "]";
+        return oss.str();
+    }
+
+    [[nodiscard]] std::string Value::to_string() const {
+        return std::visit([&]<typename T0>(T0 &&arg) {
+            using T = std::decay_t<T0>;
+            if constexpr (std::is_same_v<T, double>) {
+                return std::to_string(arg);
+            } else if constexpr (std::is_same_v<T, std::string>) {
+                return arg;
+            } else if constexpr (std::is_same_v<T, Closure>) {
+                return arg.to_string();
+            } else if constexpr (std::is_same_v<T, std::shared_ptr<NativeFunction> > ||
+                                 std::is_same_v<T, std::shared_ptr<List> >) {
+                return arg->to_string();
+            } else {
+                STATIC_ASSERT_UNREACHABLE_T(T, "unhandled runtime value");
+            }
+        }, *this);
+    }
+
+    std::ostream &operator<<(std::ostream &os, const Value &value) {
+        return os << value.to_string();
+    }
+
+    std::ostream &operator<<(std::ostream &os, const List &list) {
+        return os << list.to_string();
+    }
+
     [[nodiscard]] std::string NativeFunction::to_string() const {
         std::ostringstream oss;
         oss << "<native_fn: " << name << " " << arity << ">";
@@ -28,37 +67,6 @@ namespace intp::interp {
         if (loc.has_value()) {
             return os << loc.value() << ": ";
         }
-        return os;
-    }
-
-    std::string val_to_string(const Value &value) {
-        return std::visit([&]<typename T0>(T0 &&arg) {
-            using T = std::decay_t<T0>;
-            if constexpr (std::is_same_v<T, double>) {
-                return std::to_string(arg);
-            } else if constexpr (std::is_same_v<T, std::string>) {
-                return arg;
-            } else if constexpr (std::is_same_v<T, Closure> ||
-                                 std::is_same_v<T, NativeFunction>) {
-                return arg.to_string();
-            } else {
-                STATIC_ASSERT_UNREACHABLE_T(T, "unhandled runtime value");
-            }
-        }, value);
-    }
-
-    std::ostream &operator<<(std::ostream &os, const Value &value) {
-        std::visit([&]<typename T0>(T0 &&arg) {
-            using T = std::decay_t<T0>;
-            if constexpr (std::is_same_v<T, std::string> ||
-                          std::is_same_v<T, double> ||
-                          std::is_same_v<T, Closure> ||
-                          std::is_same_v<T, NativeFunction>) {
-                os << arg;
-            } else {
-                STATIC_ASSERT_UNREACHABLE_T(T, "unhandled runtime value");
-            }
-        }, value);
         return os;
     }
 
@@ -128,12 +136,11 @@ namespace intp::interp {
             try {
                 if (force) {
                     const Value &val = thunk->force();
-                    val_str = val_to_string(val);
+                    val_str = val.to_string();
                 } else if (thunk->cached) {
-                    val_str = val_to_string(*thunk->cached); // already computed
+                    val_str = thunk->cached->to_string(); // already computed
                 }
             } catch (const std::exception &) {
-                val_str = "<thunk: error>";
             }
             vec.push_back({name, val_str});
         }
@@ -239,8 +246,8 @@ namespace intp::interp {
                 resultant_value = eval_expr(*body, child_env);
             }
             // Native Function case: Consumes its arity-many Argument Thunks
-            else if (std::holds_alternative<NativeFunction>(current_fn)) {
-                const auto &[arity, name, impl] = std::get<NativeFunction>(current_fn);
+            else if (std::holds_alternative<std::shared_ptr<NativeFunction> >(current_fn)) {
+                const auto &[arity, name, impl] = *std::get<std::shared_ptr<NativeFunction> >(current_fn);
                 if (work_args.size() - idx < arity) {
                     print_loc_prefix(std::cerr, call_loc)
                             << "runtime error: native function " << name
@@ -268,7 +275,7 @@ namespace intp::interp {
                 std::exit(EXIT_FAILURE);
             }
             if (std::holds_alternative<Closure>(*resultant_value) ||
-                std::holds_alternative<NativeFunction>(*resultant_value)) {
+                std::holds_alternative<std::shared_ptr<NativeFunction> >(*resultant_value)) {
                 // Replace the top Frame with the returned Function (curry)
                 frames.back() = std::move(*resultant_value);
                 continue;
@@ -302,7 +309,7 @@ namespace intp::interp {
 
     // Creates placeholder Thunk then set body so recursion can refer to it during lazy evaluation
     static void bind_def_ast_node_lazy(fe::ast::DefAstNode &def_ast_node, const std::shared_ptr<Env> &env,
-                                       Options options) {
+                                       const Options options) {
         const auto thunk = std::make_shared<Thunk>();
         env->bind(def_ast_node.def_name.value, thunk);
         if (options.own_expr) {
@@ -339,7 +346,7 @@ namespace intp::interp {
     void install_builtins(const std::shared_ptr<Env> &env) {
         for (auto &native_fn: get_builtins()) {
             const auto thunk = std::make_shared<Thunk>();
-            thunk->cached = Value{native_fn};
+            thunk->cached = Value{std::make_shared<NativeFunction>(native_fn)};
             env->bind(native_fn.name, thunk);
         }
     }

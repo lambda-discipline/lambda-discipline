@@ -6,6 +6,8 @@ if_then: Any = \condition: Any.
     \then_clause: Any. \else_clause: Any.
         (condition then_clause else_clause)
 
+bool_name: Bool = \bool: Bool. (if_then bool "true" "false")
+
 -- pairs
 pair: Any = \x: Any. \y: Any. \fn: Any. (fn x y)
 

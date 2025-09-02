@@ -1,9 +1,10 @@
 true: Bool = \x: Any. \y: Any. x
 false: Bool = \x: Any. \y: Any. y
 
-ifthen: Any = \condition: Bool -> Any -> Any -> Any.
+if_then: Any = \condition: Any.
     \then_clause: Any. \else_clause: Any.
         (condition then_clause else_clause)
 
-(print (ifthen true "True" "False"))
-(print (ifthen false "True" "False"))
+
+(print (if_then true "True" "False"))
+(print (if_then false "True" "False"))

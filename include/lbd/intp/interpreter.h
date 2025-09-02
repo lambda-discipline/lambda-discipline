@@ -3,6 +3,7 @@
 #include <functional>
 #include <optional>
 #include <string>
+#include <variant>
 #include <lbd/fe/ast.h>
 #include <lbd/fe/parser.h>
 
@@ -10,6 +11,8 @@ namespace intp::interp {
     struct NativeFunction;
     struct Thunk;
     struct Env;
+    struct List;
+    struct Value;
 
     /// Runtime representation of Lambda Expression
     struct Closure {
@@ -17,12 +20,35 @@ namespace intp::interp {
         const fe::ast::Expression *body; /// Non-owning, read-only AST pointer
         std::shared_ptr<Env> env; /// Environment at the time of Lambda Expression creation
 
-        friend std::ostream &operator<<(std::ostream &os, const Closure &closure);
-
         [[nodiscard]] std::string to_string() const;
+
+        friend std::ostream &operator<<(std::ostream &os, const Closure &closure);
     };
 
-    using Value = std::variant<double, std::string, Closure, NativeFunction>;
+    struct List {
+        std::vector<Value> elements;
+
+        [[nodiscard]] std::string to_string() const;
+
+        friend std::ostream &operator<<(std::ostream &os, const List &list);
+    };
+
+    using ValueVariant = std::variant<
+        double,
+        std::string,
+        Closure,
+        std::shared_ptr<NativeFunction>,
+        std::shared_ptr<List>
+    >;
+
+    struct Value : ValueVariant {
+        using ValueVariant::ValueVariant; // inherit constructors
+
+        /// Pretty print a runtime value for REPL/diagnostics
+        [[nodiscard]] std::string to_string() const;
+
+        friend std::ostream &operator<<(std::ostream &os, const Value &value);
+    };
 
     struct NativeFunction {
         using Impl = std::function<Value(
@@ -32,15 +58,10 @@ namespace intp::interp {
         std::string name;
         Impl impl;
 
-        friend std::ostream &operator<<(std::ostream &os, const NativeFunction &native_fn);
-
         [[nodiscard]] std::string to_string() const;
+
+        friend std::ostream &operator<<(std::ostream &os, const NativeFunction &native_fn);
     };
-
-    /// Pretty print a runtime value for REPL/diagnostics
-    std::string val_to_string(const Value &value);
-
-    std::ostream &operator<<(std::ostream &os, const Value &value);
 
     /// Lazy Thunk (call-by-need)
     struct Thunk : std::enable_shared_from_this<Thunk> {
