@@ -1,15 +1,18 @@
 #include <lbd/intp/builtins.h>
 
 namespace intp::interp {
-    // TODO: If Arity is -1 that means it can consume all the arguments
-    // Prints Argument to stdout and returns the same Argument as Value
+    static options::Options options_v;
+
+    // Prints Argument to stdout and returns 0
     static NativeFunction make_print() {
         const std::string name = "print";
         return {
-            1, name, [](const std::vector<std::shared_ptr<Thunk> > &args, const std::shared_ptr<Env> &) -> Value {
-                const Value &value = args[0]->force();
-                std::cout << value.to_string() << std::endl;
-                return value;
+            -1, name, [](const std::vector<std::shared_ptr<Thunk> > &args, const std::shared_ptr<Env> &) -> Value {
+                for (auto &arg: args) {
+                    const Value &value = arg->force();
+                    std::cout << value;
+                }
+                return Value{static_cast<double>(0)};
             }
         };
     }
@@ -21,9 +24,8 @@ namespace intp::interp {
                 const Value &value1 = args[0]->force();
                 const Value &value2 = args[1]->force();
                 if (!std::holds_alternative<double>(value1) || !std::holds_alternative<double>(value2)) {
-                    std::cerr << "runtime error: wrong arguments provided to native function " << name << std::endl
-                            << name << " signature: Float -> Float -> Float" << std::endl;
-                    exit(EXIT_FAILURE);
+                    options_v.logger.error({}, "runtime error: wrong arguments provided to native function ", name,
+                                           "\n", name, " signature: Float -> Float -> Float");
                 }
                 const double result = std::get<double>(value1) + std::get<double>(value2);
                 return Value{result};
@@ -38,9 +40,8 @@ namespace intp::interp {
                 const Value &value1 = args[0]->force();
                 const Value &value2 = args[1]->force();
                 if (!std::holds_alternative<double>(value1) || !std::holds_alternative<double>(value2)) {
-                    std::cerr << "runtime error: wrong arguments provided to native function " << name << std::endl
-                            << name << " signature: Float -> Float -> Float" << std::endl;
-                    exit(EXIT_FAILURE);
+                    options_v.logger.error({}, "runtime error: wrong arguments provided to native function ", name,
+                                           "\n", name, " signature: Float -> Float -> Float");
                 }
                 const double result = std::get<double>(value1) - std::get<double>(value2);
                 return Value{result};
@@ -55,9 +56,8 @@ namespace intp::interp {
                 const Value &value1 = args[0]->force();
                 const Value &value2 = args[1]->force();
                 if (!std::holds_alternative<double>(value1) || !std::holds_alternative<double>(value2)) {
-                    std::cerr << "runtime error: wrong arguments provided to native function " << name << std::endl
-                            << name << " signature: Float -> Float -> Float" << std::endl;
-                    exit(EXIT_FAILURE);
+                    options_v.logger.error({}, "runtime error: wrong arguments provided to native function ", name,
+                                           "\n", name, " signature: Float -> Float -> Float");
                 }
                 const double result = std::get<double>(value1) * std::get<double>(value2);
                 return Value{result};
@@ -72,9 +72,8 @@ namespace intp::interp {
                 const Value &value1 = args[0]->force();
                 const Value &value2 = args[1]->force();
                 if (!std::holds_alternative<double>(value1) || !std::holds_alternative<double>(value2)) {
-                    std::cerr << "runtime error: wrong arguments provided to native function " << name << std::endl
-                            << name << " signature: Float -> Float -> Float" << std::endl;
-                    exit(EXIT_FAILURE);
+                    options_v.logger.error({}, "runtime error: wrong arguments provided to native function ", name,
+                                           "\n", name, " signature: Float -> Float -> Float");
                 }
                 const double num1 = std::get<double>(value1);
                 const double num2 = std::get<double>(value2);
@@ -90,10 +89,10 @@ namespace intp::interp {
             3, name, [name](const std::vector<std::shared_ptr<Thunk> > &args, const std::shared_ptr<Env> &) -> Value {
                 const Value &cond_value = args[0]->force();
                 if (!std::holds_alternative<double>(cond_value)) {
-                    std::cerr << "runtime error: wrong argument type to native function " << name << "\n"
-                            << name << " signature: Float -> Any -> Any -> Any\n"
-                            << "runtime error: expected <double> got " << cond_value << std::endl;
-                    exit(EXIT_FAILURE);
+                    options_v.logger.error({}, "runtime error: wrong arguments provided to native function ", name,
+                                           "\n", name,
+                                           " signature: Float -> Any -> Any -> Any""\n"
+                                           "runtime error: expected <double> got ", cond_value);
                 }
                 // Lazy branching: only force the chosen clause
                 if (const double cond = std::get<double>(cond_value); cond == 0.0) {
@@ -108,24 +107,25 @@ namespace intp::interp {
         return std::make_shared<List>(List{elements});
     }
 
-    static Value list_get(const std::shared_ptr<List> &lst, size_t index) {
-        if (index >= lst->elements.size())
+    static Value list_get(const std::shared_ptr<List> &list_v, size_t index) {
+        if (index >= list_v->elements.size())
             throw std::out_of_range("list index out of range");
-        return lst->elements[index];
+        return list_v->elements[index];
     }
 
-    static void list_append(std::shared_ptr<List> &lst, Value val) {
-        lst->elements.push_back(std::move(val));
+    static void list_append(const std::shared_ptr<List> &list_v, Value value) {
+        list_v->elements.push_back(std::move(value));
     }
 
     static NativeFunction make_list() {
         const std::string name = "list";
-        // TODO: Make this variadic
         return {
-            1, name, [](const std::vector<std::shared_ptr<Thunk> > &args, const std::shared_ptr<Env> &) -> Value {
-                std::vector<Value> vals;
-                for (auto &th: args) vals.push_back(th->force());
-                return make_list_obj(vals);
+            -1, name, [](const std::vector<std::shared_ptr<Thunk> > &args, const std::shared_ptr<Env> &) -> Value {
+                std::vector<Value> values;
+                for (auto &arg: args) {
+                    values.push_back(arg->force());
+                }
+                return make_list_obj(values);
             }
         };
     }
@@ -133,16 +133,23 @@ namespace intp::interp {
     static NativeFunction make_list_append() {
         const std::string name = "list_append";
         return {
-            2, name, [](const std::vector<std::shared_ptr<Thunk> > &args, const std::shared_ptr<Env> &) -> Value {
-                // TODO: Add error handling
-                auto lst = std::get<std::shared_ptr<List> >(args[0]->force());
-                list_append(lst, args[1]->force());
-                return lst;
+            2, name, [name](const std::vector<std::shared_ptr<Thunk> > &args, const std::shared_ptr<Env> &) -> Value {
+                const Value &arg0 = args[0]->force();
+                if (!std::holds_alternative<std::shared_ptr<List> >(arg0)) {
+                    options_v.logger.error({}, "runtime error: wrong arguments provided to native function ", name,
+                                           "\n", name,
+                                           " signature: List -> Any -> List""\n"
+                                           "runtime error: expected <List> got ", arg0);
+                }
+                auto list_v = std::get<std::shared_ptr<List> >(arg0);
+                list_append(list_v, args[1]->force());
+                return list_v;
             }
         };
     }
 
-    std::vector<NativeFunction> get_builtins() {
+    std::vector<NativeFunction> get_builtins(const options::Options options_) {
+        options_v = options_;
         return {
             {make_print()},
             {make_add()},

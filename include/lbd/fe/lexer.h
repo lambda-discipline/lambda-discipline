@@ -2,6 +2,7 @@
 
 #include <lbd/fe/loc.h>
 #include <lbd/fe/token.h>
+#include <lbd/options.h>
 #include <string>
 #include <vector>
 
@@ -19,9 +20,9 @@ namespace fe::lexer {
         size_t col = 1;
         std::string filepath;
 
-        explicit Lexer(const std::string &filepath, FromFile);
+        Lexer(const std::string &filepath, FromFile, options::Options options_ = {});
 
-        explicit Lexer(const std::string &str, FromRepl);
+        Lexer(std::string str, FromRepl, options::Options options_ = {});
 
         token::Token next_token();
 

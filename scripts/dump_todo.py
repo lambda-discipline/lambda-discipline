@@ -23,6 +23,8 @@ if os.path.exists(GITIGNORE_PATH):
     with open(GITIGNORE_PATH, "r", encoding="utf-8") as f:
         spec = pathspec.PathSpec.from_lines("gitwildmatch", f)
 
+pending = 0
+
 root: str
 for root, _, files in os.walk(BASE_DIR):
     filename: str
@@ -40,6 +42,9 @@ for root, _, files in os.walk(BASE_DIR):
                         todo_index = line.index("TODO:")
                         todo_text = line[todo_index:].strip()
                         print(f"{rel_path}:{lineno}: {todo_text}")
+                        pending += 1
         except (UnicodeDecodeError, PermissionError):
             # Skip files that can’t be read as text
             continue
+
+print("\nPending: ", pending)

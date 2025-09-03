@@ -1,7 +1,7 @@
 #include <lbd/error.h>
 #include <lbd/fe/ast.h>
 
-#include "lbd/string_escape.h"
+#include "../../include/lbd/utils/string_escape.h"
 
 namespace fe::ast {
     static void print_indent(std::ostream &os, const size_t indent) {

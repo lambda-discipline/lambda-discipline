@@ -1,8 +1,12 @@
-#include <fstream>
 #include <lbd/fe/lexer.h>
+#include <lbd/logs.h>
 #include <sstream>
+#include <utility>
+#include <fstream>
 
 namespace fe::lexer {
+    static options::Options options_v;
+
     char Lexer::peek() const {
         return pos < source.size() ? source[pos] : '\0';
     }
@@ -29,20 +33,19 @@ namespace fe::lexer {
         return {row, col, filepath};
     }
 
-    Lexer::Lexer(const std::string &filepath, FromFile) : filepath(filepath) {
+    Lexer::Lexer(const std::string &filepath, FromFile, options::Options options_) : filepath(filepath) {
         std::ifstream ifs(filepath);
+        options_v = options_;
         if (!ifs) {
-            std::cerr << "error: could not open file "
-                    << filepath
-                    << std::endl;
-            exit(EXIT_FAILURE);
+            options_v.logger.error({}, "IO error: could not open file ", filepath);
         }
         std::ostringstream ss;
         ss << ifs.rdbuf();
         source = ss.str();
     }
 
-    Lexer::Lexer(const std::string &str, FromRepl) : source(str) {
+    Lexer::Lexer(std::string str, FromRepl, const options::Options options_) : source(std::move(str)) {
+        options_v = options_;
     }
 
     token::Token Lexer::next_token() {
@@ -98,9 +101,7 @@ namespace fe::lexer {
             }
             const std::string value = source.substr(start, pos - start);
             if (c != '"') {
-                std::cerr << cur_loc << ": syntax error: unbalanced quote"
-                        << std::endl;
-                std::exit(EXIT_FAILURE);
+                options_v.logger.error(cur_loc, "syntax error: unbalanced quote");
             }
             get(); // Consume '"'
             return {token::String{value}, cur_loc};
@@ -148,10 +149,7 @@ namespace fe::lexer {
             default:
                 break;
         }
-        std::cerr << cur_loc << ": syntax error: unexpected character "
-                << c
-                << std::endl;
-        std::exit(EXIT_FAILURE);
+        options_v.logger.error(cur_loc, "syntax error: unexpected character ", c);
     }
 
     std::vector<token::Token> Lexer::lex_all() {

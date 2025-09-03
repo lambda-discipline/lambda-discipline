@@ -1,5 +1,6 @@
 #pragma once
 
+#include <lbd/options.h>
 #include <lbd/fe/ast.h>
 #include <lbd/fe/token.h>
 #include <lbd/intp/types.h>
@@ -9,7 +10,7 @@ namespace fe::parser {
     struct Parser {
         ast::Program program;
 
-        explicit Parser(const std::vector<token::Token> &tokens);
+        explicit Parser(const std::vector<token::Token> &tokens, options::Options options_ = {});
 
     private:
         // TODO: Add checks for T to be a variant of fe::token::TokenType

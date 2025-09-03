@@ -13,5 +13,4 @@ volume_of_cylinder: Float -> Float -> Float = \r: Float.
 	\h: Float. (mul (area_of_circle r) h)
 
 -- Calculate the volume of a cylinder
-(print "Volume of cylinder is: ")
-(print (volume_of_cylinder 5.0 10.0))
+(print "Volume of cylinder is: " (volume_of_cylinder 5.0 10.0) "\n")

@@ -1,14 +1,16 @@
 #include <lbd/fe/loc.h>
 #include <lbd/fe/lexer.h>
 #include <lbd/fe/parser.h>
-#include <lbd/string_escape.h>
+#include <lbd/utils/string_escape.h>
 #include <unordered_set>
 #include <filesystem>
 
 namespace fe::parser {
     static std::unordered_set<std::string> loaded_files;
+    static options::Options options_v;
 
-    Parser::Parser(const std::vector<token::Token> &tokens) {
+    Parser::Parser(const std::vector<token::Token> &tokens, const options::Options options_) {
+        options_v = options_;
         size_t i = 0;
         program = ast::Program{build_ast(tokens, i)};
     }
@@ -16,11 +18,8 @@ namespace fe::parser {
     template<typename T>
     void Parser::assert_token(const std::vector<token::Token> &tokens, size_t &i) {
         if (const token::Token &cur_token = tokens[i]; !std::holds_alternative<T>(cur_token.typ)) {
-            std::cerr << cur_token.loc << ": syntax error: expected "
-                    << token::to_string<T>()
-                    << ", got " << cur_token.to_string()
-                    << std::endl;
-            std::exit(EXIT_FAILURE);
+            options_v.logger.error(cur_token.loc, "syntax error: expected ", token::to_string<T>(), ", got ",
+                                   cur_token.to_string());
         }
     }
 
@@ -102,10 +101,7 @@ namespace fe::parser {
             if (std::is_same_v<T, token::OpenParen>) {
                 return ast::Expression(parse_function_application(tokens, i));
             }
-            std::cerr << loc << ": syntax error: unexpected token "
-                    << tok.to_string()
-                    << std::endl;
-            std::exit(EXIT_FAILURE);
+            options_v.logger.error(loc, "syntax error: unexpected token ", tok.to_string());
         }, tok.typ);
     }
 
@@ -153,10 +149,14 @@ namespace fe::parser {
             return;
         }
         loaded_files.insert(abs_path);
-        auto lexer_v = lexer::Lexer(filepath, lexer::FromFile{});
+        auto lexer_v = lexer::Lexer(filepath, lexer::FromFile{}, options_v);
         const auto tokens = lexer_v.lex_all();
-        // TODO: Accept Options and Add a debug flag for printing Lexed Tokens
-        for (Parser parser(tokens); auto &node: parser.program.nodes) {
+        if (options_v.debug) {
+            for (const auto &tok: tokens) {
+                options_v.logger.debug(tok);
+            }
+        }
+        for (Parser parser(tokens, options_v); auto &node: parser.program.nodes) {
             nodes.emplace_back(std::move(node));
         }
     }
@@ -183,10 +183,7 @@ namespace fe::parser {
                                      std::is_same_v<T, token::OpenParen>) {
                     nodes.push_back(ast::AstNode{std::move(parse_expression(tokens, i))});
                 } else {
-                    std::cerr << tok.loc << ": syntax error: unexpected token "
-                            << tok.to_string()
-                            << std::endl;
-                    std::exit(EXIT_FAILURE);
+                    options_v.logger.error(tok.loc, "syntax error: unexpected token ", tok.to_string());
                 }
             }, tok.typ);
         }

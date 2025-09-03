@@ -43,7 +43,7 @@ if_then: Any = \condition: Any.
 ```
 
 ```console
-$ ./cmake-build-debug/lbd.exe -f ./examples/if_then.lbd
+$ ./cmake-build-debug/lbd -f ./examples/if_then.lbd
 True
 False
 ```
