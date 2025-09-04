@@ -51,8 +51,14 @@ namespace intp::interp {
         friend std::ostream &operator<<(std::ostream &os, const Value &value);
     };
 
+    struct ResultOptions {
+        bool side_effects = false;
+
+        void interpolate(const ResultOptions &result_options_);
+    };
+
     struct NativeFunction {
-        using Impl = std::function<Value(
+        using Impl = std::function<std::pair<Value, ResultOptions>(
             const std::vector<std::shared_ptr<Thunk> > &, const std::shared_ptr<Env> &)>;
 
         int arity;
@@ -112,6 +118,7 @@ namespace intp::interp {
     struct Result {
         std::shared_ptr<Env> global_env;
         Value value;
+        ResultOptions options = {};
     };
 
     Result interpret(fe::ast::Program &program, std::optional<std::shared_ptr<Env> > global_env = std::nullopt,

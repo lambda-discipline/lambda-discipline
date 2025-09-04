@@ -6,6 +6,7 @@
 
 namespace intp::interp {
     static options::Options options_v;
+    static ResultOptions global_result_options;
 
     [[nodiscard]] std::string Closure::to_string() const {
         std::ostringstream oss;
@@ -50,6 +51,10 @@ namespace intp::interp {
 
     std::ostream &operator<<(std::ostream &os, const Value &value) {
         return os << value.to_string();
+    }
+
+    void ResultOptions::interpolate(const ResultOptions &result_options_) {
+        side_effects |= result_options_.side_effects;
     }
 
     std::ostream &operator<<(std::ostream &os, const List &list) {
@@ -210,18 +215,33 @@ namespace intp::interp {
             // If there are no frames left, that's unexpected (shouldn't happen), bail.
             if (frames.empty()) {
                 options_v.logger.error(call_loc, "internal error: no function frame to apply");
-                std::exit(EXIT_FAILURE);
-            }
-            // If we've consumed all available Argument Thunks:
-            if (idx >= work_args.size()) {
-                // If top frame is a function, and we have no more args to feed it,
-                // return that function (partial application) or its value as-is.
-                // If it's not a function (shouldn't happen), return it as value.
-                return frames.back();
             }
             // Work on the top-most frame
             Value current_fn = frames.back();
             std::optional<Value> resultant_value;
+            // If we've consumed all available Argument Thunks:
+            if (idx >= work_args.size()) {
+                // If top frame is a function, and we have no more args to feed it,
+                // return that function (partial application) or its value as-is.
+                if (std::holds_alternative<std::shared_ptr<NativeFunction> >(current_fn)) {
+                    // Allow arity==0 and arity==-1 (variadic) to execute with zero args.
+                    if (const auto &native_fn = *std::get<std::shared_ptr<NativeFunction> >(current_fn);
+                        native_fn.arity == 0 || native_fn.arity == -1) {
+                        std::vector<std::shared_ptr<Thunk> > slice; // empty
+                        auto [value, result_options] = native_fn.impl(slice, call_site_env);
+                        global_result_options.interpolate(result_options);
+                        return value;
+                    }
+                    // Non-zero arity native function but no args left: partial application (return the function)
+                    return current_fn;
+                }
+                if (std::holds_alternative<Closure>(current_fn)) {
+                    // Closures require one argument; with none left, this is a partial application (return the closure).
+                    return current_fn;
+                }
+                // It's not a function (shouldn't happen), return it as value.
+                return current_fn;
+            }
             // Closure case: Closure consumes exactly one Argument (its Param)
             if (std::holds_alternative<Closure>(current_fn)) {
                 const auto [param, body, env] = std::get<Closure>(current_fn);
@@ -232,8 +252,8 @@ namespace intp::interp {
             }
             // Native Function case: Consumes its arity-many Argument Thunks
             else if (std::holds_alternative<std::shared_ptr<NativeFunction> >(current_fn)) {
-                const auto &[arity, name, impl] = *std::get<std::shared_ptr<NativeFunction> >(current_fn);
-                if (arity != -1) {
+                if (const auto &[arity, name, impl] = *std::get<std::shared_ptr<NativeFunction> >(current_fn);
+                    arity != -1) {
                     if (work_args.size() - idx < arity) {
                         options_v.logger.error(call_loc, "runtime error: native function ", name, " expects ", arity,
                                                " argument(s), found ", work_args.size() - idx);
@@ -243,7 +263,9 @@ namespace intp::interp {
                     for (size_t i = 0; i < arity; ++i) {
                         slice.push_back(work_args[idx + i]);
                     }
-                    resultant_value = impl(slice, call_site_env);
+                    auto [resultant_value_, result_options] = impl(slice, call_site_env);
+                    resultant_value = resultant_value_;
+                    global_result_options.interpolate(result_options);
                     idx += arity;
                 } else {
                     std::vector<std::shared_ptr<Thunk> > slice;
@@ -251,7 +273,9 @@ namespace intp::interp {
                     for (size_t i = 0; i < args.size() - idx; ++i) {
                         slice.push_back(work_args[idx + i]);
                     }
-                    resultant_value = impl(slice, call_site_env);
+                    auto [resultant_value_, result_options] = impl(slice, call_site_env);
+                    resultant_value = resultant_value_;
+                    global_result_options.interpolate(result_options);
                     idx += args.size() - idx;
                 }
             } else {
@@ -278,7 +302,6 @@ namespace intp::interp {
                 if (idx < work_args.size()) {
                     options_v.logger.error(call_loc, "runtime error: too many arguments applied to non-function value ",
                                            concrete);
-                    std::exit(EXIT_FAILURE);
                 }
                 // No Thunks remaining then concrete Value is the result
                 return concrete;
@@ -327,7 +350,7 @@ namespace intp::interp {
                 }
             }, value);
         }
-        return {*global_env, result_value};
+        return {*global_env, result_value, global_result_options};
     }
 
     void install_builtins(const std::shared_ptr<Env> &env) {

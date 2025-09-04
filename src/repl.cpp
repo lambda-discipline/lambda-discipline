@@ -31,7 +31,8 @@ namespace repl {
         fe::parser::Parser parser(tokens);
         const std::optional<std::shared_ptr<intp::interp::Env> > temp_env = shared_env;
         // Merge loaded_env into shared_env
-        if (const auto [loaded_env, _] = intp::interp::interpret(parser.program, temp_env, {.own_expr = true});
+        if (const auto [loaded_env, _, _result_options] = intp::interp::interpret(
+                parser.program, temp_env, {.own_expr = true});
             loaded_env) {
             if (!shared_env) {
                 shared_env = loaded_env;
@@ -146,8 +147,11 @@ namespace repl {
                 }
 
                 // Interpret
-                const auto [global_env, value] = intp::interp::interpret(
+                const auto [global_env, value, result_options] = intp::interp::interpret(
                     parser_v.program, shared_global_env, options_v);
+                if (result_options.side_effects) {
+                    std::cout << std::endl;
+                }
                 std::cout << colors::GREEN << "=> " << value << colors::RESET << std::endl;
                 shared_global_env = global_env;
             } catch (const ControlledExit &) {

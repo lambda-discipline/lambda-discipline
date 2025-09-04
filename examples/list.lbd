@@ -1,4 +1,4 @@
-a: List = (list "Hello")
+a: List = (list)
 (print a)
 
 (list_append a "World")
