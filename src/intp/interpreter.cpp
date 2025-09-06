@@ -4,6 +4,8 @@
 #include <lbd/error.h>
 #include <sstream>
 
+#include "lbd/utils/string_escape.h"
+
 namespace intp::interp {
     static options::Options options_v;
     static ResultOptions global_result_options;
@@ -22,7 +24,7 @@ namespace intp::interp {
         std::ostringstream oss;
         oss << "[";
         for (size_t i = 0; i < elements.size(); ++i) {
-            oss << elements[i];
+            oss << escape(elements[i].to_string());
             if (i + 1 != elements.size()) {
                 oss << ", ";
             }
@@ -135,9 +137,9 @@ namespace intp::interp {
             try {
                 if (force) {
                     const Value &val = thunk->force();
-                    val_str = val.to_string();
+                    val_str = escape(val.to_string());
                 } else if (thunk->cached) {
-                    val_str = thunk->cached->to_string(); // already computed
+                    val_str = escape(thunk->cached->to_string()); // already computed
                 }
             } catch (const std::exception &) {
             }

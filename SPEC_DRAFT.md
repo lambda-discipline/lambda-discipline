@@ -1,3 +1,4 @@
 - TODO: Support parsing code that ends with an id. for example "a", given is already defined previously.
 - TODO: Add support for List at a language level.
 - TODO: Type checking.
+- TODO: Add documentation for Builtins.

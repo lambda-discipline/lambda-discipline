@@ -10,27 +10,40 @@
 
 #define on_off(val) ((val) ? "on " : "off")
 
+// TODO: Option :t for display type information of a symbol
+
 namespace repl {
     static options::Options options_v;
 
     static void process_load_command(const std::string &arg,
                                      std::optional<std::shared_ptr<intp::interp::Env> > &shared_env) {
         const std::string &filepath = arg;
+        options::Options sub_options = options_v;
+        sub_options.logger.show_loc = true;
+
         if (!std::filesystem::exists(filepath)) {
-            options_v.logger.error({}, "IO error: filepath ", filepath, "does not exists");
+            sub_options.logger.error({}, "IO error: filepath ", filepath, " does not exist");
         }
-        fe::lexer::Lexer lexer(filepath, fe::lexer::FromFile{});
+
+        fe::lexer::Lexer lexer(filepath, fe::lexer::FromFile{}, sub_options);
         const auto tokens = lexer.lex_all();
-        if (options_v.debug) {
+        if (sub_options.debug) {
             for (const auto &tok: tokens) {
-                options_v.logger.debug(tok);
+                sub_options.logger.debug(tok);
             }
         }
-        fe::parser::Parser parser(tokens);
+
+        fe::parser::Parser parser(tokens, sub_options);
+        if (sub_options.debug) {
+            for (const auto &node: parser.program.nodes) {
+                sub_options.logger.debug(node);
+            }
+        }
+
         const std::optional<std::shared_ptr<intp::interp::Env> > temp_env = shared_env;
         // Merge loaded_env into shared_env
-        if (const auto [loaded_env, _, _result_options] = intp::interp::interpret(
-                parser.program, temp_env, {.own_expr = true});
+        if (const auto [loaded_env, _, result_options] = intp::interp::interpret(
+                parser.program, temp_env, sub_options);
             loaded_env) {
             if (!shared_env) {
                 shared_env = loaded_env;
@@ -40,8 +53,12 @@ namespace repl {
                     (*shared_env)->bind(fst, snd);
                 }
             }
+            if (result_options.side_effects) {
+                std::cout << std::endl;
+            }
         }
-        options_v.logger.info("info: file loaded ", filepath);
+
+        sub_options.logger.info("info: file loaded ", filepath);
     }
 
     static int compute_paren_depth(const std::string &s) {

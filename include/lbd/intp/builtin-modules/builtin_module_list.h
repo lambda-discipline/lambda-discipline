@@ -12,4 +12,14 @@ namespace intp::interp::builtins {
     NativeFunction make_list_remove();
 
     NativeFunction make_list_append();
+
+    NativeFunction make_map();
+
+    NativeFunction make_transpose();
+
+    NativeFunction make_sort();
+
+    NativeFunction make_zip();
+
+    NativeFunction make_foldr();
 }
