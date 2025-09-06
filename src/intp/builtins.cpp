@@ -120,6 +120,15 @@ namespace intp::interp {
         return list_v->elements[index];
     }
 
+    static Value list_remove(const std::shared_ptr<List> &list_v, size_t index) {
+        if (index >= list_v->elements.size()) {
+            options_v.logger.error({}, "runtime error: list index out of range, index is ", index);
+        }
+        Value &value = list_v->elements[index];
+        list_v->elements.erase(list_v->elements.begin() + index);
+        return value;
+    }
+
     static void list_append(const std::shared_ptr<List> &list_v, Value value) {
         list_v->elements.push_back(std::move(value));
     }
@@ -178,6 +187,33 @@ namespace intp::interp {
                 }
                 return std::make_pair(Value{list_get(std::get<std::shared_ptr<List> >(arg0), std::get<double>(arg1))},
                                       ResultOptions{});
+            }
+        };
+    }
+
+    static NativeFunction make_list_remove() {
+        const std::string name = "list_remove";
+        return {
+            // TODO: Add type checker to replace this manual approach
+            2, name, [name](const std::vector<std::shared_ptr<Thunk> > &args,
+                            const std::shared_ptr<Env> &) -> std::pair<Value, ResultOptions> {
+                const Value &arg0 = args[0]->force();
+                if (!std::holds_alternative<std::shared_ptr<List> >(arg0)) {
+                    options_v.logger.error({}, "runtime error: wrong arguments provided to native function ", name,
+                                           "\n", name,
+                                           " signature: List -> Float -> List""\n"
+                                           "runtime error: expected <List> got ", arg0);
+                }
+                const Value &arg1 = args[1]->force();
+                if (!std::holds_alternative<double>(arg1)) {
+                    options_v.logger.error({}, "runtime error: wrong arguments provided to native function ", name,
+                                           "\n", name,
+                                           " signature: List -> Float -> List""\n"
+                                           "runtime error: expected <Float> got ", arg1);
+                }
+                return std::make_pair(
+                    Value{list_remove(std::get<std::shared_ptr<List> >(arg0), std::get<double>(arg1))},
+                    ResultOptions{});
             }
         };
     }
