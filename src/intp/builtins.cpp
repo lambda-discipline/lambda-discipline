@@ -124,8 +124,8 @@ namespace intp::interp {
         if (index >= list_v->elements.size()) {
             options_v.logger.error({}, "runtime error: list index out of range, index is ", index);
         }
-        Value &value = list_v->elements[index];
-        list_v->elements.erase(list_v->elements.begin() + index);
+        Value value = list_v->elements[index];
+        list_v->elements.erase(list_v->elements.begin() + static_cast<std::vector<Value>::difference_type>(index));
         return value;
     }
 
@@ -185,7 +185,10 @@ namespace intp::interp {
                                            " signature: List -> Float -> List""\n"
                                            "runtime error: expected <Float> got ", arg1);
                 }
-                return std::make_pair(Value{list_get(std::get<std::shared_ptr<List> >(arg0), std::get<double>(arg1))},
+                return std::make_pair(Value{
+                                          list_get(std::get<std::shared_ptr<List> >(arg0),
+                                                   static_cast<size_t>(std::get<double>(arg1)))
+                                      },
                                       ResultOptions{});
             }
         };
@@ -212,7 +215,9 @@ namespace intp::interp {
                                            "runtime error: expected <Float> got ", arg1);
                 }
                 return std::make_pair(
-                    Value{list_remove(std::get<std::shared_ptr<List> >(arg0), std::get<double>(arg1))},
+                    Value{
+                        list_remove(std::get<std::shared_ptr<List> >(arg0), static_cast<size_t>(std::get<double>(arg1)))
+                    },
                     ResultOptions{});
             }
         };
@@ -249,6 +254,7 @@ namespace intp::interp {
             {make_list()},
             {make_list_size()},
             {make_list_get()},
+            {make_list_remove()},
             {make_list_append()}
         };
     }

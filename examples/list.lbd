@@ -9,3 +9,8 @@ a: List = (list)
 (list_append a "World")
 (print "list: " a "\n")
 (print "list[1]: " (list_get a 1) "\n")
+
+(list_append a "Foo")
+(print "list: " a "\n")
+(list_remove a 2)
+(print "list: " a "\n")
