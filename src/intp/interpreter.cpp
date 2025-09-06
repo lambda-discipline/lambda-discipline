@@ -354,7 +354,7 @@ namespace intp::interp {
     }
 
     void install_builtins(const std::shared_ptr<Env> &env) {
-        for (auto &native_fn: get_builtins(options_v)) {
+        for (auto &native_fn: builtins::get_builtins(options_v)) {
             const auto thunk = std::make_shared<Thunk>();
             thunk->cached = Value{std::make_shared<NativeFunction>(native_fn)};
             env->bind(native_fn.name, thunk);

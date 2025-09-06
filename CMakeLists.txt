@@ -19,6 +19,7 @@ add_library(intp STATIC
     ${CMAKE_SOURCE_DIR}/src/intp/types.cpp
     ${CMAKE_SOURCE_DIR}/src/intp/interpreter.cpp
     ${CMAKE_SOURCE_DIR}/src/intp/builtins.cpp
+    ${CMAKE_SOURCE_DIR}/src/intp/builtin-modules/builtin_module_list.cpp
 )
 
 add_executable(lbd
