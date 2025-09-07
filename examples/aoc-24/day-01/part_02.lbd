@@ -1,0 +1,26 @@
+-- Problem Link: <https://adventofcode.com/2024/day/1>
+
+-- TODO: This is super slow, optimize this
+
+use "examples/std.lbd"
+
+content: String = (slurp_file "examples/aoc-24/day-01/input.txt")
+entries: List = (lines content)
+
+tmp: String -> Any = \x: String. (rot_2 split "   " x)
+cols: List = (transpose (map tmp entries))
+
+tmp2: List -> Any = \x: List. (map parse_float x)
+lists: List = (map tmp2 cols)
+
+eq2: Float -> Float -> Float = \x: Float. \y: Float. (if_then (eq y x) 1 0)
+add2: Float -> Float -> Float = \x: Float. \y: Float. (add y x)
+
+count: List -> Any -> Float = \xs: List. \x: Any. (foldr add2 0 (map (eq2 x) xs))
+
+l0: List = (list_get lists 0)
+l1: List = (list_get lists 1)
+
+tmp3: List -> Float = \xs: List. (mul (list_get xs 0) (list_get xs 1))
+
+(print "Answer: " (foldr add2 0 (map tmp3 (zip (list l0 (map (count l1) l0))))) "\n")
