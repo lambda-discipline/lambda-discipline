@@ -1,6 +1,6 @@
-> Functional Programming Language based on [Lambda Calculus](https://en.wikipedia.org/wiki/Lambda_calculus) highly
-> inspired by this video [Programming with Math | The Lambda Calculus - Eyesomorphic](https://youtu.be/ViPNHMSUcog) made
-> from scratch, entirely in `C++`.
+> Functional Programming Language based on [Lambda Calculus](https://en.wikipedia.org/wiki/Lambda_calculus) highly inspired by this video [Programming with Math | The Lambda Calculus - Eyesomorphic](https://youtu.be/ViPNHMSUcog) made from scratch, entirely in `C++`.
+
+---
 
 ## Getting Started
 
@@ -23,8 +23,6 @@ bash ./scripts/setup.sh
 ```powershell
 . .\scripts\setup.ps1
 ```
-
----
 
 ## Samples
 
@@ -109,13 +107,9 @@ lbd [options]
 -r, --repl              Run in interactive REPL mode
 ```
 
----
-
 ## Editor Plugins
 
 1. [GNU Emacs](./editor-plugins/emacs)
-
----
 
 ## TODO
 
