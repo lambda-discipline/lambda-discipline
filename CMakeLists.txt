@@ -30,7 +30,7 @@ add_executable(lbd
     ${CMAKE_SOURCE_DIR}/src/repl.cpp
 )
 
-target_link_libraries(lbd PRIVATE fe intp)
+target_link_libraries(lbd PRIVATE fe intp -static)
 
 # TODO: Add build tests
 # EXAMPLE: add_executable(lexer_test ../tests/lexer_test.cc)
