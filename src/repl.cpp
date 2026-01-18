@@ -121,8 +121,8 @@ namespace repl {
                     if (line == ":h" || line == ":help" || line == ":?") {
                         std::cout << std::endl;
                         print_table({"General Commands", "Argument", "Description"}, {
-                                        {":q, :quit, :exit", "", "Clear the screen"},
-                                        {":c, :clear, :cls", "", "Exit the REPL"},
+                                        {":q, :quit, :exit", "", "Exit the REPL"},
+                                        {":c, :clear, :cls", "", "Clear the screen"},
                                         {":h, :help, :?", "", "Display this help message"},
                                         {":l, :load", "<filepath>", "Load file into REPL"},
                                         {":r, :reset", "", "Reset environment"},
