@@ -14,27 +14,28 @@ namespace fe::lexer {
     };
 
     struct Lexer {
-        std::string source;
-        size_t pos = 0;
-        size_t row = 1;
-        size_t col = 1;
-        std::string filepath;
-
         Lexer(const std::string &filepath, FromFile, options::Options options_ = {});
 
         Lexer(std::string str, FromRepl, options::Options options_ = {});
 
-        token::Token next_token();
+        token::Token nextToken();
 
-        std::vector<token::Token> lex_all();
+        // TODO: Find a better name for this.
+        std::vector<token::Token> lexAll();
 
     private:
+        std::string source;
+        size_t position = 0;
+        size_t row = 1;
+        size_t col = 1;
+        std::string filepath;
+
         [[nodiscard]] char peek() const;
 
         char get();
 
-        [[nodiscard]] bool is_eof() const;
+        [[nodiscard]] bool isEof() const;
 
-        [[nodiscard]] loc::Loc get_cur_loc() const;
+        [[nodiscard]] loc::Loc getCurrentLocation() const;
     };
 }

@@ -5,16 +5,16 @@
 #include <fstream>
 
 namespace fe::lexer {
-    static options::Options options_v;
+    static options::Options optionsValue;
 
     char Lexer::peek() const {
-        return pos < source.size() ? source[pos] : '\0';
+        return position < source.size() ? source[position] : '\0';
     }
 
     char Lexer::get() {
         const char c = peek();
         if (c != '\0') {
-            ++pos;
+            ++position;
             if (c == '\n') {
                 ++row;
                 col = 1;
@@ -25,19 +25,19 @@ namespace fe::lexer {
         return c;
     }
 
-    bool Lexer::is_eof() const {
-        return pos >= source.size();
+    bool Lexer::isEof() const {
+        return position >= source.size();
     }
 
-    loc::Loc Lexer::get_cur_loc() const {
+    loc::Loc Lexer::getCurrentLocation() const {
         return {row, col, filepath};
     }
 
     Lexer::Lexer(const std::string &filepath, FromFile, options::Options options_) : filepath(filepath) {
         std::ifstream ifs(filepath);
-        options_v = options_;
+        optionsValue = options_;
         if (!ifs) {
-            options_v.logger.error({}, "IO error: could not open file ", filepath);
+            optionsValue.logger.error({}, "IO error: could not open file ", filepath);
         }
         std::ostringstream ss;
         ss << ifs.rdbuf();
@@ -45,119 +45,119 @@ namespace fe::lexer {
     }
 
     Lexer::Lexer(std::string str, FromRepl, const options::Options options_) : source(std::move(str)) {
-        options_v = options_;
+        optionsValue = options_;
     }
 
-    token::Token Lexer::next_token() {
-        char c = peek();
+    token::Token Lexer::nextToken() {
+        char currentCharacter = peek();
         // Skip whitespace
-        while (std::isspace(c)) {
+        while (std::isspace(currentCharacter)) {
             get(); // Consume ' '
-            c = peek();
+            currentCharacter = peek();
         }
-        const loc::Loc cur_loc = get_cur_loc();
-        if (is_eof()) {
-            return {token::Eof(), cur_loc};
+        const loc::Loc currentLocation = getCurrentLocation();
+        if (isEof()) {
+            return {token::Eof(), currentLocation};
         }
         // Identifiers [a-zA-Z_][a-zA-Z0-9_]*
-        if (std::isalpha(c) || c == '_') {
-            const size_t start = pos;
-            while (std::isalnum(c) || c == '_') {
+        if (std::isalpha(currentCharacter) || currentCharacter == '_') {
+            const size_t start = position;
+            while (std::isalnum(currentCharacter) || currentCharacter == '_') {
                 get();
-                c = peek();
+                currentCharacter = peek();
             }
-            const std::string value = source.substr(start, pos - start);
-            return {token::Iden{value}, cur_loc};
+            const std::string value = source.substr(start, position - start);
+            return {token::Identifier{value}, currentLocation};
         }
-        auto lex_float = [this, &c]() -> double {
-            const size_t start = pos;
-            while (std::isdigit(c)) {
+        auto lexFloat = [this, &currentCharacter]() -> double {
+            const size_t start = position;
+            while (std::isdigit(currentCharacter)) {
                 get();
-                c = peek();
+                currentCharacter = peek();
             }
-            if (c == '.') {
+            if (currentCharacter == '.') {
                 get(); // Consume '.'
-                c = peek();
-                while (std::isdigit(c)) {
+                currentCharacter = peek();
+                while (std::isdigit(currentCharacter)) {
                     get();
-                    c = peek();
+                    currentCharacter = peek();
                 }
             }
-            const double value = std::stod(source.substr(start, pos - start));
+            const double value = std::stod(source.substr(start, position - start));
             return value;
         };
         // Positive Float
-        if (std::isdigit(c)) {
-            return {token::Float(lex_float()), cur_loc};
+        if (std::isdigit(currentCharacter)) {
+            return {token::Float(lexFloat()), currentLocation};
         }
         // String Literal: " ... "
-        if (c == '"') {
+        if (currentCharacter == '"') {
             get(); // Consume '"'
-            const size_t start = pos;
-            c = peek();
-            while (c != '"' && !is_eof()) {
+            const size_t start = position;
+            currentCharacter = peek();
+            while (currentCharacter != '"' && !isEof()) {
                 get();
-                c = peek();
+                currentCharacter = peek();
             }
-            const std::string value = source.substr(start, pos - start);
-            if (c != '"') {
-                options_v.logger.error(cur_loc, "syntax error: unbalanced quote");
+            const std::string value = source.substr(start, position - start);
+            if (currentCharacter != '"') {
+                optionsValue.logger.error(currentLocation, "syntax error: unbalanced quote");
             }
             get(); // Consume '"'
-            return {token::String{value}, cur_loc};
+            return {token::String{value}, currentLocation};
         }
         // Symbols
-        switch (c) {
+        switch (currentCharacter) {
             case ':':
                 get();
-                return {token::Colon{}, cur_loc};
+                return {token::Colon{}, currentLocation};
             case '=':
                 get();
-                return {token::Equal{}, cur_loc};
+                return {token::Equal{}, currentLocation};
             case '\\':
                 get();
-                return {token::BackwardSlash{}, cur_loc};
+                return {token::BackwardSlash{}, currentLocation};
             case '.':
                 get();
-                return {token::Dot{}, cur_loc};
+                return {token::Dot{}, currentLocation};
             case '(':
                 get();
-                return {token::OpenParen{}, cur_loc};
+                return {token::OpenParenthesis{}, currentLocation};
             case ')':
                 get();
-                return {token::CloseParen{}, cur_loc};
+                return {token::CloseParenthesis{}, currentLocation};
             case '-':
                 get();
-                c = peek();
-                if (c == '>') {
+                currentCharacter = peek();
+                if (currentCharacter == '>') {
                     get();
-                    return {token::Arrow{}, cur_loc};
+                    return {token::Arrow{}, currentLocation};
                 }
-                if (c == '-') {
+                if (currentCharacter == '-') {
                     // Comment
-                    while (c != '\n' && !is_eof()) {
-                        c = get();
+                    while (currentCharacter != '\n' && !isEof()) {
+                        currentCharacter = get();
                     }
                     // After skipping comment, return the next token
-                    return next_token();
+                    return nextToken();
                 }
                 // Negative Float
-                if (std::isdigit(c)) {
-                    return {token::Float(-lex_float()), cur_loc};
+                if (std::isdigit(currentCharacter)) {
+                    return {token::Float(-lexFloat()), currentLocation};
                 }
                 break;
             default:
                 break;
         }
-        options_v.logger.error(cur_loc, "syntax error: unexpected character ", c);
+        optionsValue.logger.error(currentLocation, "syntax error: unexpected character ", currentCharacter);
     }
 
-    std::vector<token::Token> Lexer::lex_all() {
+    std::vector<token::Token> Lexer::lexAll() {
         std::vector<token::Token> tokens;
         while (true) {
-            token::Token tok = next_token();
+            token::Token tok = nextToken();
             tokens.push_back(tok);
-            if (std::holds_alternative<token::Eof>(tok.typ)) {
+            if (std::holds_alternative<token::Eof>(tok.tokenType)) {
                 break;
             }
         }

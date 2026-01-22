@@ -21,7 +21,7 @@ int main(const int argc, char **argv) {
     } else {
         // Lex
         auto lexer_v = fe::lexer::Lexer(*filepath, fe::lexer::FromFile{});
-        const std::vector<fe::token::Token> tokens = lexer_v.lex_all();
+        const std::vector<fe::token::Token> tokens = lexer_v.lexAll();
         if (debug) {
             for (const fe::token::Token &token: tokens) {
                 std::cout << token << std::endl;

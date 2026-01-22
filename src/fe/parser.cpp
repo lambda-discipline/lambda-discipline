@@ -6,42 +6,43 @@
 #include <filesystem>
 
 namespace fe::parser {
-    static std::unordered_set<std::string> loaded_files;
-    static options::Options options_v;
+    static std::unordered_set<std::string> loadedFiles;
+    static options::Options optionsValue;
 
     Parser::Parser(const std::vector<token::Token> &tokens, const options::Options options_) {
-        options_v = options_;
-        size_t i = 0;
-        program = ast::Program{build_ast(tokens, i)};
+        optionsValue = options_;
+        size_t index = 0;
+        program = ast::Program{build(tokens, index)};
     }
 
     template<typename T>
-    void Parser::assert_token(const std::vector<token::Token> &tokens, size_t &i) {
-        if (const token::Token &cur_token = tokens[i]; !std::holds_alternative<T>(cur_token.typ)) {
-            options_v.logger.error(cur_token.loc, "syntax error: expected ", token::to_string<T>(), ", got ",
-                                   cur_token.to_string());
+    void Parser::assertToken(const std::vector<token::Token> &tokens, size_t &index) {
+        if (const token::Token &currentToken = tokens[index]; !std::holds_alternative<T>(currentToken.tokenType)) {
+            optionsValue.logger.error(currentToken.location, "syntax error: expected ", token::toString<T>(), ", got ",
+                                      currentToken.toString());
         }
     }
 
     template<typename T>
-    void Parser::assert_n_eat(const std::vector<token::Token> &tokens, size_t &i) {
-        assert_token<T>(tokens, i);
-        ++i;
+    void Parser::assertAndConsume(const std::vector<token::Token> &tokens, size_t &index) {
+        assertToken<T>(tokens, index);
+        ++index;
     }
 
-    ast::IdenAstNode Parser::eat_iden(const std::vector<token::Token> &tokens, size_t &i) {
-        assert_token<token::Iden>(tokens, i);
-        auto [value] = std::get<token::Iden>(tokens[i].typ);
-        const loc::Loc loc = tokens[i].loc;
-        ++i;
-        return ast::IdenAstNode{value, loc};
+    ast::IdentifierAstNode Parser::consumeIdentifier(const std::vector<token::Token> &tokens, size_t &index) {
+        assertToken<token::Identifier>(tokens, index);
+        auto [value] = std::get<token::Identifier>(tokens[index].tokenType);
+        const loc::Loc location = tokens[index].location;
+        ++index;
+        return ast::IdentifierAstNode{value, location};
     }
 
-    intp::types::PrimitiveType Parser::eat_primitive_type_name(const std::vector<token::Token> &tokens, size_t &i) {
-        assert_token<token::Iden>(tokens, i);
-        auto [value] = std::get<token::Iden>(tokens[i].typ);
-        loc::Loc loc = tokens[i].loc;
-        ++i;
+    intp::types::PrimitiveType
+    Parser::consumePrimitiveTypeName(const std::vector<token::Token> &tokens, size_t &index) {
+        assertToken<token::Identifier>(tokens, index);
+        auto [value] = std::get<token::Identifier>(tokens[index].tokenType);
+        loc::Loc location = tokens[index].location;
+        ++index;
         if (value == "Float") {
             return intp::types::PrimitiveType{intp::types::PrimitiveType::Type::Float};
         }
@@ -54,138 +55,142 @@ namespace fe::parser {
         return intp::types::PrimitiveType{intp::types::PrimitiveType::Type::Custom, std::move(value)};
     }
 
-    intp::types::Type Parser::parse_type(const std::vector<token::Token> &tokens, size_t &i) {
-        intp::types::PrimitiveType typ = eat_primitive_type_name(tokens, i);
+    intp::types::Type Parser::parseType(const std::vector<token::Token> &tokens, size_t &index) {
+        intp::types::PrimitiveType typ = consumePrimitiveTypeName(tokens, index);
         std::vector types{typ};
-        while (std::holds_alternative<token::Arrow>(tokens[i].typ)) {
-            assert_n_eat<token::Arrow>(tokens, i);
-            types.push_back(eat_primitive_type_name(tokens, i));
+        while (std::holds_alternative<token::Arrow>(tokens[index].tokenType)) {
+            assertAndConsume<token::Arrow>(tokens, index);
+            types.push_back(consumePrimitiveTypeName(tokens, index));
         }
         if (types.size() == 1) {
             return typ;
         }
         // Construct Right Associative AST
-        intp::types::Type c_typ = types.back();
-        for (int typ_i = static_cast<int>(types.size()) - 2; typ_i >= 0; --typ_i) {
-            auto next_c_typ = std::make_shared<intp::types::CompoundType>();
-            next_c_typ->l_type = types[typ_i];
-            next_c_typ->r_type = c_typ;
-            c_typ = next_c_typ;
+        intp::types::Type currentType = types.back();
+        for (int typeIndex = static_cast<int>(types.size()) - 2; typeIndex >= 0; --typeIndex) {
+            auto nextCompoundType = std::make_shared<intp::types::CompoundType>();
+            nextCompoundType->l_type = types[typeIndex];
+            nextCompoundType->r_type = currentType;
+            currentType = nextCompoundType;
         }
-        return c_typ;
+        return currentType;
     }
 
-    ast::Expression Parser::parse_expression(const std::vector<token::Token> &tokens, size_t &i) {
-        const auto &tok = tokens[i];
-        const loc::Loc loc = tok.loc;
+    ast::Expression Parser::parseExpression(const std::vector<token::Token> &tokens, size_t &index) {
+        const auto &tok = tokens[index];
+        const loc::Loc location = tok.location;
         return std::visit([&]<typename T0>(T0 &&) {
             using T = std::decay_t<T0>;
-            if (std::is_same_v<T, token::Iden>) {
-                ++i;
-                const auto value = std::get<token::Iden>(tok.typ).value;
-                return ast::Expression(ast::IdenAstNode{value, loc});
+            if (std::is_same_v<T, token::Identifier>) {
+                ++index;
+                const auto value = std::get<token::Identifier>(tok.tokenType).value;
+                return ast::Expression(ast::IdentifierAstNode{value, location});
             }
             if (std::is_same_v<T, token::String>) {
-                ++i;
-                const auto value = unescape_string(std::get<token::String>(tok.typ).value);
-                return ast::Expression(ast::StringAstNode{value, loc});
+                ++index;
+                const auto value = unescape_string(std::get<token::String>(tok.tokenType).value);
+                return ast::Expression(ast::StringAstNode{value, location});
             }
             if (std::is_same_v<T, token::Float>) {
-                ++i;
-                const auto value = std::get<token::Float>(tok.typ).value;
-                return ast::Expression(ast::FloatAstNode{value, loc});
+                ++index;
+                const auto value = std::get<token::Float>(tok.tokenType).value;
+                return ast::Expression(ast::FloatAstNode{value, location});
             }
             if (std::is_same_v<T, token::BackwardSlash>) {
-                return ast::Expression(parse_lambda_expression(tokens, i));
+                return ast::Expression(parseLambdaExpression(tokens, index));
             }
-            if (std::is_same_v<T, token::OpenParen>) {
-                return ast::Expression(parse_function_application(tokens, i));
+            if (std::is_same_v<T, token::OpenParenthesis>) {
+                return ast::Expression(parseFunctionApplication(tokens, index));
             }
-            options_v.logger.error(loc, "syntax error: unexpected token ", tok.to_string());
-        }, tok.typ);
+            optionsValue.logger.error(location, "syntax error: unexpected token ", tok.toString());
+        }, tok.tokenType);
     }
 
-    ast::LambdaExpression Parser::parse_lambda_expression(const std::vector<token::Token> &tokens, size_t &i) {
-        loc::Loc loc = tokens[i].loc;
-        assert_n_eat<token::BackwardSlash>(tokens, i);
-        ast::IdenAstNode arg = eat_iden(tokens, i);
-        assert_n_eat<token::Colon>(tokens, i);
-        intp::types::Type arg_type = parse_type(tokens, i);
-        assert_n_eat<token::Dot>(tokens, i);
-        ast::Expression expr = parse_expression(tokens, i);
-        return ast::LambdaExpression{arg, arg_type, std::make_unique<ast::Expression>(std::move(expr)), loc};
+    ast::LambdaExpression Parser::parseLambdaExpression(const std::vector<token::Token> &tokens, size_t &index) {
+        loc::Loc location = tokens[index].location;
+        assertAndConsume<token::BackwardSlash>(tokens, index);
+        ast::IdentifierAstNode argument = consumeIdentifier(tokens, index);
+        assertAndConsume<token::Colon>(tokens, index);
+        intp::types::Type argumentType = parseType(tokens, index);
+        assertAndConsume<token::Dot>(tokens, index);
+        ast::Expression expression = parseExpression(tokens, index);
+        return ast::LambdaExpression{
+            argument, argumentType, std::make_unique<ast::Expression>(std::move(expression)), location
+        };
     }
 
-    ast::FunctionApplication Parser::parse_function_application(const std::vector<token::Token> &tokens, size_t &i) {
-        const loc::Loc loc = tokens[i].loc;
-        assert_n_eat<token::OpenParen>(tokens, i);
-        const ast::IdenAstNode fn_name = eat_iden(tokens, i);
-        std::vector<std::unique_ptr<ast::Expression> > args;
-        while (!std::holds_alternative<token::CloseParen>(tokens[i].typ)) {
-            args.push_back(std::make_unique<ast::Expression>(std::move(parse_expression(tokens, i))));
+    ast::FunctionApplication Parser::parseFunctionApplication(const std::vector<token::Token> &tokens, size_t &index) {
+        const loc::Loc location = tokens[index].location;
+        assertAndConsume<token::OpenParenthesis>(tokens, index);
+        const ast::IdentifierAstNode functionName = consumeIdentifier(tokens, index);
+        std::vector<std::unique_ptr<ast::Expression> > arguments;
+        while (!std::holds_alternative<token::CloseParenthesis>(tokens[index].tokenType)) {
+            arguments.push_back(std::make_unique<ast::Expression>(std::move(parseExpression(tokens, index))));
         }
-        assert_n_eat<token::CloseParen>(tokens, i);
-        return ast::FunctionApplication{fn_name, std::move(args), loc};
+        assertAndConsume<token::CloseParenthesis>(tokens, index);
+        return ast::FunctionApplication{functionName, std::move(arguments), location};
     }
 
-    ast::DefAstNode Parser::parse_def_ast_node(const std::vector<token::Token> &tokens, size_t &i) {
-        loc::Loc loc = tokens[i].loc;
-        ast::IdenAstNode def_name = eat_iden(tokens, i);
-        assert_n_eat<token::Colon>(tokens, i);
-        intp::types::Type typ = parse_type(tokens, i);
-        assert_n_eat<token::Equal>(tokens, i);
-        ast::Expression expr = parse_expression(tokens, i);
-        return ast::DefAstNode{def_name, typ, std::move(expr), loc};
+    ast::DefinitionAstNode Parser::parseDefinitionAstNode(const std::vector<token::Token> &tokens, size_t &index) {
+        loc::Loc location = tokens[index].location;
+        ast::IdentifierAstNode definitionName = consumeIdentifier(tokens, index);
+        assertAndConsume<token::Colon>(tokens, index);
+        intp::types::Type definitionType = parseType(tokens, index);
+        assertAndConsume<token::Equal>(tokens, index);
+        ast::Expression expression = parseExpression(tokens, index);
+        return ast::DefinitionAstNode{definitionName, definitionType, std::move(expression), location};
     }
 
-    static std::string get_abs_path(const std::string &path) {
+    static std::string getAbsolutePath(const std::string &path) {
         return std::filesystem::absolute(path).string();
     }
 
-    static void process_use_file(std::vector<ast::AstNode> &nodes, const std::string &filepath) {
-        const std::string abs_path = get_abs_path(filepath);
-        if (loaded_files.contains(abs_path)) {
+    static void processUseFile(std::vector<ast::AstNode> &nodes, const std::string &filepath) {
+        const std::string absolutePath = getAbsolutePath(filepath);
+        if (loadedFiles.contains(absolutePath)) {
             // Circular Dependency or Duplicate Load
             return;
         }
-        loaded_files.insert(abs_path);
-        auto lexer_v = lexer::Lexer(filepath, lexer::FromFile{}, options_v);
-        const auto tokens = lexer_v.lex_all();
-        if (options_v.debug) {
-            for (const auto &tok: tokens) {
-                options_v.logger.debug(tok);
+        loadedFiles.insert(absolutePath);
+        auto lexerValue = lexer::Lexer(filepath, lexer::FromFile{}, optionsValue);
+        const auto tokens = lexerValue.lexAll();
+        if (optionsValue.debug) {
+            for (const auto &token: tokens) {
+                optionsValue.logger.debug(token);
             }
         }
-        for (Parser parser(tokens, options_v); auto &node: parser.program.nodes) {
+        for (Parser parser(tokens, optionsValue); auto &node: parser.program.nodes) {
             nodes.emplace_back(std::move(node));
         }
     }
 
-    std::vector<ast::AstNode> Parser::build_ast(const std::vector<token::Token> &tokens, size_t &i) {
+    std::vector<ast::AstNode> Parser::build(const std::vector<token::Token> &tokens, size_t &index) {
         std::vector<ast::AstNode> nodes;
-        while (!std::holds_alternative<token::Eof>(tokens[i].typ)) {
-            const token::Token &tok = tokens[i];
+        while (!std::holds_alternative<token::Eof>(tokens[index].tokenType)) {
+            const token::Token &token = tokens[index];
             std::visit([&]<typename T0>(T0 &&) {
                 using T = std::decay_t<T0>;
-                if constexpr (std::is_same_v<T, token::Iden>) {
-                    if (const auto iden_value = std::get<token::Iden>(tokens[i].typ).value; iden_value == "use") {
-                        ++i; // eat "use"
-                        assert_token<token::String>(tokens, i);
-                        const std::string filepath = unescape_string(std::get<token::String>(tokens[i].typ).value);
-                        ++i; // eat <filepath>
-                        process_use_file(nodes, filepath);
+                if constexpr (std::is_same_v<T, token::Identifier>) {
+                    if (const auto identifierValue = std::get<token::Identifier>(tokens[index].tokenType).value;
+                        identifierValue == "use") {
+                        ++index; // consume "use"
+                        assertToken<token::String>(tokens, index);
+                        const std::string filepath = unescape_string(
+                            std::get<token::String>(tokens[index].tokenType).value);
+                        ++index; // consume <filepath>
+                        processUseFile(nodes, filepath);
                     } else {
-                        nodes.push_back(ast::AstNode{std::move(parse_def_ast_node(tokens, i))});
+                        nodes.push_back(ast::AstNode{std::move(parseDefinitionAstNode(tokens, index))});
                     }
                 } else if constexpr (std::is_same_v<T, token::String> ||
                                      std::is_same_v<T, token::Float> ||
                                      std::is_same_v<T, token::BackwardSlash> ||
-                                     std::is_same_v<T, token::OpenParen>) {
-                    nodes.push_back(ast::AstNode{std::move(parse_expression(tokens, i))});
+                                     std::is_same_v<T, token::OpenParenthesis>) {
+                    nodes.push_back(ast::AstNode{std::move(parseExpression(tokens, index))});
                 } else {
-                    options_v.logger.error(tok.loc, "syntax error: unexpected token ", tok.to_string());
+                    optionsValue.logger.error(token.location, "syntax error: unexpected token ", token.toString());
                 }
-            }, tok.typ);
+            }, token.tokenType);
         }
         return nodes;
     }

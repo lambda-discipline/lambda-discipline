@@ -5,7 +5,7 @@
 #include <variant>
 
 namespace fe::token {
-    struct Iden {
+    struct Identifier {
         std::string value;
     };
 
@@ -32,10 +32,10 @@ namespace fe::token {
     struct Dot {
     };
 
-    struct OpenParen {
+    struct OpenParenthesis {
     };
 
-    struct CloseParen {
+    struct CloseParenthesis {
     };
 
     struct Eof {
@@ -43,7 +43,7 @@ namespace fe::token {
 
     using TokenType = std::variant<
         std::monostate, // analogous to NULL
-        Iden,
+        Identifier,
         String,
         Colon,
         Equal,
@@ -51,22 +51,22 @@ namespace fe::token {
         Arrow,
         BackwardSlash,
         Dot,
-        OpenParen,
-        CloseParen,
+        OpenParenthesis,
+        CloseParenthesis,
         Eof
     >;
 
     struct Token {
-        loc::Loc loc;
-        TokenType typ;
+        loc::Loc location;
+        TokenType tokenType;
 
-        Token(TokenType typ, loc::Loc loc);
+        Token(TokenType tokenType, loc::Loc location);
 
-        friend std::ostream &operator<<(std::ostream &os, const Token &token);
+        friend std::ostream &operator<<(std::ostream &stream, const Token &token);
 
-        [[nodiscard]] std::string to_string() const;
+        [[nodiscard]] std::string toString() const;
     };
 
     template<typename T>
-    std::string to_string();
+    std::string toString();
 }

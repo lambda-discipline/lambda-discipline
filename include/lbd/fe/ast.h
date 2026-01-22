@@ -7,56 +7,56 @@
 #include <vector>
 
 namespace fe::ast {
-    struct IdenAstNode {
+    struct IdentifierAstNode {
         std::string value;
-        loc::Loc loc;
+        loc::Loc location;
 
-        friend std::ostream &operator<<(std::ostream &os, const IdenAstNode &node);
+        friend std::ostream &operator<<(std::ostream &stream, const IdentifierAstNode &node);
     };
 
     struct StringAstNode {
         std::string value;
-        loc::Loc loc;
+        loc::Loc location;
 
-        friend std::ostream &operator<<(std::ostream &os, const StringAstNode &node);
+        friend std::ostream &operator<<(std::ostream &stream, const StringAstNode &node);
     };
 
     struct FloatAstNode {
         double value;
-        loc::Loc loc;
+        loc::Loc location;
 
-        friend std::ostream &operator<<(std::ostream &os, const FloatAstNode &node);
+        friend std::ostream &operator<<(std::ostream &stream, const FloatAstNode &node);
     };
 
     struct Expression;
 
     struct LambdaExpression {
-        IdenAstNode arg;
-        intp::types::Type arg_type;
-        std::unique_ptr<Expression> expr;
-        loc::Loc loc;
+        IdentifierAstNode arg;
+        intp::types::Type argumentType;
+        std::unique_ptr<Expression> expression;
+        loc::Loc location;
         /// Maybe, this is redundant
         /// TODO: Remove after checking
-        intp::types::CompoundType lmd_expr_type; // Lambda Expression Type
+        intp::types::CompoundType lambdaExpressionType;
 
-        void print(std::ostream &os, size_t indent) const;
+        void print(std::ostream &stream, size_t indent) const;
 
-        friend std::ostream &operator<<(std::ostream &os, const LambdaExpression &l_expr);
+        friend std::ostream &operator<<(std::ostream &stream, const LambdaExpression &lambdaExpression);
     };
 
     struct FunctionApplication {
-        IdenAstNode fn_name;
-        std::vector<std::unique_ptr<Expression> > args;
-        loc::Loc loc;
+        IdentifierAstNode functionName;
+        std::vector<std::unique_ptr<Expression> > arguments;
+        loc::Loc location;
 
-        void print(std::ostream &os, size_t indent) const;
+        void print(std::ostream &stream, size_t indent) const;
 
-        friend std::ostream &operator<<(std::ostream &os, const FunctionApplication &fn_apl);
+        friend std::ostream &operator<<(std::ostream &stream, const FunctionApplication &functionApplication);
     };
 
     struct Expression {
         using ExpressionVariant = std::variant<
-            IdenAstNode,
+            IdentifierAstNode,
             StringAstNode,
             FloatAstNode,
             LambdaExpression,
@@ -65,7 +65,7 @@ namespace fe::ast {
 
         ExpressionVariant value;
 
-        explicit Expression(IdenAstNode value);
+        explicit Expression(IdentifierAstNode value);
 
         explicit Expression(StringAstNode value);
 
@@ -75,11 +75,11 @@ namespace fe::ast {
 
         explicit Expression(FunctionApplication value);
 
-        void print(std::ostream &os, size_t indent) const;
+        void print(std::ostream &stream, size_t indent) const;
 
-        friend std::ostream &operator<<(std::ostream &os, const Expression &expr);
+        friend std::ostream &operator<<(std::ostream &stream, const Expression &expression);
 
-        [[nodiscard]] loc::Loc get_loc() const;
+        [[nodiscard]] loc::Loc getLocation() const;
 
         Expression(const Expression &) = delete;
 
@@ -90,30 +90,30 @@ namespace fe::ast {
         Expression &operator=(Expression &&) noexcept = default;
     };
 
-    struct DefAstNode {
-        IdenAstNode def_name;
-        intp::types::Type typ;
-        Expression expr;
-        loc::Loc loc;
+    struct DefinitionAstNode {
+        IdentifierAstNode definitionName;
+        intp::types::Type definitionType;
+        Expression expression;
+        loc::Loc location;
 
-        void print(std::ostream &os, size_t indent) const;
+        void print(std::ostream &stream, size_t indent) const;
 
-        friend std::ostream &operator<<(std::ostream &os, const DefAstNode &node);
+        friend std::ostream &operator<<(std::ostream &stream, const DefinitionAstNode &node);
     };
 
     struct AstNode {
-        using NodeVariant = std::variant<Expression, DefAstNode>;
+        using NodeVariant = std::variant<Expression, DefinitionAstNode>;
 
         NodeVariant value;
 
-        void print(std::ostream &os, size_t indent) const;
+        void print(std::ostream &stream, size_t indent) const;
 
-        friend std::ostream &operator<<(std::ostream &os, const AstNode &node);
+        friend std::ostream &operator<<(std::ostream &stream, const AstNode &node);
     };
 
     struct Program {
         std::vector<AstNode> nodes;
 
-        friend std::ostream &operator<<(std::ostream &os, const Program &p);
+        friend std::ostream &operator<<(std::ostream &stream, const Program &program);
     };
 }

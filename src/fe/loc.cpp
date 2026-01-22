@@ -1,5 +1,6 @@
 #include <lbd/fe/loc.h>
 
+#include <iostream>
 #include <utility>
 
 namespace fe::loc {
@@ -7,7 +8,7 @@ namespace fe::loc {
                                                                          filepath(std::move(filepath)) {
     }
 
-    std::ostream &operator<<(std::ostream &os, const Loc &loc) {
-        return os << loc.filepath << ":" << loc.row << ":" << loc.col;
+    std::ostream &operator<<(std::ostream &stream, const Loc &location) {
+        return stream << location.filepath << ":" << location.row << ":" << location.col;
     }
 }

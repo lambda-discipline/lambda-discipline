@@ -4,50 +4,50 @@
 #include "../../include/lbd/utils/string_escape.h"
 
 namespace fe::ast {
-    static void print_indent(std::ostream &os, const size_t indent) {
+    static void printIndent(std::ostream &stream, const size_t indent) {
         for (size_t i = 0; i < indent; ++i) {
-            os << "    ";
+            stream << "    ";
         }
     }
 
-    std::ostream &operator<<(std::ostream &os, const IdenAstNode &node) {
-        return os << node.value;
+    std::ostream &operator<<(std::ostream &stream, const IdentifierAstNode &node) {
+        return stream << node.value;
     }
 
-    std::ostream &operator<<(std::ostream &os, const StringAstNode &node) {\
-        return os << "\"" << escape(node.value) << "\"";
+    std::ostream &operator<<(std::ostream &stream, const StringAstNode &node) {\
+        return stream << "\"" << escape(node.value) << "\"";
     }
 
-    std::ostream &operator<<(std::ostream &os, const FloatAstNode &node) {
-        return os << node.value;
+    std::ostream &operator<<(std::ostream &stream, const FloatAstNode &node) {
+        return stream << node.value;
     }
 
-    void LambdaExpression::print(std::ostream &os, const size_t indent) const {
-        print_indent(os, indent);
-        os << "\\" << arg << ": " << arg_type << "." << std::endl;
-        expr->print(os, indent + 1);
+    void LambdaExpression::print(std::ostream &stream, const size_t indent) const {
+        printIndent(stream, indent);
+        stream << "\\" << arg << ": " << argumentType << "." << std::endl;
+        expression->print(stream, indent + 1);
     }
 
-    std::ostream &operator<<(std::ostream &os, const LambdaExpression &l_expr) {
-        l_expr.print(os, 0);
-        return os;
+    std::ostream &operator<<(std::ostream &stream, const LambdaExpression &lambdaExpression) {
+        lambdaExpression.print(stream, 0);
+        return stream;
     }
 
-    void FunctionApplication::print(std::ostream &os, const size_t indent) const {
-        print_indent(os, indent);
-        os << "(" << fn_name;
-        for (auto &arg: args) {
-            os << " " << *arg;
+    void FunctionApplication::print(std::ostream &stream, const size_t indent) const {
+        printIndent(stream, indent);
+        stream << "(" << functionName;
+        for (auto &argument: arguments) {
+            stream << " " << *argument;
         }
-        os << ")";
+        stream << ")";
     }
 
-    std::ostream &operator<<(std::ostream &os, const FunctionApplication &fn_apl) {
-        fn_apl.print(os, 0);
-        return os;
+    std::ostream &operator<<(std::ostream &stream, const FunctionApplication &functionApplication) {
+        functionApplication.print(stream, 0);
+        return stream;
     }
 
-    Expression::Expression(IdenAstNode value) : value(std::move(value)) {
+    Expression::Expression(IdentifierAstNode value) : value(std::move(value)) {
     }
 
     Expression::Expression(StringAstNode value) : value(std::move(value)) {
@@ -62,59 +62,59 @@ namespace fe::ast {
     Expression::Expression(FunctionApplication value) : value(std::move(value)) {
     }
 
-    void Expression::print(std::ostream &os, size_t indent) const {
-        std::visit([&]<typename T0>(T0 &&arg) {
+    void Expression::print(std::ostream &stream, size_t indent) const {
+        std::visit([&]<typename T0>(T0 &&argument) {
             using T = std::decay_t<T0>;
-            if constexpr (std::is_same_v<T, IdenAstNode>
+            if constexpr (std::is_same_v<T, IdentifierAstNode>
                           || std::is_same_v<T, StringAstNode>
                           || std::is_same_v<T, FloatAstNode>) {
-                print_indent(os, indent);
-                os << arg;
+                printIndent(stream, indent);
+                stream << argument;
             } else if constexpr (std::is_same_v<T, LambdaExpression> || std::is_same_v<T, FunctionApplication>) {
-                arg.print(os, indent);
+                argument.print(stream, indent);
             } else {
                 STATIC_ASSERT_UNREACHABLE_T(T, "unhandled expression");
             }
         }, value);
     }
 
-    std::ostream &operator<<(std::ostream &os, const Expression &expr) {
-        expr.print(os, 0);
-        return os;
+    std::ostream &operator<<(std::ostream &stream, const Expression &expression) {
+        expression.print(stream, 0);
+        return stream;
     }
 
-    loc::Loc Expression::get_loc() const {
+    loc::Loc Expression::getLocation() const {
         return std::visit([&](auto &&arg) {
-            return arg.loc;
+            return arg.location;
         }, value);
     }
 
-    void DefAstNode::print(std::ostream &os, size_t indent) const {
-        print_indent(os, indent);
-        os << "def " << def_name << ": " << typ << " = " << expr;
+    void DefinitionAstNode::print(std::ostream &stream, const size_t indent) const {
+        printIndent(stream, indent);
+        stream << "def " << definitionName << ": " << definitionType << " = " << expression;
     }
 
-    std::ostream &operator<<(std::ostream &os, const DefAstNode &node) {
-        node.print(os, 0);
-        return os;
+    std::ostream &operator<<(std::ostream &stream, const DefinitionAstNode &node) {
+        node.print(stream, 0);
+        return stream;
     }
 
-    void AstNode::print(std::ostream &os, size_t indent) const {
+    void AstNode::print(std::ostream &stream, size_t indent) const {
         std::visit([&](auto &&arg) {
-            arg.print(os, indent);
+            arg.print(stream, indent);
         }, value);
-        os << std::endl;
+        stream << std::endl;
     }
 
-    std::ostream &operator<<(std::ostream &os, const AstNode &node) {
-        node.print(os, 0);
-        return os;
+    std::ostream &operator<<(std::ostream &stream, const AstNode &node) {
+        node.print(stream, 0);
+        return stream;
     }
 
-    std::ostream &operator<<(std::ostream &os, const Program &p) {
-        for (const ast::AstNode &node: p.nodes) {
-            os << node;
+    std::ostream &operator<<(std::ostream &stream, const Program &program) {
+        for (const AstNode &node: program.nodes) {
+            stream << node;
         }
-        return os;
+        return stream;
     }
 }

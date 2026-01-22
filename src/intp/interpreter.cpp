@@ -153,37 +153,37 @@ namespace intp::interp {
         return vec;
     }
 
-    static Value eval_iden_ast_node(const fe::ast::IdenAstNode &iden_ast_node, const std::shared_ptr<Env> &env) {
+    static Value eval_iden_ast_node(const fe::ast::IdentifierAstNode &iden_ast_node, const std::shared_ptr<Env> &env) {
         const auto thunk = env->lookup(iden_ast_node.value);
         if (!thunk) {
-            options_v.logger.error(iden_ast_node.loc, "runtime error: undefined identifier ", iden_ast_node.value);
+            options_v.logger.error(iden_ast_node.location, "runtime error: undefined identifier ", iden_ast_node.value);
         }
         return thunk->force();
     }
 
     static Value eval_lambda_expr(const fe::ast::LambdaExpression &l_expr, const std::shared_ptr<Env> &env) {
-        return Value(Closure{l_expr.arg.value, l_expr.expr.get(), env});
+        return Value(Closure{l_expr.arg.value, l_expr.expression.get(), env});
     }
 
     static Value eval_fn_apl(const fe::ast::FunctionApplication &fn_apl, const std::shared_ptr<Env> &env) {
         // Lookup the callee lazily
-        const auto callee_thunk = env->lookup(fn_apl.fn_name.value);
+        const auto callee_thunk = env->lookup(fn_apl.functionName.value);
         if (!callee_thunk) {
-            options_v.logger.error(fn_apl.loc, "runtime error: undefined function ", fn_apl.fn_name.value);
+            options_v.logger.error(fn_apl.location, "runtime error: undefined function ", fn_apl.functionName.value);
         }
         const Value fn_value = callee_thunk->force();
         std::vector<std::shared_ptr<Thunk> > arg_thunks;
-        arg_thunks.reserve(fn_apl.args.size());
-        for (const auto &arg: fn_apl.args) {
+        arg_thunks.reserve(fn_apl.arguments.size());
+        for (const auto &arg: fn_apl.arguments) {
             arg_thunks.push_back(std::make_shared<Thunk>(arg.get(), env));
         }
-        return apply_fn_apl(fn_value, arg_thunks, env, fn_apl.loc);
+        return apply_fn_apl(fn_value, arg_thunks, env, fn_apl.location);
     }
 
     Value eval_expr(const fe::ast::Expression &expr, std::shared_ptr<Env> env) {
         return std::visit([&]<typename T0>(T0 &&arg) {
             using T = std::decay_t<T0>;
-            if constexpr (std::is_same_v<T, fe::ast::IdenAstNode>) {
+            if constexpr (std::is_same_v<T, fe::ast::IdentifierAstNode>) {
                 return eval_iden_ast_node(arg, env);
             } else if constexpr (std::is_same_v<T, fe::ast::StringAstNode> || std::is_same_v<T,
                                      fe::ast::FloatAstNode>) {
@@ -319,14 +319,14 @@ namespace intp::interp {
     }
 
     // Creates placeholder Thunk then set body so recursion can refer to it during lazy evaluation
-    static void bind_def_ast_node_lazy(fe::ast::DefAstNode &def_ast_node, const std::shared_ptr<Env> &env,
+    static void bind_def_ast_node_lazy(fe::ast::DefinitionAstNode &def_ast_node, const std::shared_ptr<Env> &env,
                                        const options::Options options) {
         const auto thunk = std::make_shared<Thunk>();
-        env->bind(def_ast_node.def_name.value, thunk);
+        env->bind(def_ast_node.definitionName.value, thunk);
         if (options.own_expr) {
-            thunk->set_owned(std::move(def_ast_node.expr), env, def_ast_node.expr.get_loc());
+            thunk->set_owned(std::move(def_ast_node.expression), env, def_ast_node.expression.getLocation());
         } else {
-            thunk->set(&def_ast_node.expr, env, def_ast_node.expr.get_loc());
+            thunk->set(&def_ast_node.expression, env, def_ast_node.expression.getLocation());
         }
     }
 
@@ -343,10 +343,10 @@ namespace intp::interp {
                 using T = std::decay_t<T0>;
                 if constexpr (std::is_same_v<T, fe::ast::Expression>) {
                     result_value = eval_expr(arg, *global_env);
-                } else if constexpr (std::is_same_v<T, fe::ast::DefAstNode>) {
+                } else if constexpr (std::is_same_v<T, fe::ast::DefinitionAstNode>) {
                     bind_def_ast_node_lazy(arg, *global_env, options_v);
-                    const fe::ast::DefAstNode &def_ast_node = arg;
-                    result_value = def_ast_node.def_name.value;
+                    const fe::ast::DefinitionAstNode &def_ast_node = arg;
+                    result_value = def_ast_node.definitionName.value;
                 } else {
                     STATIC_ASSERT_UNREACHABLE_T(T, "unhandled program node");
                 }

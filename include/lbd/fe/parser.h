@@ -15,25 +15,25 @@ namespace fe::parser {
     private:
         // TODO: Add checks for T to be a variant of fe::token::TokenType
         template<typename T>
-        static void assert_token(const std::vector<token::Token> &tokens, size_t &i);
+        static void assertToken(const std::vector<token::Token> &tokens, size_t &index);
 
         template<typename T>
-        static void assert_n_eat(const std::vector<token::Token> &tokens, size_t &i);
+        static void assertAndConsume(const std::vector<token::Token> &tokens, size_t &index);
 
-        static ast::IdenAstNode eat_iden(const std::vector<token::Token> &tokens, size_t &i);
+        static ast::IdentifierAstNode consumeIdentifier(const std::vector<token::Token> &tokens, size_t &index);
 
-        static intp::types::PrimitiveType eat_primitive_type_name(const std::vector<token::Token> &tokens, size_t &i);
+        static intp::types::PrimitiveType consumePrimitiveTypeName(const std::vector<token::Token> &tokens, size_t &index);
 
-        static intp::types::Type parse_type(const std::vector<token::Token> &tokens, size_t &i);
+        static intp::types::Type parseType(const std::vector<token::Token> &tokens, size_t &index);
 
-        static ast::Expression parse_expression(const std::vector<token::Token> &tokens, size_t &i);
+        static ast::Expression parseExpression(const std::vector<token::Token> &tokens, size_t &index);
 
-        static ast::LambdaExpression parse_lambda_expression(const std::vector<token::Token> &tokens, size_t &i);
+        static ast::LambdaExpression parseLambdaExpression(const std::vector<token::Token> &tokens, size_t &index);
 
-        static ast::FunctionApplication parse_function_application(const std::vector<token::Token> &tokens, size_t &i);
+        static ast::FunctionApplication parseFunctionApplication(const std::vector<token::Token> &tokens, size_t &index);
 
-        static ast::DefAstNode parse_def_ast_node(const std::vector<token::Token> &tokens, size_t &i);
+        static ast::DefinitionAstNode parseDefinitionAstNode(const std::vector<token::Token> &tokens, size_t &index);
 
-        static std::vector<ast::AstNode> build_ast(const std::vector<token::Token> &tokens, size_t &i);
+        static std::vector<ast::AstNode> build(const std::vector<token::Token> &tokens, size_t &index);
     };
 }

@@ -26,7 +26,7 @@ namespace repl {
         }
 
         fe::lexer::Lexer lexer(filepath, fe::lexer::FromFile{}, sub_options);
-        const auto tokens = lexer.lex_all();
+        const auto tokens = lexer.lexAll();
         if (sub_options.debug) {
             for (const auto &tok: tokens) {
                 sub_options.logger.debug(tok);
@@ -206,7 +206,7 @@ namespace repl {
 
                 // Lex
                 fe::lexer::Lexer lexer_v(line, fe::lexer::FromRepl{}, options_v);
-                const std::vector<fe::token::Token> tokens = lexer_v.lex_all();
+                const std::vector<fe::token::Token> tokens = lexer_v.lexAll();
                 if (options_v.debug) {
                     for (const auto &tok: tokens) {
                         options_v.logger.debug(tok);
