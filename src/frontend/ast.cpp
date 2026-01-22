@@ -1,9 +1,8 @@
 #include <lbd/error.h>
-#include <lbd/fe/ast.h>
+#include <lbd/frontend/ast.h>
+#include <lbd/utils/string_escape.h>
 
-#include "../../include/lbd/utils/string_escape.h"
-
-namespace fe::ast {
+namespace frontend {
     static void printIndent(std::ostream &stream, const size_t indent) {
         for (size_t i = 0; i < indent; ++i) {
             stream << "    ";
@@ -24,7 +23,7 @@ namespace fe::ast {
 
     void LambdaExpression::print(std::ostream &stream, const size_t indent) const {
         printIndent(stream, indent);
-        stream << "\\" << arg << ": " << argumentType << "." << std::endl;
+        stream << "\\" << argument << ": " << argumentType << "." << std::endl;
         expression->print(stream, indent + 1);
     }
 
@@ -83,7 +82,7 @@ namespace fe::ast {
         return stream;
     }
 
-    loc::Loc Expression::getLocation() const {
+    Location Expression::getLocation() const {
         return std::visit([&](auto &&arg) {
             return arg.location;
         }, value);

@@ -7,12 +7,12 @@ include_directories(
     ${CMAKE_SOURCE_DIR}/include
 )
 
-add_library(fe STATIC
-    ${CMAKE_SOURCE_DIR}/src/fe/loc.cpp
-    ${CMAKE_SOURCE_DIR}/src/fe/token.cpp
-    ${CMAKE_SOURCE_DIR}/src/fe/lexer.cpp
-    ${CMAKE_SOURCE_DIR}/src/fe/ast.cpp
-    ${CMAKE_SOURCE_DIR}/src/fe/parser.cpp
+add_library(frontend STATIC
+    ${CMAKE_SOURCE_DIR}/src/frontend/location.cpp
+    ${CMAKE_SOURCE_DIR}/src/frontend/token.cpp
+    ${CMAKE_SOURCE_DIR}/src/frontend/lexer.cpp
+    ${CMAKE_SOURCE_DIR}/src/frontend/ast.cpp
+    ${CMAKE_SOURCE_DIR}/src/frontend/parser.cpp
 )
 
 add_library(intp STATIC
@@ -30,8 +30,8 @@ add_executable(lbd
     ${CMAKE_SOURCE_DIR}/src/repl.cpp
 )
 
-target_link_libraries(lbd PRIVATE fe intp -static)
+target_link_libraries(lbd PRIVATE frontend intp -static)
 
 # TODO: Add build tests
 # EXAMPLE: add_executable(lexer_test ../tests/lexer_test.cc)
-#          target_link_libraries(lexer_test PRIVATE fe)
+#          target_link_libraries(lexer_test PRIVATE frontend)

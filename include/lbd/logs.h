@@ -1,7 +1,7 @@
 #pragma once
 
 #include <optional>
-#include <lbd/fe/loc.h>
+#include <lbd/frontend/location.h>
 #include <lbd/utils/term.h>
 #include <lbd/exceptions.h>
 
@@ -21,7 +21,7 @@ namespace logs {
         }
 
         template<typename... Arguments>
-        [[noreturn]] void error(const std::optional<fe::loc::Loc> &location, Arguments &&... arguments) const {
+        [[noreturn]] void error(const std::optional<frontend::Location> &location, Arguments &&... arguments) const {
             if (useColor) {
                 std::cerr << colors::RED;
             }

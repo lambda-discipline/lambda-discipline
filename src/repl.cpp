@@ -3,8 +3,8 @@
 #include <iostream>
 #include <lbd/repl.h>
 #include <lbd/utils/term.h>
-#include <lbd/fe/lexer.h>
-#include <lbd/fe/parser.h>
+#include <lbd/frontend/lexer.h>
+#include <lbd/frontend/parser.h>
 #include <lbd/intp/interpreter.h>
 #include <lbd/exceptions.h>
 
@@ -25,7 +25,7 @@ namespace repl {
             subOptions.logger.error({}, "IO error: filepath ", filepath, " does not exist");
         }
 
-        fe::lexer::Lexer lexer(filepath, fe::lexer::FromFile{}, subOptions);
+        frontend::Lexer lexer(filepath, frontend::FromFile{}, subOptions);
         const auto tokens = lexer.lexAll();
         if (subOptions.debug) {
             for (const auto &token: tokens) {
@@ -33,7 +33,7 @@ namespace repl {
             }
         }
 
-        fe::parser::Parser parser(tokens, subOptions);
+        frontend::Parser parser(tokens, subOptions);
         if (subOptions.debug) {
             for (const auto &node: parser.program.nodes) {
                 subOptions.logger.debug(node);
@@ -204,8 +204,8 @@ namespace repl {
                 buffer.clear();
 
                 // Lex
-                fe::lexer::Lexer lexerValue(line, fe::lexer::FromRepl{}, optionsValue);
-                const std::vector<fe::token::Token> tokens = lexerValue.lexAll();
+                frontend::Lexer lexerValue(line, frontend::FromRepl{}, optionsValue);
+                const std::vector<frontend::token::Token> tokens = lexerValue.lexAll();
                 if (optionsValue.debug) {
                     for (const auto &tok: tokens) {
                         optionsValue.logger.debug(tok);
@@ -213,7 +213,7 @@ namespace repl {
                 }
 
                 // Parse
-                fe::parser::Parser parserValue(tokens, optionsValue);
+                frontend::Parser parserValue(tokens, optionsValue);
                 if (optionsValue.debug) {
                     optionsValue.logger.debug(parserValue.program);
                 }

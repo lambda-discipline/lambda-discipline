@@ -74,8 +74,8 @@ namespace intp::interp {
         return stream << nativeFunction.toString();
     }
 
-    Thunk::Thunk(const fe::ast::Expression *expression, std::shared_ptr<Environment> environment,
-                 std::optional<fe::loc::Loc> origin) : expression(expression), environment(std::move(environment)),
+    Thunk::Thunk(const frontend::Expression *expression, std::shared_ptr<Environment> environment,
+                 std::optional<frontend::Location> origin) : expression(expression), environment(std::move(environment)),
                                                        origin(std::move(origin)) {
     }
 
@@ -91,8 +91,8 @@ namespace intp::interp {
         return cached.value();
     }
 
-    void Thunk::set(const fe::ast::Expression *expression_, std::shared_ptr<Environment> environment_,
-                    std::optional<fe::loc::Loc> origin_) {
+    void Thunk::set(const frontend::Expression *expression_, std::shared_ptr<Environment> environment_,
+                    std::optional<frontend::Location> origin_) {
         expression = expression_;
         owned.reset();
         environment = std::move(environment_);
@@ -102,9 +102,9 @@ namespace intp::interp {
         cached.reset();
     }
 
-    void Thunk::set_owned(fe::ast::Expression expression_, std::shared_ptr<Environment> environment_,
-                          std::optional<fe::loc::Loc> origin_) {
-        owned = std::make_unique<fe::ast::Expression>(std::move(expression_));
+    void Thunk::set_owned(frontend::Expression expression_, std::shared_ptr<Environment> environment_,
+                          std::optional<frontend::Location> origin_) {
+        owned = std::make_unique<frontend::Expression>(std::move(expression_));
         expression = owned.get();
         environment = std::move(environment_);
         if (origin_.has_value()) {
@@ -155,7 +155,7 @@ namespace intp::interp {
         return result;
     }
 
-    static Value evaluateIdentifierAstNode(const fe::ast::IdentifierAstNode &identifierAstNode,
+    static Value evaluateIdentifierAstNode(const frontend::IdentifierAstNode &identifierAstNode,
                                            const std::shared_ptr<Environment> &environment) {
         const auto thunk = environment->lookup(identifierAstNode.value);
         if (!thunk) {
@@ -165,12 +165,12 @@ namespace intp::interp {
         return thunk->force();
     }
 
-    static Value evaluateLambdaExpression(const fe::ast::LambdaExpression &lambdaExpression,
+    static Value evaluateLambdaExpression(const frontend::LambdaExpression &lambdaExpression,
                                           const std::shared_ptr<Environment> &environment) {
-        return Value(Closure{lambdaExpression.arg.value, lambdaExpression.expression.get(), environment});
+        return Value(Closure{lambdaExpression.argument.value, lambdaExpression.expression.get(), environment});
     }
 
-    static Value evaluateFunctionApplication(const fe::ast::FunctionApplication &functionApplication,
+    static Value evaluateFunctionApplication(const frontend::FunctionApplication &functionApplication,
                                              const std::shared_ptr<Environment> &environment) {
         // Lookup the callee lazily.
         const auto calleeThunk = environment->lookup(functionApplication.functionName.value);
@@ -187,17 +187,17 @@ namespace intp::interp {
         return applyFunctionApplication(functionValue, argumentThunks, environment, functionApplication.location);
     }
 
-    Value evalExpression(const fe::ast::Expression &expression, std::shared_ptr<Environment> environment) {
+    Value evalExpression(const frontend::Expression &expression, std::shared_ptr<Environment> environment) {
         return std::visit([&]<typename T0>(T0 &&arg) {
             using T = std::decay_t<T0>;
-            if constexpr (std::is_same_v<T, fe::ast::IdentifierAstNode>) {
+            if constexpr (std::is_same_v<T, frontend::IdentifierAstNode>) {
                 return evaluateIdentifierAstNode(arg, environment);
-            } else if constexpr (std::is_same_v<T, fe::ast::StringAstNode> || std::is_same_v<T,
-                                     fe::ast::FloatAstNode>) {
+            } else if constexpr (std::is_same_v<T, frontend::StringAstNode> || std::is_same_v<T,
+                                     frontend::FloatAstNode>) {
                 return Value(arg.value);
-            } else if constexpr (std::is_same_v<T, fe::ast::LambdaExpression>) {
+            } else if constexpr (std::is_same_v<T, frontend::LambdaExpression>) {
                 return evaluateLambdaExpression(arg, environment);
-            } else if constexpr (std::is_same_v<T, fe::ast::FunctionApplication>) {
+            } else if constexpr (std::is_same_v<T, frontend::FunctionApplication>) {
                 return evaluateFunctionApplication(arg, environment);
             } else {
                 STATIC_ASSERT_UNREACHABLE_T(T, "unhandled expression");
@@ -213,7 +213,7 @@ namespace intp::interp {
 
     Value applyFunctionApplication(Value functionName, const std::vector<std::shared_ptr<Thunk> > &arguments,
                                    const std::shared_ptr<Environment> &callSiteEnvironment,
-                                   const std::optional<fe::loc::Loc> &callLocation) {
+                                   const std::optional<frontend::Location> &callLocation) {
         // Local mutable copy of the args, for inserting evaluated values as Thunks when needed.
         std::vector<std::shared_ptr<Thunk> > workArguments = arguments;
         // Frame Stack: Functions to which we are currently applying Arguments.
@@ -331,7 +331,7 @@ namespace intp::interp {
     }
 
     // Creates placeholder Thunk then set body so recursion can refer to it during lazy evaluation
-    static void bindDefinitionAstNodeLazy(fe::ast::DefinitionAstNode &definitionAstNode,
+    static void bindDefinitionAstNodeLazy(frontend::DefinitionAstNode &definitionAstNode,
                                           const std::shared_ptr<Environment> &environment,
                                           const options::Options options) {
         const auto thunk = std::make_shared<Thunk>();
@@ -344,7 +344,7 @@ namespace intp::interp {
         }
     }
 
-    Result interpret(fe::ast::Program &program, std::optional<std::shared_ptr<Environment> > globalEnvironment,
+    Result interpret(frontend::Program &program, std::optional<std::shared_ptr<Environment> > globalEnvironment,
                      const options::Options options_) {
         optionsValue = options_;
         if (!globalEnvironment) {
@@ -355,11 +355,11 @@ namespace intp::interp {
         for (auto &[value]: program.nodes) {
             std::visit([&]<typename T0>(T0 &&argument) {
                 using T = std::decay_t<T0>;
-                if constexpr (std::is_same_v<T, fe::ast::Expression>) {
+                if constexpr (std::is_same_v<T, frontend::Expression>) {
                     resultantValue = evalExpression(argument, *globalEnvironment);
-                } else if constexpr (std::is_same_v<T, fe::ast::DefinitionAstNode>) {
+                } else if constexpr (std::is_same_v<T, frontend::DefinitionAstNode>) {
                     bindDefinitionAstNodeLazy(argument, *globalEnvironment, optionsValue);
-                    const fe::ast::DefinitionAstNode &definitionAstNode = argument;
+                    const frontend::DefinitionAstNode &definitionAstNode = argument;
                     resultantValue = definitionAstNode.definitionName.value;
                 } else {
                     STATIC_ASSERT_UNREACHABLE_T(T, "unhandled program node");

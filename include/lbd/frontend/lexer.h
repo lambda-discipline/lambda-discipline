@@ -1,12 +1,12 @@
 #pragma once
 
-#include <lbd/fe/loc.h>
-#include <lbd/fe/token.h>
+#include <lbd/frontend/location.h>
+#include <lbd/frontend/token.h>
 #include <lbd/options.h>
 #include <string>
 #include <vector>
 
-namespace fe::lexer {
+namespace frontend {
     struct FromFile {
     };
 
@@ -14,6 +14,7 @@ namespace fe::lexer {
     };
 
     struct Lexer {
+        // TODO: Make factory instead of these constructors.
         Lexer(const std::string &filepath, FromFile, options::Options options_ = {});
 
         Lexer(std::string str, FromRepl, options::Options options_ = {});
@@ -36,6 +37,6 @@ namespace fe::lexer {
 
         [[nodiscard]] bool isEof() const;
 
-        [[nodiscard]] loc::Loc getCurrentLocation() const;
+        [[nodiscard]] Location getCurrentLocation() const;
     };
 }

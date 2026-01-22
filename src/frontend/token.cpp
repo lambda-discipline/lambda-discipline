@@ -1,10 +1,10 @@
 #include <lbd/error.h>
-#include <lbd/fe/token.h>
+#include <lbd/frontend/token.h>
 #include <iostream>
 #include <utility>
 
-namespace fe::token {
-    Token::Token(TokenType tokenType, loc::Loc location) : location(std::move(location)),
+namespace frontend::token {
+    Token::Token(TokenType tokenType, Location location) : location(std::move(location)),
                                                            tokenType(std::move(tokenType)) {
     }
 

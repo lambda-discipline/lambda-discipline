@@ -1,29 +1,29 @@
 #pragma once
 
-#include <lbd/fe/loc.h>
+#include <lbd/frontend/location.h>
 #include <lbd/intp/types.h>
 #include <string>
 #include <variant>
 #include <vector>
 
-namespace fe::ast {
+namespace frontend {
     struct IdentifierAstNode {
         std::string value;
-        loc::Loc location;
+        Location location;
 
         friend std::ostream &operator<<(std::ostream &stream, const IdentifierAstNode &node);
     };
 
     struct StringAstNode {
         std::string value;
-        loc::Loc location;
+        Location location;
 
         friend std::ostream &operator<<(std::ostream &stream, const StringAstNode &node);
     };
 
     struct FloatAstNode {
         double value;
-        loc::Loc location;
+        Location location;
 
         friend std::ostream &operator<<(std::ostream &stream, const FloatAstNode &node);
     };
@@ -31,12 +31,12 @@ namespace fe::ast {
     struct Expression;
 
     struct LambdaExpression {
-        IdentifierAstNode arg;
+        IdentifierAstNode argument;
         intp::types::Type argumentType;
         std::unique_ptr<Expression> expression;
-        loc::Loc location;
-        /// Maybe, this is redundant
-        /// TODO: Remove after checking
+        Location location;
+        /// Maybe, this is redundant.
+        // TODO: Remove after checking.
         intp::types::CompoundType lambdaExpressionType;
 
         void print(std::ostream &stream, size_t indent) const;
@@ -47,7 +47,7 @@ namespace fe::ast {
     struct FunctionApplication {
         IdentifierAstNode functionName;
         std::vector<std::unique_ptr<Expression> > arguments;
-        loc::Loc location;
+        Location location;
 
         void print(std::ostream &stream, size_t indent) const;
 
@@ -79,7 +79,7 @@ namespace fe::ast {
 
         friend std::ostream &operator<<(std::ostream &stream, const Expression &expression);
 
-        [[nodiscard]] loc::Loc getLocation() const;
+        [[nodiscard]] Location getLocation() const;
 
         Expression(const Expression &) = delete;
 
@@ -94,7 +94,7 @@ namespace fe::ast {
         IdentifierAstNode definitionName;
         intp::types::Type definitionType;
         Expression expression;
-        loc::Loc location;
+        Location location;
 
         void print(std::ostream &stream, size_t indent) const;
 

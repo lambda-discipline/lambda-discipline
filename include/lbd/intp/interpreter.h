@@ -4,8 +4,8 @@
 #include <optional>
 #include <string>
 #include <variant>
-#include <lbd/fe/ast.h>
-#include <lbd/fe/parser.h>
+#include <lbd/frontend/ast.h>
+#include <lbd/frontend/parser.h>
 #include <lbd/options.h>
 
 namespace intp::interp {
@@ -18,7 +18,7 @@ namespace intp::interp {
     /// Runtime representation of Lambda-Expression.
     struct Closure {
         std::string parameter;
-        const fe::ast::Expression *body; /// Non-owning, read-only AST pointer.
+        const frontend::Expression *body; /// Non-owning, read-only AST pointer.
         std::shared_ptr<Environment> environment; /// Environment at the time of Lambda-Expression creation.
 
         [[nodiscard]] std::string toString() const;
@@ -73,26 +73,26 @@ namespace intp::interp {
     /// Lazy-Thunk (call-by-need).
     struct Thunk : std::enable_shared_from_this<Thunk> {
         mutable std::optional<Value> cached;
-        const fe::ast::Expression *expression = nullptr; /// Non-owning, read-only AST pointer.
-        std::unique_ptr<fe::ast::Expression> owned; /// Owning storage (when needed) (primarily in REPL).
+        const frontend::Expression *expression = nullptr; /// Non-owning, read-only AST pointer.
+        std::unique_ptr<frontend::Expression> owned; /// Owning storage (when needed) (primarily in REPL).
         std::shared_ptr<Environment> environment; /// Environment for evaluating Expression.
-        std::optional<fe::loc::Loc> origin = std::nullopt;
+        std::optional<frontend::Location> origin = std::nullopt;
 
         Thunk() = default;
 
-        Thunk(const fe::ast::Expression *expression, std::shared_ptr<Environment> environment,
-              std::optional<fe::loc::Loc> origin = std::nullopt);
+        Thunk(const frontend::Expression *expression, std::shared_ptr<Environment> environment,
+              std::optional<frontend::Location> origin = std::nullopt);
 
         /// Force computation on Thunk and return a const reference to Value.
         const Value &force() const; /// Marked const as cached is mutable.
 
         /// Sets Thunk's fields after construction.
         /// Allows for recursive reference.
-        void set(const fe::ast::Expression *expression_, std::shared_ptr<Environment> environment_,
-                 std::optional<fe::loc::Loc> origin_ = std::nullopt);
+        void set(const frontend::Expression *expression_, std::shared_ptr<Environment> environment_,
+                 std::optional<frontend::Location> origin_ = std::nullopt);
 
-        void set_owned(fe::ast::Expression expression_, std::shared_ptr<Environment> environment_,
-                       std::optional<fe::loc::Loc> origin_ = std::nullopt);
+        void set_owned(frontend::Expression expression_, std::shared_ptr<Environment> environment_,
+                       std::optional<frontend::Location> origin_ = std::nullopt);
     };
 
     struct Environment : std::enable_shared_from_this<Environment> {
@@ -108,11 +108,11 @@ namespace intp::interp {
         std::vector<std::vector<std::string> > toVector(bool force) const;
     };
 
-    Value evalExpression(const fe::ast::Expression &expression, std::shared_ptr<Environment> environment);
+    Value evalExpression(const frontend::Expression &expression, std::shared_ptr<Environment> environment);
 
     Value applyFunctionApplication(Value functionName, const std::vector<std::shared_ptr<Thunk> > &arguments,
                                    const std::shared_ptr<Environment> &callSiteEnvironment,
-                                   const std::optional<fe::loc::Loc> &callLocation = std::nullopt);
+                                   const std::optional<frontend::Location> &callLocation = std::nullopt);
 
     /// Program Driver.
     struct Result {
@@ -121,7 +121,7 @@ namespace intp::interp {
         ResultOptions options = {};
     };
 
-    Result interpret(fe::ast::Program &program, std::optional<std::shared_ptr<Environment> > globalEnvironment = std::nullopt,
+    Result interpret(frontend::Program &program, std::optional<std::shared_ptr<Environment> > globalEnvironment = std::nullopt,
                      options::Options options_ = {});
 
     /// Add builtins Native Functions into Environment.

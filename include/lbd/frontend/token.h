@@ -1,10 +1,10 @@
 #pragma once
 
-#include <lbd/fe/loc.h>
+#include <lbd/frontend/location.h>
 #include <string>
 #include <variant>
 
-namespace fe::token {
+namespace frontend::token {
     struct Identifier {
         std::string value;
     };
@@ -57,10 +57,10 @@ namespace fe::token {
     >;
 
     struct Token {
-        loc::Loc location;
+        Location location;
         TokenType tokenType;
 
-        Token(TokenType tokenType, loc::Loc location);
+        Token(TokenType tokenType, Location location);
 
         friend std::ostream &operator<<(std::ostream &stream, const Token &token);
 

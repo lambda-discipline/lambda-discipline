@@ -1,10 +1,10 @@
-#include <lbd/fe/lexer.h>
+#include <lbd/frontend/lexer.h>
 #include <lbd/logs.h>
 #include <sstream>
 #include <utility>
 #include <fstream>
 
-namespace fe::lexer {
+namespace frontend {
     static options::Options optionsValue;
 
     char Lexer::peek() const {
@@ -29,7 +29,7 @@ namespace fe::lexer {
         return position >= source.size();
     }
 
-    loc::Loc Lexer::getCurrentLocation() const {
+    Location Lexer::getCurrentLocation() const {
         return {row, col, filepath};
     }
 
@@ -50,12 +50,12 @@ namespace fe::lexer {
 
     token::Token Lexer::nextToken() {
         char currentCharacter = peek();
-        // Skip whitespace
+        // Skip whitespace.
         while (std::isspace(currentCharacter)) {
-            get(); // Consume ' '
+            get(); // Consume ' '.
             currentCharacter = peek();
         }
-        const loc::Loc currentLocation = getCurrentLocation();
+        const Location currentLocation = getCurrentLocation();
         if (isEof()) {
             return {token::Eof(), currentLocation};
         }
@@ -76,7 +76,7 @@ namespace fe::lexer {
                 currentCharacter = peek();
             }
             if (currentCharacter == '.') {
-                get(); // Consume '.'
+                get(); // Consume '.'.
                 currentCharacter = peek();
                 while (std::isdigit(currentCharacter)) {
                     get();
@@ -86,13 +86,13 @@ namespace fe::lexer {
             const double value = std::stod(source.substr(start, position - start));
             return value;
         };
-        // Positive Float
+        // Positive Float.
         if (std::isdigit(currentCharacter)) {
             return {token::Float(lexFloat()), currentLocation};
         }
         // String Literal: " ... "
         if (currentCharacter == '"') {
-            get(); // Consume '"'
+            get(); // Consume '"'.
             const size_t start = position;
             currentCharacter = peek();
             while (currentCharacter != '"' && !isEof()) {
@@ -103,10 +103,10 @@ namespace fe::lexer {
             if (currentCharacter != '"') {
                 optionsValue.logger.error(currentLocation, "syntax error: unbalanced quote");
             }
-            get(); // Consume '"'
+            get(); // Consume '"'.
             return {token::String{value}, currentLocation};
         }
-        // Symbols
+        // Symbols.
         switch (currentCharacter) {
             case ':':
                 get();
@@ -155,9 +155,9 @@ namespace fe::lexer {
     std::vector<token::Token> Lexer::lexAll() {
         std::vector<token::Token> tokens;
         while (true) {
-            token::Token tok = nextToken();
-            tokens.push_back(tok);
-            if (std::holds_alternative<token::Eof>(tok.tokenType)) {
+            token::Token token = nextToken();
+            tokens.push_back(token);
+            if (std::holds_alternative<token::Eof>(token.tokenType)) {
                 break;
             }
         }

@@ -1,7 +1,7 @@
 ﻿#include <iostream>
-#include <lbd/fe/ast.h>
-#include <lbd/fe/lexer.h>
-#include <lbd/fe/parser.h>
+#include <lbd/frontend/ast.h>
+#include <lbd/frontend/lexer.h>
+#include <lbd/frontend/parser.h>
 #include <lbd/intp/interpreter.h>
 #include <lbd/cmd.h>
 #include <lbd/repl.h>
@@ -20,15 +20,15 @@ int main(const int argc, char **argv) {
         repl::loop(debug);
     } else {
         // Lex
-        auto lexerValue = fe::lexer::Lexer(*filepath, fe::lexer::FromFile{});
-        const std::vector<fe::token::Token> tokens = lexerValue.lexAll();
+        auto lexerValue = frontend::Lexer(*filepath, frontend::FromFile{});
+        const std::vector<frontend::token::Token> tokens = lexerValue.lexAll();
         if (debug) {
-            for (const fe::token::Token &token: tokens) {
+            for (const frontend::token::Token &token: tokens) {
                 std::cout << token << std::endl;
             }
         }
         // Parse
-        auto parser = fe::parser::Parser(tokens);
+        auto parser = frontend::Parser(tokens);
         if (debug) {
             std::cout << parser.program << std::endl;
         }
