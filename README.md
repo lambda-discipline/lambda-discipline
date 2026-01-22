@@ -24,6 +24,12 @@ bash ./scripts/setup.sh
 . .\scripts\setup.ps1
 ```
 
+### Tests
+
+```powershell
+python tests/tests.py
+```
+
 ## Samples
 
 Booleans and If-Then construct built entirely using Lambda Expressions.
@@ -115,3 +121,4 @@ lbd [options]
 
 - TODO: Add better examples (e.g., Advent of Code snippets).
 - TODO: Maybe use rere.py for testing
+- TODO: Fix tests output in README.
