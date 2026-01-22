@@ -1,0 +1,32 @@
+[
+  {
+    "name": "Hello World",
+    "source": "examples/hello_world.lbd",
+    "output": "examples/out/hello_world.out.txt"
+  },
+  {
+    "name": "Conditional branching",
+    "source": "examples/if_then.lbd",
+    "output": "examples/out/if_then.out.txt"
+  },
+  {
+    "name": "List",
+    "source": "examples/list.lbd",
+    "output": "examples/out/list.out.txt"
+  },
+  {
+    "name": "Fibonacci",
+    "source": "examples/math_demos.lbd",
+    "output": "examples/out/math_demos.out.txt"
+  },
+  {
+    "name": "Pair",
+    "source": "examples/pair.lbd",
+    "output": "examples/out/pair.out.txt"
+  },
+  {
+    "name": "Shapes",
+    "source": "examples/shapes.lbd",
+    "output": "examples/out/shapes.out.txt"
+  }
+]

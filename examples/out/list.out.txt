@@ -1,0 +1,7 @@
+list: []
+list: [Hello]
+list size: 1.000000
+list: [Hello, World]
+list[1]: World
+list: [Hello, World, Foo]
+list: [Hello, World]
