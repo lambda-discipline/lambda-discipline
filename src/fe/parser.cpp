@@ -47,7 +47,7 @@ namespace fe::parser {
             return intp::types::PrimitiveType{intp::types::PrimitiveType::Type::Float};
         }
         if (value == "Str") {
-            return intp::types::PrimitiveType{intp::types::PrimitiveType::Type::Str};
+            return intp::types::PrimitiveType{intp::types::PrimitiveType::Type::String};
         }
         if (value == "Any") {
             return intp::types::PrimitiveType{intp::types::PrimitiveType::Type::Any};
@@ -69,8 +69,8 @@ namespace fe::parser {
         intp::types::Type currentType = types.back();
         for (int typeIndex = static_cast<int>(types.size()) - 2; typeIndex >= 0; --typeIndex) {
             auto nextCompoundType = std::make_shared<intp::types::CompoundType>();
-            nextCompoundType->l_type = types[typeIndex];
-            nextCompoundType->r_type = currentType;
+            nextCompoundType->leftType = types[typeIndex];
+            nextCompoundType->rightType = currentType;
             currentType = nextCompoundType;
         }
         return currentType;

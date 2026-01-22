@@ -11,27 +11,27 @@
 namespace intp::interp {
     struct NativeFunction;
     struct Thunk;
-    struct Env;
+    struct Environment;
     struct List;
     struct Value;
 
-    /// Runtime representation of Lambda Expression
+    /// Runtime representation of Lambda-Expression.
     struct Closure {
-        std::string param;
-        const fe::ast::Expression *body; /// Non-owning, read-only AST pointer
-        std::shared_ptr<Env> env; /// Environment at the time of Lambda Expression creation
+        std::string parameter;
+        const fe::ast::Expression *body; /// Non-owning, read-only AST pointer.
+        std::shared_ptr<Environment> environment; /// Environment at the time of Lambda-Expression creation.
 
-        [[nodiscard]] std::string to_string() const;
+        [[nodiscard]] std::string toString() const;
 
-        friend std::ostream &operator<<(std::ostream &os, const Closure &closure);
+        friend std::ostream &operator<<(std::ostream &stream, const Closure &closure);
     };
 
     struct List {
         std::vector<Value> elements;
 
-        [[nodiscard]] std::string to_string() const;
+        [[nodiscard]] std::string toString() const;
 
-        friend std::ostream &operator<<(std::ostream &os, const List &list);
+        friend std::ostream &operator<<(std::ostream &stream, const List &list);
     };
 
     using ValueVariant = std::variant<
@@ -43,87 +43,87 @@ namespace intp::interp {
     >;
 
     struct Value : ValueVariant {
-        using ValueVariant::ValueVariant; // inherit constructors
+        using ValueVariant::ValueVariant; // Inherit constructors.
 
-        /// Pretty print a runtime value for REPL/diagnostics
-        [[nodiscard]] std::string to_string() const;
+        /// Pretty print a runtime value for REPL/diagnostics.
+        [[nodiscard]] std::string toString() const;
 
-        friend std::ostream &operator<<(std::ostream &os, const Value &value);
+        friend std::ostream &operator<<(std::ostream &stream, const Value &value);
     };
 
     struct ResultOptions {
-        bool side_effects = false;
+        bool sideEffects = false;
 
-        void interpolate(const ResultOptions &result_options_);
+        void interpolate(const ResultOptions &resultOptions_);
     };
 
     struct NativeFunction {
-        using Impl = std::function<std::pair<Value, ResultOptions>(
-            const std::vector<std::shared_ptr<Thunk> > &, const std::shared_ptr<Env> &)>;
+        using Implementation = std::function<std::pair<Value, ResultOptions>(
+            const std::vector<std::shared_ptr<Thunk> > &, const std::shared_ptr<Environment> &)>;
 
         int arity;
         std::string name;
-        Impl impl;
+        Implementation implementation;
 
-        [[nodiscard]] std::string to_string() const;
+        [[nodiscard]] std::string toString() const;
 
-        friend std::ostream &operator<<(std::ostream &os, const NativeFunction &native_fn);
+        friend std::ostream &operator<<(std::ostream &stream, const NativeFunction &nativeFunction);
     };
 
-    /// Lazy Thunk (call-by-need)
+    /// Lazy-Thunk (call-by-need).
     struct Thunk : std::enable_shared_from_this<Thunk> {
         mutable std::optional<Value> cached;
-        const fe::ast::Expression *expr = nullptr; /// Non-owning, read-only AST pointer
-        std::unique_ptr<fe::ast::Expression> owned; /// Owning storage (when needed) (primarily in REPL)
-        std::shared_ptr<Env> env; /// Environment for evaluating Expression
+        const fe::ast::Expression *expression = nullptr; /// Non-owning, read-only AST pointer.
+        std::unique_ptr<fe::ast::Expression> owned; /// Owning storage (when needed) (primarily in REPL).
+        std::shared_ptr<Environment> environment; /// Environment for evaluating Expression.
         std::optional<fe::loc::Loc> origin = std::nullopt;
 
         Thunk() = default;
 
-        Thunk(const fe::ast::Expression *expr, std::shared_ptr<Env> env,
+        Thunk(const fe::ast::Expression *expression, std::shared_ptr<Environment> environment,
               std::optional<fe::loc::Loc> origin = std::nullopt);
 
-        /// Force computation on Thunk and return a const reference to Value
-        const Value &force() const; /// Marked const as cached is mutable
+        /// Force computation on Thunk and return a const reference to Value.
+        const Value &force() const; /// Marked const as cached is mutable.
 
-        /// Sets Thunk's fields after construction
-        /// Allows for recursive reference
-        void set(const fe::ast::Expression *expr_, std::shared_ptr<Env> env_,
+        /// Sets Thunk's fields after construction.
+        /// Allows for recursive reference.
+        void set(const fe::ast::Expression *expression_, std::shared_ptr<Environment> environment_,
                  std::optional<fe::loc::Loc> origin_ = std::nullopt);
 
-        void set_owned(fe::ast::Expression expr_, std::shared_ptr<Env> env_,
+        void set_owned(fe::ast::Expression expression_, std::shared_ptr<Environment> environment_,
                        std::optional<fe::loc::Loc> origin_ = std::nullopt);
     };
 
-    struct Env : std::enable_shared_from_this<Env> {
+    struct Environment : std::enable_shared_from_this<Environment> {
         std::unordered_map<std::string, std::shared_ptr<Thunk> > table;
-        std::shared_ptr<Env> parent;
+        std::shared_ptr<Environment> parent;
 
-        explicit Env(std::shared_ptr<Env> parent = nullptr);
+        explicit Environment(std::shared_ptr<Environment> parent = nullptr);
 
         std::shared_ptr<Thunk> lookup(const std::string &name) const;
 
         void bind(const std::string &name, std::shared_ptr<Thunk> thunk);
 
-        std::vector<std::vector<std::string> > to_vector(bool force) const;
+        std::vector<std::vector<std::string> > toVector(bool force) const;
     };
 
-    Value eval_expr(const fe::ast::Expression &expr, std::shared_ptr<Env> env);
+    Value evalExpression(const fe::ast::Expression &expression, std::shared_ptr<Environment> environment);
 
-    Value apply_fn_apl(Value fn_value, const std::vector<std::shared_ptr<Thunk> > &args,
-                       const std::shared_ptr<Env> &call_site_env,
-                       const std::optional<fe::loc::Loc> &call_loc = std::nullopt);
+    Value applyFunctionApplication(Value functionName, const std::vector<std::shared_ptr<Thunk> > &arguments,
+                                   const std::shared_ptr<Environment> &callSiteEnvironment,
+                                   const std::optional<fe::loc::Loc> &callLocation = std::nullopt);
 
-    /// Program Driver
+    /// Program Driver.
     struct Result {
-        std::shared_ptr<Env> global_env;
+        std::shared_ptr<Environment> globalEnvironment;
         Value value;
         ResultOptions options = {};
     };
 
-    Result interpret(fe::ast::Program &program, std::optional<std::shared_ptr<Env> > global_env = std::nullopt,
+    Result interpret(fe::ast::Program &program, std::optional<std::shared_ptr<Environment> > globalEnvironment = std::nullopt,
                      options::Options options_ = {});
 
-    /// Add builtins Native Functions into Environment
-    void install_builtins(const std::shared_ptr<Env> &env);
+    /// Add builtins Native Functions into Environment.
+    void installBuiltins(const std::shared_ptr<Environment> &environment);
 }

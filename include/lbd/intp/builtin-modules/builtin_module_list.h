@@ -3,23 +3,23 @@
 #include <lbd/intp/builtins.h>
 
 namespace intp::interp::builtins {
-    NativeFunction make_list();
+    NativeFunction makeList();
 
-    NativeFunction make_list_size();
+    NativeFunction makeListSize();
 
-    NativeFunction make_list_get();
+    NativeFunction makeListGet();
 
-    NativeFunction make_list_remove();
+    NativeFunction makeListRemove();
 
-    NativeFunction make_list_append();
+    NativeFunction makeListAppend();
 
-    NativeFunction make_map();
+    NativeFunction makeMap();
 
-    NativeFunction make_transpose();
+    NativeFunction makeTranspose();
 
-    NativeFunction make_sort();
+    NativeFunction makeSort();
 
-    NativeFunction make_zip();
+    NativeFunction makeZip();
 
-    NativeFunction make_foldr();
+    NativeFunction makeFoldRight();
 }

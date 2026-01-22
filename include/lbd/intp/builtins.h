@@ -4,7 +4,7 @@
 #include <lbd/options.h>
 
 namespace intp::interp::builtins {
-    extern options::Options options_v;
+    extern options::Options optionsValue;
 
-    std::vector<NativeFunction> get_builtins(options::Options options_ = {});
+    std::vector<NativeFunction> getBuiltins(options::Options options_ = {});
 }

@@ -1,201 +1,202 @@
 #include <lbd/intp/builtin-modules/builtin_module_list.h>
 
 namespace intp::interp::builtins {
-    static Value list_get(const std::shared_ptr<List> &list_v, size_t index) {
-        if (index >= list_v->elements.size()) {
-            options_v.logger.error({}, "runtime error: list index out of range, index is ", index);
+    static Value listGet(const std::shared_ptr<List> &list, size_t index) {
+        if (index >= list->elements.size()) {
+            optionsValue.logger.error({}, "runtime error: list index out of range, index is ", index);
         }
-        return list_v->elements[index];
+        return list->elements[index];
     }
 
-    static Value list_remove(const std::shared_ptr<List> &list_v, size_t index) {
-        if (index >= list_v->elements.size()) {
-            options_v.logger.error({}, "runtime error: list index out of range, index is ", index);
+    static Value listRemove(const std::shared_ptr<List> &list, size_t index) {
+        if (index >= list->elements.size()) {
+            optionsValue.logger.error({}, "runtime error: list index out of range, index is ", index);
         }
-        Value value = list_v->elements[index];
-        list_v->elements.erase(list_v->elements.begin() + static_cast<std::vector<Value>::difference_type>(index));
+        Value value = list->elements[index];
+        list->elements.erase(list->elements.begin() + static_cast<std::vector<Value>::difference_type>(index));
         return value;
     }
 
-    static void list_append(const std::shared_ptr<List> &list_v, Value value) {
-        list_v->elements.push_back(std::move(value));
+    static void listAppend(const std::shared_ptr<List> &list, Value value) {
+        list->elements.push_back(std::move(value));
     }
 
-    std::shared_ptr<List> make_list_obj(const std::vector<Value> &elements) {
+    std::shared_ptr<List> makeListObject(const std::vector<Value> &elements) {
         return std::make_shared<List>(List{elements});
     }
 
-    NativeFunction make_list() {
+    NativeFunction makeList() {
         const std::string name = "list";
         return {
-            -1, name, [](const std::vector<std::shared_ptr<Thunk> > &args,
-                         const std::shared_ptr<Env> &) -> std::pair<Value, ResultOptions> {
+            -1, name, [](const std::vector<std::shared_ptr<Thunk> > &arguments,
+                         const std::shared_ptr<Environment> &) -> std::pair<Value, ResultOptions> {
                 std::vector<Value> values;
-                for (auto &arg: args) {
-                    values.push_back(arg->force());
+                for (auto &argument: arguments) {
+                    values.push_back(argument->force());
                 }
-                return std::make_pair(Value{make_list_obj(values)}, ResultOptions{});
+                return std::make_pair(Value{makeListObject(values)}, ResultOptions{});
             }
         };
     }
 
-    NativeFunction make_list_size() {
+    NativeFunction makeListSize() {
         const std::string name = "list_size";
         return {
-            1, name, [name](const std::vector<std::shared_ptr<Thunk> > &args,
-                            const std::shared_ptr<Env> &) -> std::pair<Value, ResultOptions> {
-                const Value &arg0 = args[0]->force();
-                if (!std::holds_alternative<std::shared_ptr<List> >(arg0)) {
-                    options_v.logger.error({}, "runtime error: wrong arguments provided to native function ", name,
-                                           "\n", name,
-                                           " signature: List -> Float""\n"
-                                           "runtime error: expected <List> got ", arg0);
+            1, name, [name](const std::vector<std::shared_ptr<Thunk> > &arguments,
+                            const std::shared_ptr<Environment> &) -> std::pair<Value, ResultOptions> {
+                const Value &argument0 = arguments[0]->force();
+                if (!std::holds_alternative<std::shared_ptr<List> >(argument0)) {
+                    optionsValue.logger.error({}, "runtime error: wrong arguments provided to native function ", name,
+                                              "\n", name,
+                                              " signature: List -> Float""\n"
+                                              "runtime error: expected <List> got ", argument0);
                 }
-                const auto list_v = std::get<std::shared_ptr<List> >(arg0);
-                return std::make_pair(Value{static_cast<double>(list_v->elements.size())}, ResultOptions{});
+                const auto list = std::get<std::shared_ptr<List> >(argument0);
+                return std::make_pair(Value{static_cast<double>(list->elements.size())}, ResultOptions{});
             }
         };
     }
 
-    NativeFunction make_list_get() {
+    NativeFunction makeListGet() {
         const std::string name = "list_get";
         return {
-            // TODO: Add type checker to replace this manual approach
-            2, name, [name](const std::vector<std::shared_ptr<Thunk> > &args,
-                            const std::shared_ptr<Env> &) -> std::pair<Value, ResultOptions> {
-                const Value &arg0 = args[0]->force();
-                if (!std::holds_alternative<std::shared_ptr<List> >(arg0)) {
-                    options_v.logger.error({}, "runtime error: wrong arguments provided to native function ", name,
-                                           "\n", name,
-                                           " signature: List -> Float -> List""\n"
-                                           "runtime error: expected <List> got ", arg0);
+            // TODO: Add type checker to replace this manual approach.
+            2, name, [name](const std::vector<std::shared_ptr<Thunk> > &arguments,
+                            const std::shared_ptr<Environment> &) -> std::pair<Value, ResultOptions> {
+                const Value &argument0 = arguments[0]->force();
+                if (!std::holds_alternative<std::shared_ptr<List> >(argument0)) {
+                    optionsValue.logger.error({}, "runtime error: wrong arguments provided to native function ", name,
+                                              "\n", name,
+                                              " signature: List -> Float -> List""\n"
+                                              "runtime error: expected <List> got ", argument0);
                 }
-                const Value &arg1 = args[1]->force();
-                if (!std::holds_alternative<double>(arg1)) {
-                    options_v.logger.error({}, "runtime error: wrong arguments provided to native function ", name,
-                                           "\n", name,
-                                           " signature: List -> Float -> List""\n"
-                                           "runtime error: expected <Float> got ", arg1);
+                const Value &argument1 = arguments[1]->force();
+                if (!std::holds_alternative<double>(argument1)) {
+                    optionsValue.logger.error({}, "runtime error: wrong arguments provided to native function ", name,
+                                              "\n", name,
+                                              " signature: List -> Float -> List""\n"
+                                              "runtime error: expected <Float> got ", argument1);
                 }
                 return std::make_pair(Value{
-                                          list_get(std::get<std::shared_ptr<List> >(arg0),
-                                                   static_cast<size_t>(std::get<double>(arg1)))
-                                      },
-                                      ResultOptions{});
+                                          listGet(std::get<std::shared_ptr<List> >(argument0),
+                                                  static_cast<size_t>(std::get<double>(argument1)))
+                                      }, ResultOptions{});
             }
         };
     }
 
-    NativeFunction make_list_remove() {
+    NativeFunction makeListRemove() {
         const std::string name = "list_remove";
         return {
             // TODO: Add type checker to replace this manual approach
-            2, name, [name](const std::vector<std::shared_ptr<Thunk> > &args,
-                            const std::shared_ptr<Env> &) -> std::pair<Value, ResultOptions> {
-                const Value &arg0 = args[0]->force();
-                if (!std::holds_alternative<std::shared_ptr<List> >(arg0)) {
-                    options_v.logger.error({}, "runtime error: wrong arguments provided to native function ", name,
-                                           "\n", name,
-                                           " signature: List -> Float -> List""\n"
-                                           "runtime error: expected <List> got ", arg0);
+            2, name, [name](const std::vector<std::shared_ptr<Thunk> > &arguments,
+                            const std::shared_ptr<Environment> &) -> std::pair<Value, ResultOptions> {
+                const Value &argument0 = arguments[0]->force();
+                if (!std::holds_alternative<std::shared_ptr<List> >(argument0)) {
+                    optionsValue.logger.error({}, "runtime error: wrong arguments provided to native function ", name,
+                                              "\n", name,
+                                              " signature: List -> Float -> List""\n"
+                                              "runtime error: expected <List> got ", argument0);
                 }
-                const Value &arg1 = args[1]->force();
-                if (!std::holds_alternative<double>(arg1)) {
-                    options_v.logger.error({}, "runtime error: wrong arguments provided to native function ", name,
-                                           "\n", name,
-                                           " signature: List -> Float -> List""\n"
-                                           "runtime error: expected <Float> got ", arg1);
+                const Value &argument1 = arguments[1]->force();
+                if (!std::holds_alternative<double>(argument1)) {
+                    optionsValue.logger.error({}, "runtime error: wrong arguments provided to native function ", name,
+                                              "\n", name,
+                                              " signature: List -> Float -> List""\n"
+                                              "runtime error: expected <Float> got ", argument1);
                 }
                 return std::make_pair(
                     Value{
-                        list_remove(std::get<std::shared_ptr<List> >(arg0), static_cast<size_t>(std::get<double>(arg1)))
+                        listRemove(std::get<std::shared_ptr<List> >(argument0),
+                                   static_cast<size_t>(std::get<double>(argument1)))
                     },
                     ResultOptions{});
             }
         };
     }
 
-    NativeFunction make_list_append() {
+    NativeFunction makeListAppend() {
         const std::string name = "list_append";
         return {
-            2, name, [name](const std::vector<std::shared_ptr<Thunk> > &args,
-                            const std::shared_ptr<Env> &) -> std::pair<Value, ResultOptions> {
-                const Value &arg0 = args[0]->force();
-                if (!std::holds_alternative<std::shared_ptr<List> >(arg0)) {
-                    options_v.logger.error({}, "runtime error: wrong arguments provided to native function ", name,
-                                           "\n", name,
-                                           " signature: List -> Any -> List""\n"
-                                           "runtime error: expected <List> got ", arg0);
+            2, name, [name](const std::vector<std::shared_ptr<Thunk> > &arguments,
+                            const std::shared_ptr<Environment> &) -> std::pair<Value, ResultOptions> {
+                const Value &argument0 = arguments[0]->force();
+                if (!std::holds_alternative<std::shared_ptr<List> >(argument0)) {
+                    optionsValue.logger.error({}, "runtime error: wrong arguments provided to native function ", name,
+                                              "\n", name,
+                                              " signature: List -> Any -> List""\n"
+                                              "runtime error: expected <List> got ", argument0);
                 }
-                auto list_v = std::get<std::shared_ptr<List> >(arg0);
-                list_append(list_v, args[1]->force());
+                auto list_v = std::get<std::shared_ptr<List> >(argument0);
+                listAppend(list_v, arguments[1]->force());
                 return std::make_pair(Value{list_v}, ResultOptions{});
             }
         };
     }
 
-    NativeFunction make_map() {
+    NativeFunction makeMap() {
         const std::string name = "map";
         return {
-            2, name, [name](const std::vector<std::shared_ptr<Thunk> > &args,
-                            const std::shared_ptr<Env> &call_site_env) -> std::pair<Value, ResultOptions> {
-                const Value &fn_val = args[0]->force();
-                const Value &list_val = args[1]->force();
-                if (!std::holds_alternative<std::shared_ptr<List> >(list_val)) {
-                    options_v.logger.error({},
-                                           "runtime error: wrong arguments provided to native function ", name,
-                                           "\n", name,
-                                           " signature: (A -> B) -> List<A> -> List<B>\n"
-                                           "runtime error: expected List<A> got ", list_val);
+            2, name, [name](const std::vector<std::shared_ptr<Thunk> > &arguments,
+                            const std::shared_ptr<Environment> &callSiteEnvironment) -> std::pair<Value,
+        ResultOptions> {
+                const Value &functionValue = arguments[0]->force();
+                const Value &listValue = arguments[1]->force();
+                if (!std::holds_alternative<std::shared_ptr<List> >(listValue)) {
+                    optionsValue.logger.error({},
+                                              "runtime error: wrong arguments provided to native function ", name,
+                                              "\n", name,
+                                              " signature: (A -> B) -> List<A> -> List<B>\n"
+                                              "runtime error: expected List<A> got ", listValue);
                 }
-                const auto list_v = std::get<std::shared_ptr<List> >(list_val);
+                const auto list = std::get<std::shared_ptr<List> >(listValue);
                 std::vector<Value> results;
-                results.reserve(list_v->elements.size());
-                for (auto &elem: list_v->elements) {
-                    auto elem_thunk = std::make_shared<Thunk>();
-                    elem_thunk->cached = elem;
-                    // TODO: Accumulate ResultOptions from apply_fn_apl
-                    auto mapped_val = apply_fn_apl(fn_val, {elem_thunk}, call_site_env);
-                    results.push_back(mapped_val);
+                results.reserve(list->elements.size());
+                for (auto &element: list->elements) {
+                    auto elementThunk = std::make_shared<Thunk>();
+                    elementThunk->cached = element;
+                    // TODO: Accumulate ResultOptions from applyFunctionApplication
+                    auto mappedValue = applyFunctionApplication(functionValue, {elementThunk}, callSiteEnvironment);
+                    results.push_back(mappedValue);
                 }
                 return {Value{std::make_shared<List>(List{std::move(results)})}, ResultOptions{}};
             }
         };
     }
 
-    NativeFunction make_transpose() {
+    NativeFunction makeTranspose() {
         const std::string name = "transpose";
         return {
-            1, name, [name](const std::vector<std::shared_ptr<Thunk> > &args,
-                            const std::shared_ptr<Env> &) -> std::pair<Value, ResultOptions> {
-                const Value &arg0 = args[0]->force();
-                if (!std::holds_alternative<std::shared_ptr<List> >(arg0)) {
-                    options_v.logger.error({},
-                                           "runtime error: wrong arguments provided to native function ", name,
-                                           "\n", name,
-                                           " signature: List<List> -> List<List>\n"
-                                           "runtime error: expected List got ", arg0);
+            1, name, [name](const std::vector<std::shared_ptr<Thunk> > &arguments,
+                            const std::shared_ptr<Environment> &) -> std::pair<Value, ResultOptions> {
+                const Value &argument0 = arguments[0]->force();
+                if (!std::holds_alternative<std::shared_ptr<List> >(argument0)) {
+                    optionsValue.logger.error({},
+                                              "runtime error: wrong arguments provided to native function ", name,
+                                              "\n", name,
+                                              " signature: List<List> -> List<List>\n"
+                                              "runtime error: expected List got ", argument0);
                 }
-                const auto outer_list = std::get<std::shared_ptr<List> >(arg0);
-                if (outer_list->elements.empty()) return {Value{std::make_shared<List>(List{})}, ResultOptions{}};
+                const auto outerList = std::get<std::shared_ptr<List> >(argument0);
+                if (outerList->elements.empty()) return {Value{std::make_shared<List>(List{})}, ResultOptions{}};
                 // Ensure all elements are lists
                 std::vector<std::shared_ptr<List> > rows;
-                rows.reserve(outer_list->elements.size());
-                size_t min_size = SIZE_MAX;
-                for (auto &elem: outer_list->elements) {
-                    if (!std::holds_alternative<std::shared_ptr<List> >(elem)) {
-                        options_v.logger.error({},
-                                               "runtime error: native function ", name,
-                                               " expects List<List>, but got element ", elem);
+                rows.reserve(outerList->elements.size());
+                size_t minSize = SIZE_MAX;
+                for (auto &element: outerList->elements) {
+                    if (!std::holds_alternative<std::shared_ptr<List> >(element)) {
+                        optionsValue.logger.error({},
+                                                  "runtime error: native function ", name,
+                                                  " expects List<List>, but got element ", element);
                     }
-                    auto row = std::get<std::shared_ptr<List> >(elem);
+                    auto row = std::get<std::shared_ptr<List> >(element);
                     rows.push_back(row);
-                    min_size = std::min(min_size, row->elements.size());
+                    minSize = std::min(minSize, row->elements.size());
                 }
                 // Build columns
                 std::vector<Value> transposed;
-                transposed.reserve(min_size);
-                for (size_t col = 0; col < min_size; ++col) {
+                transposed.reserve(minSize);
+                for (size_t col = 0; col < minSize; ++col) {
                     std::vector<Value> column;
                     column.reserve(rows.size());
                     for (const auto &row: rows) {
@@ -208,30 +209,30 @@ namespace intp::interp::builtins {
         };
     }
 
-    NativeFunction make_sort() {
+    NativeFunction makeSort() {
         const std::string name = "sort";
         return {
-            1, name, [name](const std::vector<std::shared_ptr<Thunk> > &args,
-                            const std::shared_ptr<Env> &) -> std::pair<Value, ResultOptions> {
-                const Value &arg0 = args[0]->force();
-                if (!std::holds_alternative<std::shared_ptr<List> >(arg0)) {
-                    options_v.logger.error({},
-                                           "runtime error: wrong arguments provided to native function ", name,
-                                           "\n", name,
-                                           " signature: List<Float> -> List<Float>\n"
-                                           "runtime error: expected List<Float> got ", arg0);
+            1, name, [name](const std::vector<std::shared_ptr<Thunk> > &arguments,
+                            const std::shared_ptr<Environment> &) -> std::pair<Value, ResultOptions> {
+                const Value &argument0 = arguments[0]->force();
+                if (!std::holds_alternative<std::shared_ptr<List> >(argument0)) {
+                    optionsValue.logger.error({},
+                                              "runtime error: wrong arguments provided to native function ", name,
+                                              "\n", name,
+                                              " signature: List<Float> -> List<Float>\n"
+                                              "runtime error: expected List<Float> got ", argument0);
                 }
-                const auto list_v = std::get<std::shared_ptr<List> >(arg0);
+                const auto list = std::get<std::shared_ptr<List> >(argument0);
                 // Ensure all elements are floats
                 std::vector<double> floats;
-                floats.reserve(list_v->elements.size());
-                for (auto &elem: list_v->elements) {
-                    if (!std::holds_alternative<double>(elem)) {
-                        options_v.logger.error({},
-                                               "runtime error: native function ", name,
-                                               "expects List of Float, but got element ", elem);
+                floats.reserve(list->elements.size());
+                for (auto &element: list->elements) {
+                    if (!std::holds_alternative<double>(element)) {
+                        optionsValue.logger.error({},
+                                                  "runtime error: native function ", name,
+                                                  "expects List of Float, but got element ", element);
                     }
-                    floats.push_back(std::get<double>(elem));
+                    floats.push_back(std::get<double>(element));
                 }
                 std::sort(floats.begin(), floats.end());
                 std::vector<Value> sorted;
@@ -244,41 +245,41 @@ namespace intp::interp::builtins {
         };
     }
 
-    NativeFunction make_zip() {
+    NativeFunction makeZip() {
         const std::string name = "zip";
         return {
-            1, name, [name](const std::vector<std::shared_ptr<Thunk> > &args,
-                            const std::shared_ptr<Env> &) -> std::pair<Value, ResultOptions> {
-                const Value &arg0 = args[0]->force();
-                if (!std::holds_alternative<std::shared_ptr<List> >(arg0)) {
-                    options_v.logger.error({},
-                                           "runtime error: wrong arguments provided to native function ", name,
-                                           "\n", name,
-                                           " signature: List<List> -> List<List>\n"
-                                           "runtime error: expected List<List> got ", arg0);
+            1, name, [name](const std::vector<std::shared_ptr<Thunk> > &arguments,
+                            const std::shared_ptr<Environment> &) -> std::pair<Value, ResultOptions> {
+                const Value &argument0 = arguments[0]->force();
+                if (!std::holds_alternative<std::shared_ptr<List> >(argument0)) {
+                    optionsValue.logger.error({},
+                                              "runtime error: wrong arguments provided to native function ", name,
+                                              "\n", name,
+                                              " signature: List<List> -> List<List>\n"
+                                              "runtime error: expected List<List> got ", argument0);
                 }
-                const auto outer_list = std::get<std::shared_ptr<List> >(arg0);
-                if (outer_list->elements.empty()) {
+                const auto outerList = std::get<std::shared_ptr<List> >(argument0);
+                if (outerList->elements.empty()) {
                     return {Value{std::make_shared<List>(List{})}, ResultOptions{}};
                 }
                 // Ensure all elements are lists
                 std::vector<std::shared_ptr<List> > lists;
-                lists.reserve(outer_list->elements.size());
-                size_t min_size = SIZE_MAX;
-                for (auto &elem: outer_list->elements) {
-                    if (!std::holds_alternative<std::shared_ptr<List> >(elem)) {
-                        options_v.logger.error({},
-                                               "runtime error: native function ", name,
-                                               "expects List of List, but got element ", elem);
+                lists.reserve(outerList->elements.size());
+                size_t minSize = SIZE_MAX;
+                for (auto &element: outerList->elements) {
+                    if (!std::holds_alternative<std::shared_ptr<List> >(element)) {
+                        optionsValue.logger.error({},
+                                                  "runtime error: native function ", name,
+                                                  "expects List of List, but got element ", element);
                     }
-                    auto list = std::get<std::shared_ptr<List> >(elem);
+                    auto list = std::get<std::shared_ptr<List> >(element);
                     lists.push_back(list);
-                    min_size = std::min(min_size, list->elements.size());
+                    minSize = std::min(minSize, list->elements.size());
                 }
                 // Build zipped result
                 std::vector<Value> zipped;
-                zipped.reserve(min_size);
-                for (size_t i = 0; i < min_size; ++i) {
+                zipped.reserve(minSize);
+                for (size_t i = 0; i < minSize; ++i) {
                     std::vector<Value> tuple;
                     tuple.reserve(lists.size());
                     for (const auto &list: lists) tuple.push_back(list->elements[i]);
@@ -289,34 +290,36 @@ namespace intp::interp::builtins {
         };
     }
 
-    NativeFunction make_foldr() {
+    NativeFunction makeFoldRight() {
         const std::string name = "foldr";
         return {
-            3, name, [name](const std::vector<std::shared_ptr<Thunk> > &args,
-                            const std::shared_ptr<Env> &call_site_env) -> std::pair<Value, ResultOptions> {
-                const Value &fn_val = args[0]->force();
-                const Value &init_val = args[1]->force();
-                const Value &list_val = args[2]->force();
-                if (!std::holds_alternative<std::shared_ptr<List> >(list_val)) {
-                    options_v.logger.error({},
-                                           "runtime error: wrong arguments provided to native function ", name,
-                                           "\n", name,
-                                           " signature: (A -> B -> B) -> List<A> -> B -> B\n"
-                                           "runtime error: expected List<A> got ", list_val);
+            3, name, [name](const std::vector<std::shared_ptr<Thunk> > &arguments,
+                            const std::shared_ptr<Environment> &callSiteEnvironment) -> std::pair<Value,
+        ResultOptions> {
+                const Value &functionValue = arguments[0]->force();
+                const Value &initialValue = arguments[1]->force();
+                const Value &listValue = arguments[2]->force();
+                if (!std::holds_alternative<std::shared_ptr<List> >(listValue)) {
+                    optionsValue.logger.error({},
+                                              "runtime error: wrong arguments provided to native function ", name,
+                                              "\n", name,
+                                              " signature: (A -> B -> B) -> List<A> -> B -> B\n"
+                                              "runtime error: expected List<A> got ", listValue);
                 }
-                const auto list_v = std::get<std::shared_ptr<List> >(list_val);
+                const auto list = std::get<std::shared_ptr<List> >(listValue);
                 // Start with the initial accumulator value
-                Value acc = init_val;
+                Value accumulatedValue = initialValue;
                 // Traverse from the last element to the first
-                for (auto it = list_v->elements.rbegin(); it != list_v->elements.rend(); ++it) {
-                    auto elem_thunk = std::make_shared<Thunk>();
-                    elem_thunk->cached = *it;
-                    auto acc_thunk = std::make_shared<Thunk>();
-                    acc_thunk->cached = acc;
+                for (auto it = list->elements.rbegin(); it != list->elements.rend(); ++it) {
+                    auto elementThunk = std::make_shared<Thunk>();
+                    elementThunk->cached = *it;
+                    auto accumulatedThunk = std::make_shared<Thunk>();
+                    accumulatedThunk->cached = accumulatedValue;
                     // fn takes (element, accumulator)
-                    acc = apply_fn_apl(fn_val, {elem_thunk, acc_thunk}, call_site_env);
+                    accumulatedValue = applyFunctionApplication(functionValue, {elementThunk, accumulatedThunk},
+                                                                callSiteEnvironment);
                 }
-                return {acc, ResultOptions{}};
+                return {accumulatedValue, ResultOptions{}};
             }
         };
     }

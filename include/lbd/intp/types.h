@@ -8,7 +8,7 @@ namespace intp::types {
     struct PrimitiveType {
         enum class Type {
             Float,
-            Str,
+            String,
             Custom,
             Any,
         };
@@ -16,7 +16,7 @@ namespace intp::types {
         Type type;
         std::string custom;
 
-        friend std::ostream &operator<<(std::ostream &os, const PrimitiveType &typ);
+        friend std::ostream &operator<<(std::ostream &stream, const PrimitiveType &type);
     };
 
     struct CompoundType;
@@ -24,11 +24,11 @@ namespace intp::types {
     using Type = std::variant<PrimitiveType, std::shared_ptr<CompoundType> >;
 
     struct CompoundType {
-        PrimitiveType l_type;
-        Type r_type;
+        PrimitiveType leftType;
+        Type rightType;
 
-        friend std::ostream &operator<<(std::ostream &os, const CompoundType &typ);
+        friend std::ostream &operator<<(std::ostream &stream, const CompoundType &type);
     };
 
-    std::ostream &operator<<(std::ostream &os, const Type &typ);
+    std::ostream &operator<<(std::ostream &stream, const Type &type);
 }

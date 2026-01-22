@@ -16,7 +16,7 @@ namespace repl {
     static options::Options options_v;
 
     static void process_load_command(const std::string &arg,
-                                     std::optional<std::shared_ptr<intp::interp::Env> > &shared_env) {
+                                     std::optional<std::shared_ptr<intp::interp::Environment> > &shared_env) {
         const std::string &filepath = arg;
         options::Options sub_options = options_v;
         sub_options.logger.show_loc = true;
@@ -40,7 +40,7 @@ namespace repl {
             }
         }
 
-        const std::optional<std::shared_ptr<intp::interp::Env> > temp_env = shared_env;
+        const std::optional<std::shared_ptr<intp::interp::Environment> > temp_env = shared_env;
         // Merge loaded_env into shared_env
         if (const auto [loaded_env, _, result_options] = intp::interp::interpret(
                 parser.program, temp_env, sub_options);
@@ -53,7 +53,7 @@ namespace repl {
                     (*shared_env)->bind(fst, snd);
                 }
             }
-            if (result_options.side_effects) {
+            if (result_options.sideEffects) {
                 std::cout << std::endl;
             }
         }
@@ -82,11 +82,11 @@ namespace repl {
         enable_virtual_terminal();
 
         static logs::Logger logger(false, true, false);
-        options_v = {.own_expr = true, .force_on_env_dump = false, .debug = debug, .logger = logger};
+        options_v = {.ownExpression = true, .forceOnEnvironmentDump = false, .debug = debug, .logger = logger};
 
         std::string line, buffer;
         size_t indent_level = 0;
-        std::optional<std::shared_ptr<intp::interp::Env> > shared_global_env = std::nullopt;
+        std::optional<std::shared_ptr<intp::interp::Environment> > shared_global_env = std::nullopt;
 
         options_v.logger.info("Welcome to lambda-discipline REPL.\nType :quit to exit.");
 
@@ -137,7 +137,7 @@ namespace repl {
                         print_table({"Options", "State", "Help"}, {
                                         {"debug", on_off(options_v.debug), "use :debug to toggle"},
                                         {
-                                            "force-on-env-dump", on_off(options_v.force_on_env_dump),
+                                            "force-on-env-dump", on_off(options_v.forceOnEnvironmentDump),
                                             "use :force to toggle"
                                         }
                                     }, colors::GREEN);
@@ -148,7 +148,7 @@ namespace repl {
                         std::cout << std::endl;
                         if (shared_global_env) {
                             print_table({"Symbol", "Thunk"},
-                                        (*shared_global_env)->to_vector(options_v.force_on_env_dump),
+                                        (*shared_global_env)->toVector(options_v.forceOnEnvironmentDump),
                                         colors::GREEN);
                         } else {
                             print_table({"Symbol", "Thunk"}, {{"Empty"}}, colors::GREEN);
@@ -167,7 +167,7 @@ namespace repl {
                     }
 
                     if (line == ":force") {
-                        options_v.force_on_env_dump = !options_v.force_on_env_dump;
+                        options_v.forceOnEnvironmentDump = !options_v.forceOnEnvironmentDump;
                         continue;
                     }
 
@@ -222,7 +222,7 @@ namespace repl {
                 // Interpret
                 const auto [global_env, value, result_options] = intp::interp::interpret(
                     parser_v.program, shared_global_env, options_v);
-                if (result_options.side_effects) {
+                if (result_options.sideEffects) {
                     std::cout << std::endl;
                 }
                 std::cout << colors::GREEN << "=> " << value << colors::RESET << std::endl;

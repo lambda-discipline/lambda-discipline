@@ -3,9 +3,9 @@
 #include <lbd/intp/builtins.h>
 
 namespace intp::interp::builtins {
-    NativeFunction make_slurp_file();
+    NativeFunction makeSlurpFile();
 
-    NativeFunction make_lines();
+    NativeFunction makeLines();
 
-    NativeFunction make_split();
+    NativeFunction makeSplit();
 }

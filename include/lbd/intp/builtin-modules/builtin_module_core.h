@@ -3,17 +3,17 @@
 #include <lbd/intp/builtins.h>
 
 namespace intp::interp::builtins {
-    NativeFunction make_print();
+    NativeFunction makePrint();
 
-    NativeFunction make_add();
+    NativeFunction makeAdd();
 
-    NativeFunction make_sub();
+    NativeFunction makeSub();
 
-    NativeFunction make_mul();
+    NativeFunction makeMul();
 
-    NativeFunction make_cmp();
+    NativeFunction makeCmp();
 
-    NativeFunction make_if_zero();
+    NativeFunction makeIfZero();
 
-    NativeFunction make_parse_float();
+    NativeFunction makeParseFloat();
 }

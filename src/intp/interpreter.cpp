@@ -7,33 +7,33 @@
 #include "lbd/utils/string_escape.h"
 
 namespace intp::interp {
-    static options::Options options_v;
-    static ResultOptions global_result_options;
+    static options::Options optionsValue;
+    static ResultOptions globalResultOptions;
 
-    [[nodiscard]] std::string Closure::to_string() const {
+    [[nodiscard]] std::string Closure::toString() const {
         std::ostringstream oss;
-        oss << "<closure: " << param << ">";
+        oss << "<closure: " << parameter << ">";
         return oss.str();
     }
 
-    std::ostream &operator<<(std::ostream &os, const Closure &closure) {
-        return os << closure.to_string();
+    std::ostream &operator<<(std::ostream &stream, const Closure &closure) {
+        return stream << closure.toString();
     }
 
-    [[nodiscard]] std::string List::to_string() const {
-        std::ostringstream oss;
-        oss << "[";
+    [[nodiscard]] std::string List::toString() const {
+        std::ostringstream stringStream;
+        stringStream << "[";
         for (size_t i = 0; i < elements.size(); ++i) {
-            oss << escape(elements[i].to_string());
+            stringStream << escape(elements[i].toString());
             if (i + 1 != elements.size()) {
-                oss << ", ";
+                stringStream << ", ";
             }
         }
-        oss << "]";
-        return oss.str();
+        stringStream << "]";
+        return stringStream.str();
     }
 
-    [[nodiscard]] std::string Value::to_string() const {
+    [[nodiscard]] std::string Value::toString() const {
         return std::visit([&]<typename T0>(T0 &&arg) {
             using T = std::decay_t<T0>;
             if constexpr (std::is_same_v<T, double>) {
@@ -41,40 +41,42 @@ namespace intp::interp {
             } else if constexpr (std::is_same_v<T, std::string>) {
                 return arg;
             } else if constexpr (std::is_same_v<T, Closure>) {
-                return arg.to_string();
+                return arg.toString();
             } else if constexpr (std::is_same_v<T, std::shared_ptr<NativeFunction> > ||
                                  std::is_same_v<T, std::shared_ptr<List> >) {
-                return arg->to_string();
+                return arg->toString();
             } else {
                 STATIC_ASSERT_UNREACHABLE_T(T, "unhandled runtime value");
             }
         }, *this);
     }
 
-    std::ostream &operator<<(std::ostream &os, const Value &value) {
-        return os << value.to_string();
+    std::ostream &operator<<(std::ostream &stream, const Value &value) {
+        return stream << value.toString();
     }
 
-    void ResultOptions::interpolate(const ResultOptions &result_options_) {
-        side_effects |= result_options_.side_effects;
+    void ResultOptions::interpolate(const ResultOptions &resultOptions_) {
+        sideEffects |= resultOptions_.sideEffects;
     }
 
-    std::ostream &operator<<(std::ostream &os, const List &list) {
-        return os << list.to_string();
+    std::ostream &operator<<(std::ostream &stream, const List &list) {
+        return stream << list.toString();
     }
 
-    [[nodiscard]] std::string NativeFunction::to_string() const {
-        std::ostringstream oss;
-        oss << "<native_fn: " << name << " " << arity << ">";
-        return oss.str();
+    [[nodiscard]] std::string NativeFunction::toString() const {
+        std::ostringstream stringStream;
+        // TODO: Update the type name.
+        stringStream << "<native_fn: " << name << " " << arity << ">";
+        return stringStream.str();
     }
 
-    std::ostream &operator<<(std::ostream &os, const NativeFunction &native_fn) {
-        return os << native_fn.to_string();
+    std::ostream &operator<<(std::ostream &stream, const NativeFunction &nativeFunction) {
+        return stream << nativeFunction.toString();
     }
 
-    Thunk::Thunk(const fe::ast::Expression *expr, std::shared_ptr<Env> env,
-                 std::optional<fe::loc::Loc> origin) : expr(expr), env(std::move(env)), origin(std::move(origin)) {
+    Thunk::Thunk(const fe::ast::Expression *expression, std::shared_ptr<Environment> environment,
+                 std::optional<fe::loc::Loc> origin) : expression(expression), environment(std::move(environment)),
+                                                       origin(std::move(origin)) {
     }
 
     const Value &Thunk::force() const {
@@ -82,40 +84,40 @@ namespace intp::interp {
             return cached.value();
         }
         // Expression is not initialized
-        if (!expr) {
-            options_v.logger.error(origin, "runtime error: forcing empty thunk");
+        if (!expression) {
+            optionsValue.logger.error(origin, "runtime error: forcing empty thunk");
         }
-        cached = eval_expr(*expr, env);
+        cached = evalExpression(*expression, environment);
         return cached.value();
     }
 
-    void Thunk::set(const fe::ast::Expression *expr_, std::shared_ptr<Env> env_,
+    void Thunk::set(const fe::ast::Expression *expression_, std::shared_ptr<Environment> environment_,
                     std::optional<fe::loc::Loc> origin_) {
-        expr = expr_;
+        expression = expression_;
         owned.reset();
-        env = std::move(env_);
+        environment = std::move(environment_);
         if (origin_.has_value()) {
             origin = std::move(origin_.value());
         }
         cached.reset();
     }
 
-    void Thunk::set_owned(fe::ast::Expression expr_, std::shared_ptr<Env> env_,
+    void Thunk::set_owned(fe::ast::Expression expression_, std::shared_ptr<Environment> environment_,
                           std::optional<fe::loc::Loc> origin_) {
-        owned = std::make_unique<fe::ast::Expression>(std::move(expr_));
-        expr = owned.get();
-        env = std::move(env_);
+        owned = std::make_unique<fe::ast::Expression>(std::move(expression_));
+        expression = owned.get();
+        environment = std::move(environment_);
         if (origin_.has_value()) {
             origin = std::move(origin_.value());
         }
         cached.reset();
     }
 
-    Env::Env(std::shared_ptr<Env> parent) : parent(std::move(parent)) {
+    Environment::Environment(std::shared_ptr<Environment> parent) : parent(std::move(parent)) {
     }
 
-    std::shared_ptr<Thunk> Env::lookup(const std::string &name) const {
-        // Precedence: Local Environment > Global Environment
+    std::shared_ptr<Thunk> Environment::lookup(const std::string &name) const {
+        // Precedence: Local Environment > Global Environment.
         if (const auto it = table.find(name); it != table.end()) {
             return it->second;
         }
@@ -125,241 +127,253 @@ namespace intp::interp {
         return nullptr;
     }
 
-    void Env::bind(const std::string &name, std::shared_ptr<Thunk> thunk) {
+    void Environment::bind(const std::string &name, std::shared_ptr<Thunk> thunk) {
         table[name] = std::move(thunk);
     }
 
-    std::vector<std::vector<std::string> > Env::to_vector(const bool force) const {
-        std::vector<std::vector<std::string> > vec;
-        vec.reserve(table.size());
+    std::vector<std::vector<std::string> > Environment::toVector(const bool force) const {
+        std::vector<std::vector<std::string> > result;
+        result.reserve(table.size());
         for (const auto &[name, thunk]: table) {
-            std::string val_str = "<thunk: unevaluated>";
+            std::string valueString = "<thunk: unevaluated>";
             try {
                 if (force) {
-                    const Value &val = thunk->force();
-                    val_str = escape(val.to_string());
+                    const Value &value = thunk->force();
+                    valueString = escape(value.toString());
                 } else if (thunk->cached) {
-                    val_str = escape(thunk->cached->to_string()); // already computed
+                    valueString = escape(thunk->cached->toString()); // Already computed.
                 }
             } catch (const std::exception &) {
             }
-            vec.push_back({name, val_str});
+            result.push_back({name, valueString});
         }
         if (parent) {
-            auto parent_vec = parent->to_vector(force);
-            vec.insert(vec.end(), std::make_move_iterator(parent_vec.begin()),
-                       std::make_move_iterator(parent_vec.end()));
+            auto parentVector = parent->toVector(force);
+            result.insert(result.end(), std::make_move_iterator(parentVector.begin()),
+                          std::make_move_iterator(parentVector.end()));
         }
-        return vec;
+        return result;
     }
 
-    static Value eval_iden_ast_node(const fe::ast::IdentifierAstNode &iden_ast_node, const std::shared_ptr<Env> &env) {
-        const auto thunk = env->lookup(iden_ast_node.value);
+    static Value evaluateIdentifierAstNode(const fe::ast::IdentifierAstNode &identifierAstNode,
+                                           const std::shared_ptr<Environment> &environment) {
+        const auto thunk = environment->lookup(identifierAstNode.value);
         if (!thunk) {
-            options_v.logger.error(iden_ast_node.location, "runtime error: undefined identifier ", iden_ast_node.value);
+            optionsValue.logger.error(identifierAstNode.location, "runtime error: undefined identifier ",
+                                      identifierAstNode.value);
         }
         return thunk->force();
     }
 
-    static Value eval_lambda_expr(const fe::ast::LambdaExpression &l_expr, const std::shared_ptr<Env> &env) {
-        return Value(Closure{l_expr.arg.value, l_expr.expression.get(), env});
+    static Value evaluateLambdaExpression(const fe::ast::LambdaExpression &lambdaExpression,
+                                          const std::shared_ptr<Environment> &environment) {
+        return Value(Closure{lambdaExpression.arg.value, lambdaExpression.expression.get(), environment});
     }
 
-    static Value eval_fn_apl(const fe::ast::FunctionApplication &fn_apl, const std::shared_ptr<Env> &env) {
-        // Lookup the callee lazily
-        const auto callee_thunk = env->lookup(fn_apl.functionName.value);
-        if (!callee_thunk) {
-            options_v.logger.error(fn_apl.location, "runtime error: undefined function ", fn_apl.functionName.value);
+    static Value evaluateFunctionApplication(const fe::ast::FunctionApplication &functionApplication,
+                                             const std::shared_ptr<Environment> &environment) {
+        // Lookup the callee lazily.
+        const auto calleeThunk = environment->lookup(functionApplication.functionName.value);
+        if (!calleeThunk) {
+            optionsValue.logger.error(functionApplication.location, "runtime error: undefined function ",
+                                      functionApplication.functionName.value);
         }
-        const Value fn_value = callee_thunk->force();
-        std::vector<std::shared_ptr<Thunk> > arg_thunks;
-        arg_thunks.reserve(fn_apl.arguments.size());
-        for (const auto &arg: fn_apl.arguments) {
-            arg_thunks.push_back(std::make_shared<Thunk>(arg.get(), env));
+        const Value functionValue = calleeThunk->force();
+        std::vector<std::shared_ptr<Thunk> > argumentThunks;
+        argumentThunks.reserve(functionApplication.arguments.size());
+        for (const auto &argument: functionApplication.arguments) {
+            argumentThunks.push_back(std::make_shared<Thunk>(argument.get(), environment));
         }
-        return apply_fn_apl(fn_value, arg_thunks, env, fn_apl.location);
+        return applyFunctionApplication(functionValue, argumentThunks, environment, functionApplication.location);
     }
 
-    Value eval_expr(const fe::ast::Expression &expr, std::shared_ptr<Env> env) {
+    Value evalExpression(const fe::ast::Expression &expression, std::shared_ptr<Environment> environment) {
         return std::visit([&]<typename T0>(T0 &&arg) {
             using T = std::decay_t<T0>;
             if constexpr (std::is_same_v<T, fe::ast::IdentifierAstNode>) {
-                return eval_iden_ast_node(arg, env);
+                return evaluateIdentifierAstNode(arg, environment);
             } else if constexpr (std::is_same_v<T, fe::ast::StringAstNode> || std::is_same_v<T,
                                      fe::ast::FloatAstNode>) {
                 return Value(arg.value);
             } else if constexpr (std::is_same_v<T, fe::ast::LambdaExpression>) {
-                return eval_lambda_expr(arg, env);
+                return evaluateLambdaExpression(arg, environment);
             } else if constexpr (std::is_same_v<T, fe::ast::FunctionApplication>) {
-                return eval_fn_apl(arg, env);
+                return evaluateFunctionApplication(arg, environment);
             } else {
                 STATIC_ASSERT_UNREACHABLE_T(T, "unhandled expression");
             }
-        }, expr.value);
+        }, expression.value);
     }
 
-    static std::shared_ptr<Thunk> value_to_thunk(const Value &v) {
-        auto t = std::make_shared<Thunk>();
-        t->cached = v;
-        return t;
+    static std::shared_ptr<Thunk> valueToThunk(const Value &value) {
+        auto thunk = std::make_shared<Thunk>();
+        thunk->cached = value;
+        return thunk;
     }
 
-    Value apply_fn_apl(Value fn_value, const std::vector<std::shared_ptr<Thunk> > &args,
-                       const std::shared_ptr<Env> &call_site_env, const std::optional<fe::loc::Loc> &call_loc) {
+    Value applyFunctionApplication(Value functionName, const std::vector<std::shared_ptr<Thunk> > &arguments,
+                                   const std::shared_ptr<Environment> &callSiteEnvironment,
+                                   const std::optional<fe::loc::Loc> &callLocation) {
         // Local mutable copy of the args, for inserting evaluated values as Thunks when needed.
-        std::vector<std::shared_ptr<Thunk> > work_args = args;
+        std::vector<std::shared_ptr<Thunk> > workArguments = arguments;
         // Frame Stack: Functions to which we are currently applying Arguments.
         // Start with the initial Function.
         std::vector<Value> frames;
-        frames.push_back(std::move(fn_value));
-        size_t idx = 0; // Index of next Thunk to consume from work_args
+        frames.push_back(std::move(functionName));
+        size_t index = 0; // Index of next Thunk to consume from work_args
         while (true) {
             // If there are no frames left, that's unexpected (shouldn't happen), bail.
             if (frames.empty()) {
-                options_v.logger.error(call_loc, "internal error: no function frame to apply");
+                optionsValue.logger.error(callLocation, "internal error: no function frame to apply");
             }
             // Work on the top-most frame
-            Value current_fn = frames.back();
-            std::optional<Value> resultant_value;
+            Value currentFunction = frames.back();
+            std::optional<Value> resultantValue;
             // If we've consumed all available Argument Thunks:
-            if (idx >= work_args.size()) {
+            if (index >= workArguments.size()) {
                 // If top frame is a function, and we have no more args to feed it,
                 // return that function (partial application) or its value as-is.
-                if (std::holds_alternative<std::shared_ptr<NativeFunction> >(current_fn)) {
+                if (std::holds_alternative<std::shared_ptr<NativeFunction> >(currentFunction)) {
                     // Allow arity==0 and arity==-1 (variadic) to execute with zero args.
-                    if (const auto &native_fn = *std::get<std::shared_ptr<NativeFunction> >(current_fn);
-                        native_fn.arity == 0 || native_fn.arity == -1) {
+                    if (const auto &nativeFunction = *std::get<std::shared_ptr<NativeFunction> >(currentFunction);
+                        nativeFunction.arity == 0 || nativeFunction.arity == -1) {
                         std::vector<std::shared_ptr<Thunk> > slice; // empty
-                        auto [value, result_options] = native_fn.impl(slice, call_site_env);
-                        global_result_options.interpolate(result_options);
+                        auto [value, result_options] = nativeFunction.implementation(slice, callSiteEnvironment);
+                        globalResultOptions.interpolate(result_options);
                         return value;
                     }
                     // Non-zero arity native function but no args left: partial application (return the function)
-                    return current_fn;
+                    return currentFunction;
                 }
-                if (std::holds_alternative<Closure>(current_fn)) {
+                if (std::holds_alternative<Closure>(currentFunction)) {
                     // Closures require one argument; with none left, this is a partial application (return the closure).
-                    return current_fn;
+                    return currentFunction;
                 }
                 // It's not a function (shouldn't happen), return it as value.
-                return current_fn;
+                return currentFunction;
             }
             // Closure case: Closure consumes exactly one Argument (its Param)
-            if (std::holds_alternative<Closure>(current_fn)) {
-                const auto [param, body, env] = std::get<Closure>(current_fn);
-                const auto &arg_thunk = work_args[idx++];
-                const auto child_env = std::make_shared<Env>(env);
-                child_env->bind(param, arg_thunk);
-                resultant_value = eval_expr(*body, child_env);
+            if (std::holds_alternative<Closure>(currentFunction)) {
+                const auto [param, body, env] = std::get<Closure>(currentFunction);
+                const auto &argumentThunk = workArguments[index++];
+                const auto childEnvironment = std::make_shared<Environment>(env);
+                childEnvironment->bind(param, argumentThunk);
+                resultantValue = evalExpression(*body, childEnvironment);
             }
             // Native Function case: Consumes its arity-many Argument Thunks
-            else if (std::holds_alternative<std::shared_ptr<NativeFunction> >(current_fn)) {
-                if (const auto &[arity, name, impl] = *std::get<std::shared_ptr<NativeFunction> >(current_fn);
+            else if (std::holds_alternative<std::shared_ptr<NativeFunction> >(currentFunction)) {
+                if (const auto &[arity, name, implementation] = *std::get<std::shared_ptr<NativeFunction> >(
+                        currentFunction);
                     arity != -1) {
-                    if (work_args.size() - idx < arity) {
-                        options_v.logger.error(call_loc, "runtime error: native function ", name, " expects ", arity,
-                                               " argument(s), found ", work_args.size() - idx);
+                    if (workArguments.size() - index < arity) {
+                        optionsValue.logger.error(callLocation, "runtime error: native function ", name, " expects ",
+                                                  arity, " argument(s), found ", workArguments.size() - index);
                     }
                     std::vector<std::shared_ptr<Thunk> > slice;
                     slice.reserve(arity);
                     for (size_t i = 0; i < arity; ++i) {
-                        slice.push_back(work_args[idx + i]);
+                        slice.push_back(workArguments[index + i]);
                     }
-                    auto [resultant_value_, result_options] = impl(slice, call_site_env);
-                    resultant_value = resultant_value_;
-                    global_result_options.interpolate(result_options);
-                    idx += arity;
+                    auto [resultantValue_, resultOptions] = implementation(slice, callSiteEnvironment);
+                    resultantValue = resultantValue_;
+                    globalResultOptions.interpolate(resultOptions);
+                    index += arity;
                 } else {
                     std::vector<std::shared_ptr<Thunk> > slice;
-                    slice.reserve(args.size() - idx);
-                    for (size_t i = 0; i < args.size() - idx; ++i) {
-                        slice.push_back(work_args[idx + i]);
+                    slice.reserve(arguments.size() - index);
+                    for (size_t i = 0; i < arguments.size() - index; ++i) {
+                        slice.push_back(workArguments[index + i]);
                     }
-                    auto [resultant_value_, result_options] = impl(slice, call_site_env);
-                    resultant_value = resultant_value_;
-                    global_result_options.interpolate(result_options);
-                    idx += args.size() - idx;
+                    auto [resultantValue_, resultOptions] = implementation(slice, callSiteEnvironment);
+                    resultantValue = resultantValue_;
+                    globalResultOptions.interpolate(resultOptions);
+                    index += arguments.size() - index;
                 }
             } else {
                 // Top frame is not a Function (Closure, NativeFunction) Value but there are still Arguments left
-                options_v.logger.error(call_loc, "runtime error: trying to apply non-function value ", frames.back());
+                optionsValue.logger.error(callLocation, "runtime error: trying to apply non-function value ",
+                                          frames.back());
             }
-            if (!resultant_value) {
-                options_v.logger.error(call_loc, "internal error: application produced no result");
+            if (!resultantValue) {
+                optionsValue.logger.error(callLocation, "internal error: application produced no result");
             }
-            if (std::holds_alternative<Closure>(*resultant_value) ||
-                std::holds_alternative<std::shared_ptr<NativeFunction> >(*resultant_value)) {
+            if (std::holds_alternative<Closure>(*resultantValue) ||
+                std::holds_alternative<std::shared_ptr<NativeFunction> >(*resultantValue)) {
                 // Replace the top Frame with the returned Function (curry)
-                frames.back() = std::move(*resultant_value);
+                frames.back() = std::move(*resultantValue);
                 continue;
             }
             // Resultant is a concrete Value (different from Function Value i.e. double, string).
-            // Pop the frame that produced it, and insert this Value as a thunk at the current idx
+            // Pop the frame that produced it, and insert this Value as a thunk at the current index
             // so the previous Frame (if any) will consume it.
-            Value concrete = std::move(*resultant_value);
+            Value concrete = std::move(*resultantValue);
             frames.pop_back();
             // If there are no more Frames after popping, then this Value is the final result of the
             // whole Function Application, but only valid if there are no further Argument Thunks remaining.
             if (frames.empty()) {
-                if (idx < work_args.size()) {
-                    options_v.logger.error(call_loc, "runtime error: too many arguments applied to non-function value ",
-                                           concrete);
+                if (index < workArguments.size()) {
+                    optionsValue.logger.error(callLocation,
+                                              "runtime error: too many arguments applied to non-function value ",
+                                              concrete);
                 }
                 // No Thunks remaining then concrete Value is the result
                 return concrete;
             }
             // There is a previous Frame; insert the concrete Value as a Thunk at the
             // current index so the previous Frame will consume it on the next iteration.
-            auto inj_th = value_to_thunk(concrete);
-            work_args.insert(work_args.begin() + static_cast<int>(idx), inj_th);
-            // Do NOT advance idx: the inserted thunk is at position idx and will be consumed
+            // TODO: Why is it named injThunk
+            auto injThunk = valueToThunk(concrete);
+            workArguments.insert(workArguments.begin() + static_cast<int>(index), injThunk);
+            // Do NOT advance index: the inserted thunk is at position index and will be consumed
             // by the previous frame on the next iteration.
             // Loop will continue with frames.back() being the previous frame.
         }
     }
 
     // Creates placeholder Thunk then set body so recursion can refer to it during lazy evaluation
-    static void bind_def_ast_node_lazy(fe::ast::DefinitionAstNode &def_ast_node, const std::shared_ptr<Env> &env,
-                                       const options::Options options) {
+    static void bindDefinitionAstNodeLazy(fe::ast::DefinitionAstNode &definitionAstNode,
+                                          const std::shared_ptr<Environment> &environment,
+                                          const options::Options options) {
         const auto thunk = std::make_shared<Thunk>();
-        env->bind(def_ast_node.definitionName.value, thunk);
-        if (options.own_expr) {
-            thunk->set_owned(std::move(def_ast_node.expression), env, def_ast_node.expression.getLocation());
+        environment->bind(definitionAstNode.definitionName.value, thunk);
+        if (options.ownExpression) {
+            thunk->set_owned(std::move(definitionAstNode.expression), environment,
+                             definitionAstNode.expression.getLocation());
         } else {
-            thunk->set(&def_ast_node.expression, env, def_ast_node.expression.getLocation());
+            thunk->set(&definitionAstNode.expression, environment, definitionAstNode.expression.getLocation());
         }
     }
 
-    Result interpret(fe::ast::Program &program, std::optional<std::shared_ptr<Env> > global_env,
+    Result interpret(fe::ast::Program &program, std::optional<std::shared_ptr<Environment> > globalEnvironment,
                      const options::Options options_) {
-        options_v = options_;
-        if (!global_env) {
-            global_env = std::make_shared<Env>();
-            install_builtins(*global_env);
+        optionsValue = options_;
+        if (!globalEnvironment) {
+            globalEnvironment = std::make_shared<Environment>();
+            installBuiltins(*globalEnvironment);
         }
-        Value result_value;
+        Value resultantValue;
         for (auto &[value]: program.nodes) {
-            std::visit([&]<typename T0>(T0 &&arg) {
+            std::visit([&]<typename T0>(T0 &&argument) {
                 using T = std::decay_t<T0>;
                 if constexpr (std::is_same_v<T, fe::ast::Expression>) {
-                    result_value = eval_expr(arg, *global_env);
+                    resultantValue = evalExpression(argument, *globalEnvironment);
                 } else if constexpr (std::is_same_v<T, fe::ast::DefinitionAstNode>) {
-                    bind_def_ast_node_lazy(arg, *global_env, options_v);
-                    const fe::ast::DefinitionAstNode &def_ast_node = arg;
-                    result_value = def_ast_node.definitionName.value;
+                    bindDefinitionAstNodeLazy(argument, *globalEnvironment, optionsValue);
+                    const fe::ast::DefinitionAstNode &definitionAstNode = argument;
+                    resultantValue = definitionAstNode.definitionName.value;
                 } else {
                     STATIC_ASSERT_UNREACHABLE_T(T, "unhandled program node");
                 }
             }, value);
         }
-        return {*global_env, result_value, global_result_options};
+        return {*globalEnvironment, resultantValue, globalResultOptions};
     }
 
-    void install_builtins(const std::shared_ptr<Env> &env) {
-        for (auto &native_fn: builtins::get_builtins(options_v)) {
+    void installBuiltins(const std::shared_ptr<Environment> &environment) {
+        for (auto &nativeFunction: builtins::getBuiltins(optionsValue)) {
             const auto thunk = std::make_shared<Thunk>();
-            thunk->cached = Value{std::make_shared<NativeFunction>(native_fn)};
-            env->bind(native_fn.name, thunk);
+            thunk->cached = Value{std::make_shared<NativeFunction>(nativeFunction)};
+            environment->bind(nativeFunction.name, thunk);
         }
     }
 }
