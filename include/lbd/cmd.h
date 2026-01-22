@@ -7,12 +7,12 @@
 namespace cmd {
     struct Options {
         std::optional<std::string> filepath;
-        bool show_help = false;
+        bool showHelp = false;
         bool repl = false;
         bool debug = false;
     };
 
-    void print_help(std::ostream &os, const std::string &program_name);
+    void printHelp(std::ostream &os, const std::string &programName);
 
-    Options parse_args(int argc, char **argv, const std::string &program_name);
+    Options parseArguments(int argc, char **argv, const std::string &programName);
 }

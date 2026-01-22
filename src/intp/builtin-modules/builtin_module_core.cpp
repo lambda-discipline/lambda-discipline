@@ -127,11 +127,11 @@ namespace intp::interp::builtins {
                     return {Value{value}, ResultOptions{}};
                 } catch (const std::invalid_argument &) {
                     optionsValue.logger.error({}, "runtime error: ", name, " could not parse string \"",
-                                              escape(argumentString),
+                                              escapeString(argumentString),
                                               "\"");
                 } catch (const std::out_of_range &) {
                     optionsValue.logger.error({}, "runtime error: ", name, " out of range for string \"",
-                                              escape(argumentString),
+                                              escapeString(argumentString),
                                               "\"");
                 }
             }

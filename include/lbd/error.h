@@ -3,12 +3,12 @@
 #include <cassert>
 
 template<typename>
-inline constexpr bool always_false_v = false;
+inline constexpr bool alwaysFalseValue = false;
 
 #define STATIC_ASSERT(VAL, MSG) \
 	static_assert(VAL, __FILE__ ":" STRINGIFY(__LINE__) ": " MSG)
 
-#define STATIC_ASSERT_UNREACHABLE_T(TYPE, MSG) STATIC_ASSERT((always_false_v<TYPE>), MSG)
+#define STATIC_ASSERT_UNREACHABLE_T(TYPE, MSG) STATIC_ASSERT((alwaysFalseValue<TYPE>), MSG)
 #define STATIC_ASSERT_UNREACHABLE(MSG) STATIC_ASSERT(false, MSG)
 
 #define STRINGIFY2(x) #x

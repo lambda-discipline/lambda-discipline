@@ -88,7 +88,7 @@ namespace fe::parser {
             }
             if (std::is_same_v<T, token::String>) {
                 ++index;
-                const auto value = unescape_string(std::get<token::String>(tok.tokenType).value);
+                const auto value = unescapeString(std::get<token::String>(tok.tokenType).value);
                 return ast::Expression(ast::StringAstNode{value, location});
             }
             if (std::is_same_v<T, token::Float>) {
@@ -175,7 +175,7 @@ namespace fe::parser {
                         identifierValue == "use") {
                         ++index; // consume "use"
                         assertToken<token::String>(tokens, index);
-                        const std::string filepath = unescape_string(
+                        const std::string filepath = unescapeString(
                             std::get<token::String>(tokens[index].tokenType).value);
                         ++index; // consume <filepath>
                         processUseFile(nodes, filepath);

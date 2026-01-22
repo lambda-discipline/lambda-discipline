@@ -7,59 +7,59 @@
 
 namespace logs {
     struct Logger {
-        bool exit_on_error = true;
-        bool use_color = false;
-        bool show_loc = true;
+        bool exitOnError = true;
+        bool useColor = false;
+        bool showLocation = true;
 
         Logger() = default;
 
-        Logger(const bool exit_on_error, const bool use_color, const bool show_loc) : exit_on_error(exit_on_error),
-            use_color(use_color), show_loc(show_loc) {
-            if (use_color) {
-                enable_virtual_terminal();
+        Logger(const bool exitOnError, const bool useColor, const bool showLocation) : exitOnError(exitOnError),
+            useColor(useColor), showLocation(showLocation) {
+            if (useColor) {
+                enableVirtualTerminal();
             }
         }
 
-        template<typename... Args>
-        [[noreturn]] void error(const std::optional<fe::loc::Loc> &loc, Args &&... args) const {
-            if (use_color) {
+        template<typename... Arguments>
+        [[noreturn]] void error(const std::optional<fe::loc::Loc> &location, Arguments &&... arguments) const {
+            if (useColor) {
                 std::cerr << colors::RED;
             }
-            if (show_loc && loc.has_value()) {
-                std::cerr << loc.value() << ": ";
+            if (showLocation && location.has_value()) {
+                std::cerr << location.value() << ": ";
             }
-            (std::cerr << ... << std::forward<Args>(args));
-            if (use_color) {
+            (std::cerr << ... << std::forward<Arguments>(arguments));
+            if (useColor) {
                 std::cerr << colors::RESET;
             }
             std::cerr << std::endl;
-            if (exit_on_error) {
+            if (exitOnError) {
                 exit(EXIT_FAILURE);
             }
             throw ControlledExit{};
         }
 
-        template<typename... Args>
-        void info(Args &&... args) const {
-            log_impl(colors::BLUE, std::cout, std::forward<Args>(args)...);
+        template<typename... Arguments>
+        void info(Arguments &&... arguments) const {
+            logImplementation(colors::BLUE, std::cout, std::forward<Arguments>(arguments)...);
         }
 
-        template<typename... Args>
-        void debug(Args &&... args) const {
-            log_impl(colors::YELLOW, std::cout, std::forward<Args>(args)...);
+        template<typename... Arguments>
+        void debug(Arguments &&... arguments) const {
+            logImplementation(colors::YELLOW, std::cout, std::forward<Arguments>(arguments)...);
         }
 
     private:
-        template<typename... Args>
-        void log_impl(const std::string &color, std::ostream &os, Args &&... args) const {
-            if (use_color) {
-                os << color;
+        template<typename... Arguments>
+        void logImplementation(const std::string &color, std::ostream &stream, Arguments &&... arguments) const {
+            if (useColor) {
+                stream << color;
             }
-            (os << ... << std::forward<Args>(args));
-            if (use_color) {
-                os << colors::RESET;
+            (stream << ... << std::forward<Arguments>(arguments));
+            if (useColor) {
+                stream << colors::RESET;
             }
-            os << std::endl;
+            stream << std::endl;
         }
     };
 }

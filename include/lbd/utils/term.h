@@ -8,7 +8,7 @@
 #include <windows.h>
 #endif
 
-inline bool enable_virtual_terminal() {
+inline bool enableVirtualTerminal() {
 #if defined(_WIN32)
     const HANDLE output_handle = GetStdHandle(STD_OUTPUT_HANDLE); // NOLINT(*-misplaced-const)
     if (output_handle == INVALID_HANDLE_VALUE) {
@@ -37,8 +37,8 @@ namespace colors {
     constexpr auto GREY = "\033[38;5;200m";
 }
 
-inline void print_table_row(const std::vector<std::string> &row, const std::vector<size_t> &widths,
-                            const std::string &color = "") {
+inline void printTableRow(const std::vector<std::string> &row, const std::vector<size_t> &widths,
+                          const std::string &color = "") {
     std::cout << color;
     for (size_t i = 0; i < row.size(); ++i) {
         std::cout << std::setw(static_cast<int>(widths[i])) << std::left << row[i] << "  ";
@@ -46,8 +46,8 @@ inline void print_table_row(const std::vector<std::string> &row, const std::vect
     std::cout << colors::RESET << std::endl;
 }
 
-inline void print_table(const std::vector<std::string> &headers, const std::vector<std::vector<std::string> > &data,
-                        const std::string &color = colors::CYAN) {
+inline void printTable(const std::vector<std::string> &headers, const std::vector<std::vector<std::string> > &data,
+                       const std::string &color = colors::CYAN) {
     std::vector<size_t> widths(headers.size(), 0);
     for (size_t i = 0; i < headers.size(); ++i) {
         widths[i] = headers[i].size();
@@ -59,12 +59,12 @@ inline void print_table(const std::vector<std::string> &headers, const std::vect
             }
         }
     }
-    print_table_row(headers, widths, color);
+    printTableRow(headers, widths, color);
     for (size_t i = 0; i < headers.size(); ++i) {
         std::cout << std::string(widths[i], '-') << "  ";
     }
     std::cout << std::endl;
     for (const auto &row: data) {
-        print_table_row(row, widths);
+        printTableRow(row, widths);
     }
 }

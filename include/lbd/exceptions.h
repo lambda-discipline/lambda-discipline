@@ -1,4 +1,5 @@
 #pragma once
+
 #include <exception>
 
 struct ControlledExit final : std::exception {

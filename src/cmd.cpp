@@ -1,8 +1,8 @@
 #include <lbd/cmd.h>
 
 namespace cmd {
-    void print_help(std::ostream &os, const std::string &program_name) {
-        os << "usage: " << program_name << " [options]\n\n"
+    void printHelp(std::ostream &os, const std::string &programName) {
+        os << "usage: " << programName << " [options]\n\n"
                 << "options:\n"
                 << "  -f, --file <filepath>   Specify input source filepath to run\n"
                 << "  -h, --help              Show this help message and exit\n"
@@ -10,17 +10,17 @@ namespace cmd {
                 << "  -r, --repl              Run in interactive REPL node" << std::endl;
     }
 
-    Options parse_args(const int argc, char **argv, const std::string &program_name) {
+    Options parseArguments(const int argc, char **argv, const std::string &programName) {
         Options opts;
         for (int i = 1; i < argc; ++i) {
             if (std::string arg = argv[i]; arg == "-h" || arg == "--help") {
-                opts.show_help = true;
+                opts.showHelp = true;
             } else if (arg == "-f" || arg == "--file") {
                 if (i + 1 < argc) {
                     opts.filepath = argv[++i];
                 } else {
                     std::cerr << "error: missing filepath after " << arg << std::endl;
-                    print_help(std::cerr, program_name);
+                    printHelp(std::cerr, programName);
                     std::exit(EXIT_FAILURE);
                 }
             } else if (arg == "-d" || arg == "--debug") {
@@ -29,7 +29,7 @@ namespace cmd {
                 opts.repl = true;
             } else {
                 std::cerr << "unknown option: " << arg << "\n";
-                print_help(std::cerr, program_name);
+                printHelp(std::cerr, programName);
                 std::exit(EXIT_FAILURE);
             }
         }

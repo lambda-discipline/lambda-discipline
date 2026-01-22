@@ -1,38 +1,44 @@
 #pragma once
 #include <string>
 
-inline std::string escape(const std::string& str) {
+inline std::string escapeString(const std::string &data) {
     std::string result;
-    result.reserve(str.size());
-    for (const char c : str) {
+    result.reserve(data.size());
+    for (const char c: data) {
         switch (c) {
-            case '\n': result += "\\n"; break;
-            case '\t': result += "\\t"; break;
-            case '\r': result += "\\r"; break;
-            case '\\': result += "\\\\"; break;
-            case '"':  result += "\\\""; break;
-            case '\'': result += "\\\'"; break;
+            case '\n': result += "\\n";
+                break;
+            case '\t': result += "\\t";
+                break;
+            case '\r': result += "\\r";
+                break;
+            case '\\': result += "\\\\";
+                break;
+            case '"': result += "\\\"";
+                break;
+            case '\'': result += "\\\'";
+                break;
             default:
-                // Printable ASCII characters
+                // Printable ASCII characters.
                 if (c >= 32 && c <= 126) {
                     result.push_back(c);
                 } else {
-                    // Non-printable: use hex escape
-                    char buf[5];
-                    snprintf(buf, sizeof(buf), "\\x%02X", static_cast<unsigned char>(c));
-                    result += buf;
+                    // Non-printable: use hex escape.
+                    char buffer[5];
+                    snprintf(buffer, sizeof(buffer), "\\x%02X", static_cast<unsigned char>(c));
+                    result += buffer;
                 }
         }
     }
     return result;
 }
 
-inline std::string unescape_string(const std::string &str) {
+inline std::string unescapeString(const std::string &data) {
     std::string result;
-    result.reserve(str.size());
-    for (size_t i = 0; i < str.size(); ++i) {
-        if (str[i] == '\\' && i + 1 < str.size()) {
-            switch (str[i + 1]) {
+    result.reserve(data.size());
+    for (size_t index = 0; index < data.size(); ++index) {
+        if (data[index] == '\\' && index + 1 < data.size()) {
+            switch (data[index + 1]) {
                 case 'n': result.push_back('\n');
                     break;
                 case 't': result.push_back('\t');
@@ -44,11 +50,11 @@ inline std::string unescape_string(const std::string &str) {
                 case '"': result.push_back('"');
                     break;
                 default:
-                    result.push_back(str[i + 1]); // Unknown escape: take character
+                    result.push_back(data[index + 1]); // Unknown escape: take character.
             }
-            ++i; // Skip the escaped char
+            ++index; // Skip the escaped char.
         } else {
-            result.push_back(str[i]);
+            result.push_back(data[index]);
         }
     }
     return result;

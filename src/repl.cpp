@@ -8,87 +8,86 @@
 #include <lbd/intp/interpreter.h>
 #include <lbd/exceptions.h>
 
-#define on_off(val) ((val) ? "on " : "off")
+#define onOrOff(val) ((val) ? "on " : "off")
 
-// TODO: Option :t for display type information of a symbol
+// TODO: Option :t for display type information of a symbol.
 
 namespace repl {
-    static options::Options options_v;
+    static options::Options optionsValue;
 
-    static void process_load_command(const std::string &arg,
-                                     std::optional<std::shared_ptr<intp::interp::Environment> > &shared_env) {
-        const std::string &filepath = arg;
-        options::Options sub_options = options_v;
-        sub_options.logger.show_loc = true;
+    static void processLoadCommand(const std::string &argument,
+                                   std::optional<std::shared_ptr<intp::interp::Environment> > &sharedEnvironment) {
+        const std::string &filepath = argument;
+        options::Options subOptions = optionsValue;
+        subOptions.logger.showLocation = true;
 
         if (!std::filesystem::exists(filepath)) {
-            sub_options.logger.error({}, "IO error: filepath ", filepath, " does not exist");
+            subOptions.logger.error({}, "IO error: filepath ", filepath, " does not exist");
         }
 
-        fe::lexer::Lexer lexer(filepath, fe::lexer::FromFile{}, sub_options);
+        fe::lexer::Lexer lexer(filepath, fe::lexer::FromFile{}, subOptions);
         const auto tokens = lexer.lexAll();
-        if (sub_options.debug) {
-            for (const auto &tok: tokens) {
-                sub_options.logger.debug(tok);
+        if (subOptions.debug) {
+            for (const auto &token: tokens) {
+                subOptions.logger.debug(token);
             }
         }
 
-        fe::parser::Parser parser(tokens, sub_options);
-        if (sub_options.debug) {
+        fe::parser::Parser parser(tokens, subOptions);
+        if (subOptions.debug) {
             for (const auto &node: parser.program.nodes) {
-                sub_options.logger.debug(node);
+                subOptions.logger.debug(node);
             }
         }
 
-        const std::optional<std::shared_ptr<intp::interp::Environment> > temp_env = shared_env;
+        const std::optional<std::shared_ptr<intp::interp::Environment> > temporaryEnvironment = sharedEnvironment;
         // Merge loaded_env into shared_env
-        if (const auto [loaded_env, _, result_options] = intp::interp::interpret(
-                parser.program, temp_env, sub_options);
-            loaded_env) {
-            if (!shared_env) {
-                shared_env = loaded_env;
+        if (const auto [loadedEnvironment, _, resultantOptions] = intp::interp::interpret(
+            parser.program, temporaryEnvironment, subOptions); loadedEnvironment) {
+            if (!sharedEnvironment) {
+                sharedEnvironment = loadedEnvironment;
             } else {
                 // Merge all Bindings from loaded_env into shared_env
-                for (const auto &[fst, snd]: loaded_env->table) {
-                    (*shared_env)->bind(fst, snd);
+                for (const auto &[first, second]: loadedEnvironment->table) {
+                    (*sharedEnvironment)->bind(first, second);
                 }
             }
-            if (result_options.sideEffects) {
+            if (resultantOptions.sideEffects) {
                 std::cout << std::endl;
             }
         }
 
-        sub_options.logger.info("info: file loaded ", filepath);
+        subOptions.logger.info("info: file loaded ", filepath);
     }
 
-    static int compute_paren_depth(const std::string &s) {
+    static int computeParenthesisDepth(const std::string &data) {
         int depth = 0;
-        for (const char c: s) {
+        for (const char c: data) {
             if (c == '(') depth++;
             else if (c == ')') depth = std::max(0, depth - 1);
         }
         return depth;
     }
 
-    static std::string trim(const std::string &s) {
+    static std::string trim(const std::string &data) {
         size_t start = 0;
-        while (start < s.size() && std::isspace(static_cast<unsigned char>(s[start]))) start++;
-        size_t end = s.size();
-        while (end > start && std::isspace(static_cast<unsigned char>(s[end - 1]))) end--;
-        return s.substr(start, end - start);
+        while (start < data.size() && std::isspace(static_cast<unsigned char>(data[start]))) start++;
+        size_t end = data.size();
+        while (end > start && std::isspace(static_cast<unsigned char>(data[end - 1]))) end--;
+        return data.substr(start, end - start);
     }
 
     void loop(const bool debug) {
-        enable_virtual_terminal();
+        enableVirtualTerminal();
 
         static logs::Logger logger(false, true, false);
-        options_v = {.ownExpression = true, .forceOnEnvironmentDump = false, .debug = debug, .logger = logger};
+        optionsValue = {.ownExpression = true, .forceOnEnvironmentDump = false, .debug = debug, .logger = logger};
 
         std::string line, buffer;
-        size_t indent_level = 0;
-        std::optional<std::shared_ptr<intp::interp::Environment> > shared_global_env = std::nullopt;
+        size_t indentLevel = 0;
+        std::optional<std::shared_ptr<intp::interp::Environment> > sharedGlobalEnvironment = std::nullopt;
 
-        options_v.logger.info("Welcome to lambda-discipline REPL.\nType :quit to exit.");
+        optionsValue.logger.info("Welcome to lambda-discipline REPL.\nType :quit to exit.");
 
         while (true) {
             try {
@@ -98,14 +97,14 @@ namespace repl {
                 } else {
                     std::cout << colors::CYAN << ".. " << colors::RESET;
                 }
-                for (size_t i = 0; i < indent_level; i++) std::cout << "  ";
+                for (size_t i = 0; i < indentLevel; i++) std::cout << "  ";
 
                 if (!std::getline(std::cin, line)) break; // EOF (C-d / C-z)
 
                 // REPL arguments parsing
                 {
                     if (line == ":q" || line == ":quit" || line == ":exit") {
-                        options_v.logger.info("\nexiting REPL.");
+                        optionsValue.logger.info("\nexiting REPL.");
                         break;
                     }
 
@@ -120,64 +119,64 @@ namespace repl {
 
                     if (line == ":h" || line == ":help" || line == ":?") {
                         std::cout << std::endl;
-                        print_table({"General Commands", "Argument", "Description"}, {
-                                        {":q, :quit, :exit", "", "Exit the REPL"},
-                                        {":c, :clear, :cls", "", "Clear the screen"},
-                                        {":h, :help, :?", "", "Display this help message"},
-                                        {":l, :load", "<filepath>", "Load file into REPL"},
-                                        {":r, :reset", "", "Reset environment"},
-                                        {":d, :debug", "", "Toggle debug mode"}
-                                    }, colors::GREEN);
+                        printTable({"General Commands", "Argument", "Description"}, {
+                                       {":q, :quit, :exit", "", "Exit the REPL"},
+                                       {":c, :clear, :cls", "", "Clear the screen"},
+                                       {":h, :help, :?", "", "Display this help message"},
+                                       {":l, :load", "<filepath>", "Load file into REPL"},
+                                       {":r, :reset", "", "Reset environment"},
+                                       {":d, :debug", "", "Toggle debug mode"}
+                                   }, colors::GREEN);
                         std::cout << std::endl;
-                        print_table({"Inspection Commands", "Argument", "Description"}, {
-                                        {":e, :env", "", "Dump environment bindings"},
-                                        {":force", "", "Force thunk evaluation on dump"}
-                                    }, colors::GREEN);
+                        printTable({"Inspection Commands", "Argument", "Description"}, {
+                                       {":e, :env", "", "Dump environment bindings"},
+                                       {":force", "", "Force thunk evaluation on dump"}
+                                   }, colors::GREEN);
                         std::cout << std::endl;
-                        print_table({"Options", "State", "Help"}, {
-                                        {"debug", on_off(options_v.debug), "use :debug to toggle"},
-                                        {
-                                            "force-on-env-dump", on_off(options_v.forceOnEnvironmentDump),
-                                            "use :force to toggle"
-                                        }
-                                    }, colors::GREEN);
+                        printTable({"Options", "State", "Help"}, {
+                                       {"debug", onOrOff(optionsValue.debug), "use :debug to toggle"},
+                                       {
+                                           "force-on-env-dump", onOrOff(optionsValue.forceOnEnvironmentDump),
+                                           "use :force to toggle"
+                                       }
+                                   }, colors::GREEN);
                         continue;
                     }
 
                     if (line == ":env" || line == ":e") {
                         std::cout << std::endl;
-                        if (shared_global_env) {
-                            print_table({"Symbol", "Thunk"},
-                                        (*shared_global_env)->toVector(options_v.forceOnEnvironmentDump),
-                                        colors::GREEN);
+                        if (sharedGlobalEnvironment) {
+                            printTable({"Symbol", "Thunk"},
+                                       (*sharedGlobalEnvironment)->toVector(optionsValue.forceOnEnvironmentDump),
+                                       colors::GREEN);
                         } else {
-                            print_table({"Symbol", "Thunk"}, {{"Empty"}}, colors::GREEN);
+                            printTable({"Symbol", "Thunk"}, {{"Empty"}}, colors::GREEN);
                         }
                         continue;
                     }
 
                     if (line == ":reset" || line == ":r") {
-                        shared_global_env.reset();
+                        sharedGlobalEnvironment.reset();
                         continue;
                     }
 
                     if (line == ":debug" || line == ":d") {
-                        options_v.debug = !options_v.debug;
+                        optionsValue.debug = !optionsValue.debug;
                         continue;
                     }
 
                     if (line == ":force") {
-                        options_v.forceOnEnvironmentDump = !options_v.forceOnEnvironmentDump;
+                        optionsValue.forceOnEnvironmentDump = !optionsValue.forceOnEnvironmentDump;
                         continue;
                     }
 
                     if (line.rfind(":load ", 0) == 0) {
-                        process_load_command(line.substr(6), shared_global_env);
+                        processLoadCommand(line.substr(6), sharedGlobalEnvironment);
                         continue;
                     }
 
                     if (line.rfind(":l ", 0) == 0) {
-                        process_load_command(line.substr(3), shared_global_env);
+                        processLoadCommand(line.substr(3), sharedGlobalEnvironment);
                         continue;
                     }
                 }
@@ -185,7 +184,7 @@ namespace repl {
                 if (line.empty()) continue;
 
                 std::string trimmed = trim(line);
-                // Continue the line with trailing '`'
+                // Continue the line with trailing '`'.
                 bool continuation = !trimmed.empty() && trimmed.back() == '`';
                 if (continuation) {
                     trimmed.pop_back();
@@ -195,41 +194,41 @@ namespace repl {
                 if (continuation) {
                     // Indent level depends on whether the current line ends with '.' after trimming and removing trailing '`'.
                     // Additionally, it also depends upon the current parenthesis depth.
-                    indent_level = compute_paren_depth(buffer);
+                    indentLevel = computeParenthesisDepth(buffer);
                     trimmed = trim(trimmed);
-                    if (!trimmed.empty() && trimmed.back() == '.') indent_level++;
+                    if (!trimmed.empty() && trimmed.back() == '.') indentLevel++;
                     continue;
                 }
-                indent_level = 0;
+                indentLevel = 0;
                 line = buffer;
                 buffer.clear();
 
                 // Lex
-                fe::lexer::Lexer lexer_v(line, fe::lexer::FromRepl{}, options_v);
-                const std::vector<fe::token::Token> tokens = lexer_v.lexAll();
-                if (options_v.debug) {
+                fe::lexer::Lexer lexerValue(line, fe::lexer::FromRepl{}, optionsValue);
+                const std::vector<fe::token::Token> tokens = lexerValue.lexAll();
+                if (optionsValue.debug) {
                     for (const auto &tok: tokens) {
-                        options_v.logger.debug(tok);
+                        optionsValue.logger.debug(tok);
                     }
                 }
 
                 // Parse
-                fe::parser::Parser parser_v(tokens, options_v);
-                if (options_v.debug) {
-                    options_v.logger.debug(parser_v.program);
+                fe::parser::Parser parserValue(tokens, optionsValue);
+                if (optionsValue.debug) {
+                    optionsValue.logger.debug(parserValue.program);
                 }
 
                 // Interpret
-                const auto [global_env, value, result_options] = intp::interp::interpret(
-                    parser_v.program, shared_global_env, options_v);
-                if (result_options.sideEffects) {
+                const auto [globalEnvironment, value, resultantOptions] = intp::interp::interpret(
+                    parserValue.program, sharedGlobalEnvironment, optionsValue);
+                if (resultantOptions.sideEffects) {
                     std::cout << std::endl;
                 }
                 std::cout << colors::GREEN << "=> " << value << colors::RESET << std::endl;
-                shared_global_env = global_env;
+                sharedGlobalEnvironment = globalEnvironment;
             } catch (const ControlledExit &) {
             } catch (const std::exception &ex) {
-                options_v.logger.error({}, "error: ", ex.what());
+                optionsValue.logger.error({}, "error: ", ex.what());
             }
         }
     }

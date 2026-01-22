@@ -15,7 +15,7 @@ namespace fe::ast {
     }
 
     std::ostream &operator<<(std::ostream &stream, const StringAstNode &node) {\
-        return stream << "\"" << escape(node.value) << "\"";
+        return stream << "\"" << escapeString(node.value) << "\"";
     }
 
     std::ostream &operator<<(std::ostream &stream, const FloatAstNode &node) {

@@ -24,7 +24,7 @@ namespace intp::interp {
         std::ostringstream stringStream;
         stringStream << "[";
         for (size_t i = 0; i < elements.size(); ++i) {
-            stringStream << escape(elements[i].toString());
+            stringStream << escapeString(elements[i].toString());
             if (i + 1 != elements.size()) {
                 stringStream << ", ";
             }
@@ -139,9 +139,9 @@ namespace intp::interp {
             try {
                 if (force) {
                     const Value &value = thunk->force();
-                    valueString = escape(value.toString());
+                    valueString = escapeString(value.toString());
                 } else if (thunk->cached) {
-                    valueString = escape(thunk->cached->toString()); // Already computed.
+                    valueString = escapeString(thunk->cached->toString()); // Already computed.
                 }
             } catch (const std::exception &) {
             }
