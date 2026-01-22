@@ -28,5 +28,10 @@
     "name": "Shapes",
     "source": "examples/shapes.lbd",
     "output": "examples/out/shapes.out.txt"
+  },
+  {
+    "name": "AOC-24 Day-01 Part-01",
+    "source": "examples/aoc-24/day-01/part_01.lbd",
+    "output": "examples/out/aoc-24/day-01/part_01.out.txt"
   }
 ]
