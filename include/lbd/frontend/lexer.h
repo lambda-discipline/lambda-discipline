@@ -26,6 +26,7 @@ namespace frontend {
         size_t row = 1;
         size_t col = 1;
         const std::string filepath;
+        const context::Options options;
 
         [[nodiscard]] char peek() const;
 

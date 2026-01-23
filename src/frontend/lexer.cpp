@@ -5,8 +5,6 @@
 #include <fstream>
 
 namespace frontend {
-    static context::Options optionsValue;
-
     char Lexer::peek() const {
         return position < source.size() ? source[position] : '\0';
     }
@@ -34,13 +32,13 @@ namespace frontend {
     }
 
     Lexer Lexer::fromFile(const std::string &filepath, const context::Options options) {
-        std::ifstream fileStream(filepath);
-        if (!fileStream) {
-            optionsValue.logger.error({}, "IO error: could not open file ", filepath);
+        std::ifstream inputFileStream(filepath);
+        if (!inputFileStream) {
+            options.logger.error({}, "IO error: could not open file ", filepath);
         }
-        std::ostringstream stringStream;
-        stringStream << fileStream.rdbuf();
-        return Lexer(filepath, stringStream.str(), options);
+        std::ostringstream outputStringStream;
+        outputStringStream << inputFileStream.rdbuf();
+        return Lexer(filepath, outputStringStream.str(), options);
     }
 
     Lexer Lexer::fromRepl(const std::string &source, const context::Options options) {
@@ -48,8 +46,7 @@ namespace frontend {
     }
 
     Lexer::Lexer(std::string filepath, std::string source, const context::Options options) : source(std::move(source)),
-        filepath(std::move(filepath)) {
-        optionsValue = options;
+        filepath(std::move(filepath)), options(options) {
     }
 
     token::Token Lexer::nextToken() {
@@ -105,7 +102,7 @@ namespace frontend {
             }
             const std::string value = source.substr(start, position - start);
             if (currentCharacter != '"') {
-                optionsValue.logger.error(currentLocation, "syntax error: unbalanced quote");
+                options.logger.error(currentLocation, "syntax error: unbalanced quote");
             }
             get(); // Consume '"'.
             return {token::String{value}, currentLocation};
@@ -153,7 +150,7 @@ namespace frontend {
             default:
                 break;
         }
-        optionsValue.logger.error(currentLocation, "syntax error: unexpected character ", currentCharacter);
+        options.logger.error(currentLocation, "syntax error: unexpected character ", currentCharacter);
     }
 
     std::vector<token::Token> Lexer::lex() {
