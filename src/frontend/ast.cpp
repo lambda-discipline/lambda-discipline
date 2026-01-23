@@ -9,41 +9,41 @@ namespace frontend {
         }
     }
 
-    std::ostream &operator<<(std::ostream &stream, const IdentifierAstNode &node) {
-        return stream << node.value;
+    std::ostream &operator<<(std::ostream &outputStream, const IdentifierAstNode &node) {
+        return outputStream << node.value;
     }
 
-    std::ostream &operator<<(std::ostream &stream, const StringAstNode &node) {\
-        return stream << "\"" << escapeString(node.value) << "\"";
+    std::ostream &operator<<(std::ostream &outputStream, const StringAstNode &node) {\
+        return outputStream << "\"" << escapeString(node.value) << "\"";
     }
 
-    std::ostream &operator<<(std::ostream &stream, const FloatAstNode &node) {
-        return stream << node.value;
+    std::ostream &operator<<(std::ostream &outputStream, const FloatAstNode &node) {
+        return outputStream << node.value;
     }
 
-    void LambdaExpression::print(std::ostream &stream, const size_t indent) const {
-        printIndent(stream, indent);
-        stream << "\\" << argument << ": " << argumentType << "." << std::endl;
-        expression->print(stream, indent + 1);
+    void LambdaExpression::print(std::ostream &outputStream, const size_t indent) const {
+        printIndent(outputStream, indent);
+        outputStream << "\\" << argument << ": " << argumentType << "." << std::endl;
+        expression->print(outputStream, indent + 1);
     }
 
-    std::ostream &operator<<(std::ostream &stream, const LambdaExpression &lambdaExpression) {
-        lambdaExpression.print(stream, 0);
-        return stream;
+    std::ostream &operator<<(std::ostream &outputStream, const LambdaExpression &lambdaExpression) {
+        lambdaExpression.print(outputStream, 0);
+        return outputStream;
     }
 
-    void FunctionApplication::print(std::ostream &stream, const size_t indent) const {
-        printIndent(stream, indent);
-        stream << "(" << functionName;
+    void FunctionApplication::print(std::ostream &outputStream, const size_t indent) const {
+        printIndent(outputStream, indent);
+        outputStream << "(" << functionName;
         for (auto &argument: arguments) {
-            stream << " " << *argument;
+            outputStream << " " << *argument;
         }
-        stream << ")";
+        outputStream << ")";
     }
 
-    std::ostream &operator<<(std::ostream &stream, const FunctionApplication &functionApplication) {
-        functionApplication.print(stream, 0);
-        return stream;
+    std::ostream &operator<<(std::ostream &outputStream, const FunctionApplication &functionApplication) {
+        functionApplication.print(outputStream, 0);
+        return outputStream;
     }
 
     Expression::Expression(IdentifierAstNode value) : value(std::move(value)) {
@@ -61,25 +61,25 @@ namespace frontend {
     Expression::Expression(FunctionApplication value) : value(std::move(value)) {
     }
 
-    void Expression::print(std::ostream &stream, size_t indent) const {
+    void Expression::print(std::ostream &outputStream, size_t indent) const {
         std::visit([&]<typename T0>(T0 &&argument) {
             using T = std::decay_t<T0>;
             if constexpr (std::is_same_v<T, IdentifierAstNode>
                           || std::is_same_v<T, StringAstNode>
                           || std::is_same_v<T, FloatAstNode>) {
-                printIndent(stream, indent);
-                stream << argument;
+                printIndent(outputStream, indent);
+                outputStream << argument;
             } else if constexpr (std::is_same_v<T, LambdaExpression> || std::is_same_v<T, FunctionApplication>) {
-                argument.print(stream, indent);
+                argument.print(outputStream, indent);
             } else {
                 STATIC_ASSERT_UNREACHABLE_T(T, "unhandled expression");
             }
         }, value);
     }
 
-    std::ostream &operator<<(std::ostream &stream, const Expression &expression) {
-        expression.print(stream, 0);
-        return stream;
+    std::ostream &operator<<(std::ostream &outputStream, const Expression &expression) {
+        expression.print(outputStream, 0);
+        return outputStream;
     }
 
     Location Expression::getLocation() const {
@@ -88,32 +88,32 @@ namespace frontend {
         }, value);
     }
 
-    void DefinitionAstNode::print(std::ostream &stream, const size_t indent) const {
-        printIndent(stream, indent);
-        stream << "def " << definitionName << ": " << definitionType << " = " << expression;
+    void DefinitionAstNode::print(std::ostream &outputStream, const size_t indent) const {
+        printIndent(outputStream, indent);
+        outputStream << "def " << definitionName << ": " << definitionType << " = " << expression;
     }
 
-    std::ostream &operator<<(std::ostream &stream, const DefinitionAstNode &node) {
-        node.print(stream, 0);
-        return stream;
+    std::ostream &operator<<(std::ostream &outputStream, const DefinitionAstNode &node) {
+        node.print(outputStream, 0);
+        return outputStream;
     }
 
-    void AstNode::print(std::ostream &stream, size_t indent) const {
+    void AstNode::print(std::ostream &outputStream, size_t indent) const {
         std::visit([&](auto &&arg) {
-            arg.print(stream, indent);
+            arg.print(outputStream, indent);
         }, value);
-        stream << std::endl;
+        outputStream << std::endl;
     }
 
-    std::ostream &operator<<(std::ostream &stream, const AstNode &node) {
-        node.print(stream, 0);
-        return stream;
+    std::ostream &operator<<(std::ostream &outputStream, const AstNode &node) {
+        node.print(outputStream, 0);
+        return outputStream;
     }
 
-    std::ostream &operator<<(std::ostream &stream, const Program &program) {
+    std::ostream &operator<<(std::ostream &outputStream, const Program &program) {
         for (const AstNode &node: program.nodes) {
-            stream << node;
+            outputStream << node;
         }
-        return stream;
+        return outputStream;
     }
 }

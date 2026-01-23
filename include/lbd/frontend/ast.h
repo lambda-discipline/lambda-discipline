@@ -11,21 +11,21 @@ namespace frontend {
         std::string value;
         Location location;
 
-        friend std::ostream &operator<<(std::ostream &stream, const IdentifierAstNode &node);
+        friend std::ostream &operator<<(std::ostream &outputStream, const IdentifierAstNode &node);
     };
 
     struct StringAstNode {
         std::string value;
         Location location;
 
-        friend std::ostream &operator<<(std::ostream &stream, const StringAstNode &node);
+        friend std::ostream &operator<<(std::ostream &outputStream, const StringAstNode &node);
     };
 
     struct FloatAstNode {
         double value;
         Location location;
 
-        friend std::ostream &operator<<(std::ostream &stream, const FloatAstNode &node);
+        friend std::ostream &operator<<(std::ostream &outputStream, const FloatAstNode &node);
     };
 
     struct Expression;
@@ -39,9 +39,9 @@ namespace frontend {
         // TODO: Remove after checking.
         interpreter::type::CompoundType lambdaExpressionType;
 
-        void print(std::ostream &stream, size_t indent) const;
+        void print(std::ostream &outputStream, size_t indent) const;
 
-        friend std::ostream &operator<<(std::ostream &stream, const LambdaExpression &lambdaExpression);
+        friend std::ostream &operator<<(std::ostream &outputStream, const LambdaExpression &lambdaExpression);
     };
 
     struct FunctionApplication {
@@ -49,9 +49,9 @@ namespace frontend {
         std::vector<std::unique_ptr<Expression> > arguments;
         Location location;
 
-        void print(std::ostream &stream, size_t indent) const;
+        void print(std::ostream &outputStream, size_t indent) const;
 
-        friend std::ostream &operator<<(std::ostream &stream, const FunctionApplication &functionApplication);
+        friend std::ostream &operator<<(std::ostream &outputStream, const FunctionApplication &functionApplication);
     };
 
     struct Expression {
@@ -75,9 +75,9 @@ namespace frontend {
 
         explicit Expression(FunctionApplication value);
 
-        void print(std::ostream &stream, size_t indent) const;
+        void print(std::ostream &outputStream, size_t indent) const;
 
-        friend std::ostream &operator<<(std::ostream &stream, const Expression &expression);
+        friend std::ostream &operator<<(std::ostream &outputStream, const Expression &expression);
 
         [[nodiscard]] Location getLocation() const;
 
@@ -96,9 +96,9 @@ namespace frontend {
         Expression expression;
         Location location;
 
-        void print(std::ostream &stream, size_t indent) const;
+        void print(std::ostream &outputStream, size_t indent) const;
 
-        friend std::ostream &operator<<(std::ostream &stream, const DefinitionAstNode &node);
+        friend std::ostream &operator<<(std::ostream &outputStream, const DefinitionAstNode &node);
     };
 
     struct AstNode {
@@ -106,14 +106,14 @@ namespace frontend {
 
         NodeVariant value;
 
-        void print(std::ostream &stream, size_t indent) const;
+        void print(std::ostream &outputStream, size_t indent) const;
 
-        friend std::ostream &operator<<(std::ostream &stream, const AstNode &node);
+        friend std::ostream &operator<<(std::ostream &outputStream, const AstNode &node);
     };
 
     struct Program {
         std::vector<AstNode> nodes;
 
-        friend std::ostream &operator<<(std::ostream &stream, const Program &program);
+        friend std::ostream &operator<<(std::ostream &outputStream, const Program &program);
     };
 }
