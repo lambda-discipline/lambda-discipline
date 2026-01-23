@@ -1,8 +1,8 @@
 #include <fstream>
 #include <sstream>
-#include <lbd/intp/builtin-modules/builtin_module_io.h>
+#include <lbd/interpreter/builtin-modules/builtin_module_io.h>
 
-namespace intp::interp::builtins {
+namespace interpreter::builtins {
     NativeFunction makeSlurpFile() {
         const std::string name = "slurp_file";
         return {

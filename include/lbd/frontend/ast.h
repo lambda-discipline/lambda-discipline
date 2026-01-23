@@ -1,7 +1,7 @@
 #pragma once
 
 #include <lbd/frontend/location.h>
-#include <lbd/intp/types.h>
+#include <lbd/interpreter/type.h>
 #include <string>
 #include <variant>
 #include <vector>
@@ -32,12 +32,12 @@ namespace frontend {
 
     struct LambdaExpression {
         IdentifierAstNode argument;
-        intp::types::Type argumentType;
+        interpreter::type::Type argumentType;
         std::unique_ptr<Expression> expression;
         Location location;
         /// Maybe, this is redundant.
         // TODO: Remove after checking.
-        intp::types::CompoundType lambdaExpressionType;
+        interpreter::type::CompoundType lambdaExpressionType;
 
         void print(std::ostream &stream, size_t indent) const;
 
@@ -92,7 +92,7 @@ namespace frontend {
 
     struct DefinitionAstNode {
         IdentifierAstNode definitionName;
-        intp::types::Type definitionType;
+        interpreter::type::Type definitionType;
         Expression expression;
         Location location;
 

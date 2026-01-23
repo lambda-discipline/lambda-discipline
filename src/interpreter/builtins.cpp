@@ -1,14 +1,14 @@
-#include <lbd/intp/builtins.h>
-#include <lbd/intp/builtin-modules/builtin_module_core.h>
-#include <lbd/intp/builtin-modules/builtin_module_list.h>
-#include <lbd/intp/builtin-modules/builtin_module_io.h>
+#include <lbd/interpreter/builtins.h>
+#include <lbd/interpreter/builtin-modules/builtin_module_core.h>
+#include <lbd/interpreter/builtin-modules/builtin_module_list.h>
+#include <lbd/interpreter/builtin-modules/builtin_module_io.h>
 
 // TODO: Add module system like use module io. Which dlopen's the module and loads it.
 
-namespace intp::interp::builtins {
-    options::Options optionsValue;
+namespace interpreter::builtins {
+    global::Options optionsValue;
 
-    std::vector<NativeFunction> getBuiltins(const options::Options options_) {
+    std::vector<NativeFunction> getBuiltins(const global::Options options_) {
         optionsValue = options_;
         return {
             {makePrint()},

@@ -1,8 +1,8 @@
 #pragma once
 
-#include <lbd/intp/builtins.h>
+#include <lbd/interpreter/builtins.h>
 
-namespace intp::interp::builtins {
+namespace interpreter::builtins {
     NativeFunction makeSlurpFile();
 
     NativeFunction makeLines();

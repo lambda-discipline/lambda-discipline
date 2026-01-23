@@ -4,7 +4,7 @@
 #include <string>
 #include <variant>
 
-namespace intp::types {
+namespace interpreter::type {
     struct PrimitiveType {
         enum class Type {
             Float,

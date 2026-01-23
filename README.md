@@ -120,5 +120,5 @@ lbd [options]
 ## TODO
 
 - TODO: Add better examples (e.g., Advent of Code snippets).
-- TODO: Maybe use rere.py for testing
+- TODO: CI/CD for testing.
 - TODO: Fix tests output in README.

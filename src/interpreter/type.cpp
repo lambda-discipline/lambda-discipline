@@ -1,7 +1,7 @@
 #include <lbd/error.h>
-#include <lbd/intp/types.h>
+#include <lbd/interpreter/type.h>
 
-namespace intp::types {
+namespace interpreter::type {
     std::ostream &operator<<(std::ostream &stream, const PrimitiveType &type) {
         switch (type.type) {
             case PrimitiveType::Type::Float:

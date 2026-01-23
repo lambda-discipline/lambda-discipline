@@ -2,8 +2,7 @@
 
 #include "logs.h"
 
-// TODO: Choose better namespace for this. Maybe global, context.
-namespace options {
+namespace global {
     struct Options {
         bool ownExpression = false; /// Owning Expression inside Thunk. Turned on for REPL
         bool forceOnEnvironmentDump = false;

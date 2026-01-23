@@ -7,9 +7,9 @@
 
 namespace frontend {
     static std::unordered_set<std::string> loadedFiles;
-    static options::Options optionsValue;
+    static global::Options optionsValue;
 
-    Parser::Parser(const std::vector<token::Token> &tokens, const options::Options options_) {
+    Parser::Parser(const std::vector<token::Token> &tokens, const global::Options options_) {
         optionsValue = options_;
         size_t index = 0;
         program = Program{build(tokens, index)};
@@ -37,26 +37,26 @@ namespace frontend {
         return IdentifierAstNode{value, location};
     }
 
-    intp::types::PrimitiveType
+    interpreter::type::PrimitiveType
     Parser::consumePrimitiveTypeName(const std::vector<token::Token> &tokens, size_t &index) {
         assertToken<token::Identifier>(tokens, index);
         auto [value] = std::get<token::Identifier>(tokens[index].tokenType);
         Location location = tokens[index].location;
         ++index;
         if (value == "Float") {
-            return intp::types::PrimitiveType{intp::types::PrimitiveType::Type::Float};
+            return interpreter::type::PrimitiveType{interpreter::type::PrimitiveType::Type::Float};
         }
         if (value == "Str") {
-            return intp::types::PrimitiveType{intp::types::PrimitiveType::Type::String};
+            return interpreter::type::PrimitiveType{interpreter::type::PrimitiveType::Type::String};
         }
         if (value == "Any") {
-            return intp::types::PrimitiveType{intp::types::PrimitiveType::Type::Any};
+            return interpreter::type::PrimitiveType{interpreter::type::PrimitiveType::Type::Any};
         }
-        return intp::types::PrimitiveType{intp::types::PrimitiveType::Type::Custom, std::move(value)};
+        return interpreter::type::PrimitiveType{interpreter::type::PrimitiveType::Type::Custom, std::move(value)};
     }
 
-    intp::types::Type Parser::parseType(const std::vector<token::Token> &tokens, size_t &index) {
-        intp::types::PrimitiveType typ = consumePrimitiveTypeName(tokens, index);
+    interpreter::type::Type Parser::parseType(const std::vector<token::Token> &tokens, size_t &index) {
+        interpreter::type::PrimitiveType typ = consumePrimitiveTypeName(tokens, index);
         std::vector types{typ};
         while (std::holds_alternative<token::Arrow>(tokens[index].tokenType)) {
             assertAndConsume<token::Arrow>(tokens, index);
@@ -66,9 +66,9 @@ namespace frontend {
             return typ;
         }
         // Construct Right Associative AST
-        intp::types::Type currentType = types.back();
+        interpreter::type::Type currentType = types.back();
         for (int typeIndex = static_cast<int>(types.size()) - 2; typeIndex >= 0; --typeIndex) {
-            auto nextCompoundType = std::make_shared<intp::types::CompoundType>();
+            auto nextCompoundType = std::make_shared<interpreter::type::CompoundType>();
             nextCompoundType->leftType = types[typeIndex];
             nextCompoundType->rightType = currentType;
             currentType = nextCompoundType;
@@ -111,7 +111,7 @@ namespace frontend {
         assertAndConsume<token::BackwardSlash>(tokens, index);
         IdentifierAstNode argument = consumeIdentifier(tokens, index);
         assertAndConsume<token::Colon>(tokens, index);
-        intp::types::Type argumentType = parseType(tokens, index);
+        interpreter::type::Type argumentType = parseType(tokens, index);
         assertAndConsume<token::Dot>(tokens, index);
         Expression expression = parseExpression(tokens, index);
         return LambdaExpression{
@@ -135,7 +135,7 @@ namespace frontend {
         Location location = tokens[index].location;
         IdentifierAstNode definitionName = consumeIdentifier(tokens, index);
         assertAndConsume<token::Colon>(tokens, index);
-        intp::types::Type definitionType = parseType(tokens, index);
+        interpreter::type::Type definitionType = parseType(tokens, index);
         assertAndConsume<token::Equal>(tokens, index);
         Expression expression = parseExpression(tokens, index);
         return DefinitionAstNode{definitionName, definitionType, std::move(expression), location};

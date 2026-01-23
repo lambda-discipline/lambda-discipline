@@ -1,13 +1,13 @@
-#include <lbd/intp/interpreter.h>
-#include <lbd/intp/builtins.h>
+#include <lbd/interpreter/interpreter.h>
+#include <lbd/interpreter/builtins.h>
 #include <lbd/options.h>
 #include <lbd/error.h>
 #include <sstream>
 
 #include "lbd/utils/string_escape.h"
 
-namespace intp::interp {
-    static options::Options optionsValue;
+namespace interpreter {
+    static global::Options optionsValue;
     static ResultOptions globalResultOptions;
 
     [[nodiscard]] std::string Closure::toString() const {
@@ -75,8 +75,9 @@ namespace intp::interp {
     }
 
     Thunk::Thunk(const frontend::Expression *expression, std::shared_ptr<Environment> environment,
-                 std::optional<frontend::Location> origin) : expression(expression), environment(std::move(environment)),
-                                                       origin(std::move(origin)) {
+                 std::optional<frontend::Location> origin) : expression(expression),
+                                                             environment(std::move(environment)),
+                                                             origin(std::move(origin)) {
     }
 
     const Value &Thunk::force() const {
@@ -102,8 +103,8 @@ namespace intp::interp {
         cached.reset();
     }
 
-    void Thunk::set_owned(frontend::Expression expression_, std::shared_ptr<Environment> environment_,
-                          std::optional<frontend::Location> origin_) {
+    void Thunk::setOwned(frontend::Expression expression_, std::shared_ptr<Environment> environment_,
+                         std::optional<frontend::Location> origin_) {
         owned = std::make_unique<frontend::Expression>(std::move(expression_));
         expression = owned.get();
         environment = std::move(environment_);
@@ -333,19 +334,19 @@ namespace intp::interp {
     // Creates placeholder Thunk then set body so recursion can refer to it during lazy evaluation
     static void bindDefinitionAstNodeLazy(frontend::DefinitionAstNode &definitionAstNode,
                                           const std::shared_ptr<Environment> &environment,
-                                          const options::Options options) {
+                                          const global::Options options) {
         const auto thunk = std::make_shared<Thunk>();
         environment->bind(definitionAstNode.definitionName.value, thunk);
         if (options.ownExpression) {
-            thunk->set_owned(std::move(definitionAstNode.expression), environment,
-                             definitionAstNode.expression.getLocation());
+            thunk->setOwned(std::move(definitionAstNode.expression), environment,
+                            definitionAstNode.expression.getLocation());
         } else {
             thunk->set(&definitionAstNode.expression, environment, definitionAstNode.expression.getLocation());
         }
     }
 
     Result interpret(frontend::Program &program, std::optional<std::shared_ptr<Environment> > globalEnvironment,
-                     const options::Options options_) {
+                     const global::Options options_) {
         optionsValue = options_;
         if (!globalEnvironment) {
             globalEnvironment = std::make_shared<Environment>();

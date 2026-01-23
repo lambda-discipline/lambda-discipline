@@ -8,7 +8,7 @@
 #include <lbd/frontend/parser.h>
 #include <lbd/options.h>
 
-namespace intp::interp {
+namespace interpreter {
     struct NativeFunction;
     struct Thunk;
     struct Environment;
@@ -54,6 +54,7 @@ namespace intp::interp {
     struct ResultOptions {
         bool sideEffects = false;
 
+        // TODO: _ may not be needed here
         void interpolate(const ResultOptions &resultOptions_);
     };
 
@@ -91,8 +92,8 @@ namespace intp::interp {
         void set(const frontend::Expression *expression_, std::shared_ptr<Environment> environment_,
                  std::optional<frontend::Location> origin_ = std::nullopt);
 
-        void set_owned(frontend::Expression expression_, std::shared_ptr<Environment> environment_,
-                       std::optional<frontend::Location> origin_ = std::nullopt);
+        void setOwned(frontend::Expression expression_, std::shared_ptr<Environment> environment_,
+                      std::optional<frontend::Location> origin_ = std::nullopt);
     };
 
     struct Environment : std::enable_shared_from_this<Environment> {
@@ -121,8 +122,9 @@ namespace intp::interp {
         ResultOptions options = {};
     };
 
-    Result interpret(frontend::Program &program, std::optional<std::shared_ptr<Environment> > globalEnvironment = std::nullopt,
-                     options::Options options_ = {});
+    Result interpret(frontend::Program &program,
+                     std::optional<std::shared_ptr<Environment> > globalEnvironment = std::nullopt,
+                     global::Options options_ = {});
 
     /// Add builtins Native Functions into Environment.
     void installBuiltins(const std::shared_ptr<Environment> &environment);

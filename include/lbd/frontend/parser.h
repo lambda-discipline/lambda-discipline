@@ -3,14 +3,14 @@
 #include <lbd/options.h>
 #include <lbd/frontend/ast.h>
 #include <lbd/frontend/token.h>
-#include <lbd/intp/types.h>
+#include <lbd/interpreter/type.h>
 #include <vector>
 
 namespace frontend {
     struct Parser {
         Program program;
 
-        explicit Parser(const std::vector<token::Token> &tokens, options::Options options_ = {});
+        explicit Parser(const std::vector<token::Token> &tokens, global::Options options_ = {});
 
     private:
         // TODO: Add checks for T to be a variant of frontend::TokenType
@@ -22,9 +22,9 @@ namespace frontend {
 
         static IdentifierAstNode consumeIdentifier(const std::vector<token::Token> &tokens, size_t &index);
 
-        static intp::types::PrimitiveType consumePrimitiveTypeName(const std::vector<token::Token> &tokens, size_t &index);
+        static interpreter::type::PrimitiveType consumePrimitiveTypeName(const std::vector<token::Token> &tokens, size_t &index);
 
-        static intp::types::Type parseType(const std::vector<token::Token> &tokens, size_t &index);
+        static interpreter::type::Type parseType(const std::vector<token::Token> &tokens, size_t &index);
 
         static Expression parseExpression(const std::vector<token::Token> &tokens, size_t &index);
 

@@ -15,9 +15,9 @@ namespace frontend {
 
     struct Lexer {
         // TODO: Make factory instead of these constructors.
-        Lexer(const std::string &filepath, FromFile, options::Options options_ = {});
+        Lexer(const std::string &filepath, FromFile, global::Options options_ = {});
 
-        Lexer(std::string str, FromRepl, options::Options options_ = {});
+        Lexer(std::string str, FromRepl, global::Options options_ = {});
 
         token::Token nextToken();
 

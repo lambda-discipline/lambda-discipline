@@ -14,6 +14,8 @@ TEST_CASE_SOURCE_KEY = "source"
 TEST_CASE_OUTPUT_KEY = "output"
 
 
+# TODO: Also log the time taken.
+
 def execCommand(command):
     return subprocess.run(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 

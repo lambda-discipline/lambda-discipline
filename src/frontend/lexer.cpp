@@ -5,7 +5,7 @@
 #include <fstream>
 
 namespace frontend {
-    static options::Options optionsValue;
+    static global::Options optionsValue;
 
     char Lexer::peek() const {
         return position < source.size() ? source[position] : '\0';
@@ -33,7 +33,7 @@ namespace frontend {
         return {row, col, filepath};
     }
 
-    Lexer::Lexer(const std::string &filepath, FromFile, options::Options options_) : filepath(filepath) {
+    Lexer::Lexer(const std::string &filepath, FromFile, global::Options options_) : filepath(filepath) {
         std::ifstream ifs(filepath);
         optionsValue = options_;
         if (!ifs) {
@@ -44,7 +44,7 @@ namespace frontend {
         source = ss.str();
     }
 
-    Lexer::Lexer(std::string str, FromRepl, const options::Options options_) : source(std::move(str)) {
+    Lexer::Lexer(std::string str, FromRepl, const global::Options options_) : source(std::move(str)) {
         optionsValue = options_;
     }
 

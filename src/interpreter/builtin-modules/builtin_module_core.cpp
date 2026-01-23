@@ -1,7 +1,7 @@
-#include <lbd/intp/builtin-modules/builtin_module_io.h>
+#include <lbd/interpreter/builtin-modules/builtin_module_io.h>
 #include <lbd/utils/string_escape.h>
 
-namespace intp::interp::builtins {
+namespace interpreter::builtins {
     // Prints Argument to stdout and returns 0.
     NativeFunction makePrint() {
         const std::string name = "print";

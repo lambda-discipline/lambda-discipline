@@ -5,7 +5,7 @@
 #include <lbd/utils/term.h>
 #include <lbd/frontend/lexer.h>
 #include <lbd/frontend/parser.h>
-#include <lbd/intp/interpreter.h>
+#include <lbd/interpreter/interpreter.h>
 #include <lbd/exceptions.h>
 
 #define onOrOff(val) ((val) ? "on " : "off")
@@ -13,12 +13,12 @@
 // TODO: Option :t for display type information of a symbol.
 
 namespace repl {
-    static options::Options optionsValue;
+    static global::Options optionsValue;
 
     static void processLoadCommand(const std::string &argument,
-                                   std::optional<std::shared_ptr<intp::interp::Environment> > &sharedEnvironment) {
+                                   std::optional<std::shared_ptr<interpreter::Environment> > &sharedEnvironment) {
         const std::string &filepath = argument;
-        options::Options subOptions = optionsValue;
+        global::Options subOptions = optionsValue;
         subOptions.logger.showLocation = true;
 
         if (!std::filesystem::exists(filepath)) {
@@ -40,9 +40,9 @@ namespace repl {
             }
         }
 
-        const std::optional<std::shared_ptr<intp::interp::Environment> > temporaryEnvironment = sharedEnvironment;
+        const std::optional<std::shared_ptr<interpreter::Environment> > temporaryEnvironment = sharedEnvironment;
         // Merge loaded_env into shared_env
-        if (const auto [loadedEnvironment, _, resultantOptions] = intp::interp::interpret(
+        if (const auto [loadedEnvironment, _, resultantOptions] = interpreter::interpret(
             parser.program, temporaryEnvironment, subOptions); loadedEnvironment) {
             if (!sharedEnvironment) {
                 sharedEnvironment = loadedEnvironment;
@@ -85,7 +85,7 @@ namespace repl {
 
         std::string line, buffer;
         size_t indentLevel = 0;
-        std::optional<std::shared_ptr<intp::interp::Environment> > sharedGlobalEnvironment = std::nullopt;
+        std::optional<std::shared_ptr<interpreter::Environment> > sharedGlobalEnvironment = std::nullopt;
 
         optionsValue.logger.info("Welcome to lambda-discipline REPL.\nType :quit to exit.");
 
@@ -219,7 +219,7 @@ namespace repl {
                 }
 
                 // Interpret
-                const auto [globalEnvironment, value, resultantOptions] = intp::interp::interpret(
+                const auto [globalEnvironment, value, resultantOptions] = interpreter::interpret(
                     parserValue.program, sharedGlobalEnvironment, optionsValue);
                 if (resultantOptions.sideEffects) {
                     std::cout << std::endl;

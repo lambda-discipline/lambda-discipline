@@ -2,7 +2,7 @@
 #include <lbd/frontend/ast.h>
 #include <lbd/frontend/lexer.h>
 #include <lbd/frontend/parser.h>
-#include <lbd/intp/interpreter.h>
+#include <lbd/interpreter/interpreter.h>
 #include <lbd/cmd.h>
 #include <lbd/repl.h>
 #include <string>
@@ -33,7 +33,7 @@ int main(const int argc, char **argv) {
             std::cout << parser.program << std::endl;
         }
         // Interpret
-        auto result = intp::interp::interpret(parser.program);
+        auto result = interpreter::interpret(parser.program);
         return EXIT_SUCCESS;
     }
 }
