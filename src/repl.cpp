@@ -33,9 +33,9 @@ namespace repl {
             }
         }
 
-        frontend::Parser parser(tokens, subOptions);
+        frontend::Program program = frontend::Parser(tokens, subOptions).parse();
         if (subOptions.debug) {
-            for (const auto &node: parser.program.astNodes) {
+            for (const auto &node: program.astNodes) {
                 subOptions.logger.debug(node);
             }
         }
@@ -43,7 +43,7 @@ namespace repl {
         const std::optional<std::shared_ptr<interpreter::Environment> > temporaryEnvironment = sharedEnvironment;
         // Merge loaded_env into shared_env
         if (const auto [loadedEnvironment, _, resultantOptions] = interpreter::interpret(
-            parser.program, temporaryEnvironment, subOptions); loadedEnvironment) {
+            program, temporaryEnvironment, subOptions); loadedEnvironment) {
             if (!sharedEnvironment) {
                 sharedEnvironment = loadedEnvironment;
             } else {
@@ -213,14 +213,14 @@ namespace repl {
                 }
 
                 // Parse
-                frontend::Parser parserValue(tokens, optionsValue);
+                frontend::Program program = frontend::Parser(tokens, optionsValue).parse();
                 if (optionsValue.debug) {
-                    optionsValue.logger.debug(parserValue.program);
+                    optionsValue.logger.debug(program);
                 }
 
                 // Interpret
                 const auto [globalEnvironment, value, resultantOptions] = interpreter::interpret(
-                    parserValue.program, sharedGlobalEnvironment, optionsValue);
+                    program, sharedGlobalEnvironment, optionsValue);
                 if (resultantOptions.sideEffects) {
                     std::cout << std::endl;
                 }

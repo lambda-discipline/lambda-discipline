@@ -27,12 +27,12 @@ int main(const int argc, char **argv) {
             }
         }
         // Parse
-        auto parser = frontend::Parser(tokens);
+        auto program = frontend::Parser(tokens).parse();
         if (debug) {
-            std::cout << parser.program << std::endl;
+            std::cout << program << std::endl;
         }
         // Interpret
-        auto result = interpreter::interpret(parser.program);
+        auto result = interpreter::interpret(program);
         return EXIT_SUCCESS;
     }
 }

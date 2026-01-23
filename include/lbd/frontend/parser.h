@@ -9,34 +9,36 @@
 
 namespace frontend {
     struct Parser {
-        // TODO: Make this private
-        Program program;
+        Program parse();
 
-        explicit Parser(const std::vector<token::Token> &tokens, context::Options options_ = {});
+        explicit Parser(const std::vector<token::Token> &tokens, context::Options options = {});
 
     private:
+        const context::Options options;
+        const std::vector<token::Token> &tokens;
+        size_t index;
+
         // TODO: Add checks for T to be a variant of frontend::TokenType
         template<typename T>
-        static void assertToken(const std::vector<token::Token> &tokens, size_t &index);
+        void assertToken();
 
         template<typename T>
-        static void assertAndConsume(const std::vector<token::Token> &tokens, size_t &index);
+        void assertAndConsume();
 
-        static IdentifierAstNode consumeIdentifier(const std::vector<token::Token> &tokens, size_t &index);
+        IdentifierAstNode consumeIdentifier();
 
-        static interpreter::type::PrimitiveType consumePrimitiveTypeName(
-            const std::vector<token::Token> &tokens, size_t &index);
+        interpreter::type::PrimitiveType consumePrimitiveTypeName();
 
-        static interpreter::type::Type parseType(const std::vector<token::Token> &tokens, size_t &index);
+        interpreter::type::Type parseType();
 
-        static Expression parseExpression(const std::vector<token::Token> &tokens, size_t &index);
+        Expression parseExpression();
 
-        static LambdaExpression parseLambdaExpression(const std::vector<token::Token> &tokens, size_t &index);
+        LambdaExpression parseLambdaExpression();
 
-        static FunctionApplication parseFunctionApplication(const std::vector<token::Token> &tokens, size_t &index);
+        FunctionApplication parseFunctionApplication();
 
-        static DefinitionAstNode parseDefinitionAstNode(const std::vector<token::Token> &tokens, size_t &index);
+        DefinitionAstNode parseDefinitionAstNode();
 
-        static std::vector<AstNode> build(const std::vector<token::Token> &tokens, size_t &index);
+        std::vector<AstNode> build();
     };
 }
