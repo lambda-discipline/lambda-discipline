@@ -5,7 +5,7 @@
 #include <fstream>
 
 namespace frontend {
-    static global::Options optionsValue;
+    static context::Options optionsValue;
 
     char Lexer::peek() const {
         return position < source.size() ? source[position] : '\0';
@@ -33,7 +33,7 @@ namespace frontend {
         return {row, col, filepath};
     }
 
-    Lexer Lexer::fromFile(const std::string &filepath, const global::Options options) {
+    Lexer Lexer::fromFile(const std::string &filepath, const context::Options options) {
         std::ifstream fileStream(filepath);
         if (!fileStream) {
             optionsValue.logger.error({}, "IO error: could not open file ", filepath);
@@ -43,11 +43,11 @@ namespace frontend {
         return Lexer(filepath, stringStream.str(), options);
     }
 
-    Lexer Lexer::fromRepl(const std::string &source, const global::Options options) {
+    Lexer Lexer::fromRepl(const std::string &source, const context::Options options) {
         return Lexer("", source, options);
     }
 
-    Lexer::Lexer(std::string filepath, std::string source, const global::Options options) : source(std::move(source)),
+    Lexer::Lexer(std::string filepath, std::string source, const context::Options options) : source(std::move(source)),
         filepath(std::move(filepath)) {
         optionsValue = options;
     }

@@ -7,9 +7,9 @@
 
 namespace frontend {
     static std::unordered_set<std::string> loadedFiles;
-    static global::Options optionsValue;
+    static context::Options optionsValue;
 
-    Parser::Parser(const std::vector<token::Token> &tokens, const global::Options options_) {
+    Parser::Parser(const std::vector<token::Token> &tokens, const context::Options options_) {
         optionsValue = options_;
         size_t index = 0;
         program = Program{build(tokens, index)};

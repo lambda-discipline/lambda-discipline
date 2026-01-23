@@ -4,7 +4,7 @@
 #include <lbd/options.h>
 
 namespace interpreter::builtins {
-    extern global::Options optionsValue;
+    extern context::Options optionsValue;
 
-    std::vector<NativeFunction> getBuiltins(global::Options options_ = {});
+    std::vector<NativeFunction> getBuiltins(context::Options options_ = {});
 }

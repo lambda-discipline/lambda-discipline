@@ -10,7 +10,7 @@ namespace frontend {
     struct Parser {
         Program program;
 
-        explicit Parser(const std::vector<token::Token> &tokens, global::Options options_ = {});
+        explicit Parser(const std::vector<token::Token> &tokens, context::Options options_ = {});
 
     private:
         // TODO: Add checks for T to be a variant of frontend::TokenType

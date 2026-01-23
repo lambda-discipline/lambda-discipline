@@ -13,12 +13,12 @@
 // TODO: Option :t for display type information of a symbol.
 
 namespace repl {
-    static global::Options optionsValue;
+    static context::Options optionsValue;
 
     static void processLoadCommand(const std::string &argument,
                                    std::optional<std::shared_ptr<interpreter::Environment> > &sharedEnvironment) {
         const std::string &filepath = argument;
-        global::Options subOptions = optionsValue;
+        context::Options subOptions = optionsValue;
         subOptions.logger.showLocation = true;
 
         if (!std::filesystem::exists(filepath)) {

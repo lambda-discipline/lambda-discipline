@@ -6,9 +6,9 @@
 // TODO: Add module system like use module io. Which dlopen's the module and loads it.
 
 namespace interpreter::builtins {
-    global::Options optionsValue;
+    context::Options optionsValue;
 
-    std::vector<NativeFunction> getBuiltins(const global::Options options_) {
+    std::vector<NativeFunction> getBuiltins(const context::Options options_) {
         optionsValue = options_;
         return {
             {makePrint()},

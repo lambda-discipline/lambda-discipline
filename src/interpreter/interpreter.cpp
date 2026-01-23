@@ -7,7 +7,7 @@
 #include "lbd/utils/string_escape.h"
 
 namespace interpreter {
-    static global::Options optionsValue;
+    static context::Options optionsValue;
     static ResultOptions globalResultOptions;
 
     [[nodiscard]] std::string Closure::toString() const {
@@ -334,7 +334,7 @@ namespace interpreter {
     // Creates placeholder Thunk then set body so recursion can refer to it during lazy evaluation
     static void bindDefinitionAstNodeLazy(frontend::DefinitionAstNode &definitionAstNode,
                                           const std::shared_ptr<Environment> &environment,
-                                          const global::Options options) {
+                                          const context::Options options) {
         const auto thunk = std::make_shared<Thunk>();
         environment->bind(definitionAstNode.definitionName.value, thunk);
         if (options.ownExpression) {
@@ -346,7 +346,7 @@ namespace interpreter {
     }
 
     Result interpret(frontend::Program &program, std::optional<std::shared_ptr<Environment> > globalEnvironment,
-                     const global::Options options_) {
+                     const context::Options options_) {
         optionsValue = options_;
         if (!globalEnvironment) {
             globalEnvironment = std::make_shared<Environment>();

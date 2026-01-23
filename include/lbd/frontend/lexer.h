@@ -8,9 +8,9 @@
 
 namespace frontend {
     struct Lexer {
-        static Lexer fromFile(const std::string &filepath, global::Options options = {});
+        static Lexer fromFile(const std::string &filepath, context::Options options = {});
 
-        static Lexer fromRepl(const std::string &source, global::Options options = {});
+        static Lexer fromRepl(const std::string &source, context::Options options = {});
 
         // TODO: Add fromStdin
 
@@ -19,7 +19,7 @@ namespace frontend {
         std::vector<token::Token> lex();
 
     private:
-        explicit Lexer(std::string filepath, std::string source, global::Options options = {});
+        explicit Lexer(std::string filepath, std::string source, context::Options options = {});
 
         std::string source;
         size_t position = 0;

@@ -124,7 +124,7 @@ namespace interpreter {
 
     Result interpret(frontend::Program &program,
                      std::optional<std::shared_ptr<Environment> > globalEnvironment = std::nullopt,
-                     global::Options options_ = {});
+                     context::Options options_ = {});
 
     /// Add builtins Native Functions into Environment.
     void installBuiltins(const std::shared_ptr<Environment> &environment);
