@@ -24,7 +24,7 @@ namespace frontend {
         std::string source;
         size_t position = 0;
         size_t row = 1;
-        size_t col = 1;
+        size_t column = 1;
         const std::string filepath;
         const context::Options options;
 

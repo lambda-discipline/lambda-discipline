@@ -15,9 +15,9 @@ namespace frontend {
             ++position;
             if (c == '\n') {
                 ++row;
-                col = 1;
+                column = 1;
             } else {
-                ++col;
+                ++column;
             }
         }
         return c;
@@ -28,7 +28,7 @@ namespace frontend {
     }
 
     Location Lexer::getCurrentLocation() const {
-        return {row, col, filepath};
+        return {row, column, filepath};
     }
 
     Lexer Lexer::fromFile(const std::string &filepath, const context::Options options) {
@@ -91,7 +91,7 @@ namespace frontend {
         if (std::isdigit(currentCharacter)) {
             return {token::Float(lexFloat()), currentLocation};
         }
-        // String Literal: " ... "
+        // String Literal: " ... ".
         if (currentCharacter == '"') {
             get(); // Consume '"'.
             const size_t start = position;
@@ -135,11 +135,11 @@ namespace frontend {
                     return {token::Arrow{}, currentLocation};
                 }
                 if (currentCharacter == '-') {
-                    // Comment
+                    // Comment.
                     while (currentCharacter != '\n' && !isEof()) {
                         currentCharacter = get();
                     }
-                    // After skipping comment, return the next token
+                    // After skipping comment, return the next token.
                     return nextToken();
                 }
                 // Negative Float
