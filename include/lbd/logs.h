@@ -2,7 +2,7 @@
 
 #include <optional>
 #include <lbd/frontend/location.h>
-#include <lbd/utils/term.h>
+#include <lbd/utils/terminal.h>
 #include <lbd/exceptions.h>
 
 namespace logs {

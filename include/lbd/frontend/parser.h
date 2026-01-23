@@ -3,11 +3,13 @@
 #include <lbd/options.h>
 #include <lbd/frontend/ast.h>
 #include <lbd/frontend/token.h>
+#include <lbd/frontend/program.h>
 #include <lbd/interpreter/type.h>
 #include <vector>
 
 namespace frontend {
     struct Parser {
+        // TODO: Make this private
         Program program;
 
         explicit Parser(const std::vector<token::Token> &tokens, context::Options options_ = {});
@@ -22,7 +24,8 @@ namespace frontend {
 
         static IdentifierAstNode consumeIdentifier(const std::vector<token::Token> &tokens, size_t &index);
 
-        static interpreter::type::PrimitiveType consumePrimitiveTypeName(const std::vector<token::Token> &tokens, size_t &index);
+        static interpreter::type::PrimitiveType consumePrimitiveTypeName(
+            const std::vector<token::Token> &tokens, size_t &index);
 
         static interpreter::type::Type parseType(const std::vector<token::Token> &tokens, size_t &index);
 

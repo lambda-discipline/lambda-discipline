@@ -1,5 +1,4 @@
 ﻿#include <iostream>
-#include <lbd/frontend/ast.h>
 #include <lbd/frontend/lexer.h>
 #include <lbd/frontend/parser.h>
 #include <lbd/interpreter/interpreter.h>

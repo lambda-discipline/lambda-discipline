@@ -1,6 +1,6 @@
 #pragma once
 
-#include "logs.h"
+#include <lbd/logs.h>
 
 namespace context {
     struct Options {

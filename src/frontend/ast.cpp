@@ -109,11 +109,4 @@ namespace frontend {
         node.print(outputStream, 0);
         return outputStream;
     }
-
-    std::ostream &operator<<(std::ostream &outputStream, const Program &program) {
-        for (const AstNode &node: program.nodes) {
-            outputStream << node;
-        }
-        return outputStream;
-    }
 }

@@ -159,8 +159,8 @@ namespace frontend {
                 optionsValue.logger.debug(token);
             }
         }
-        for (Parser parser(tokens, optionsValue); auto &node: parser.program.nodes) {
-            nodes.emplace_back(std::move(node));
+        for (Parser parser(tokens, optionsValue); auto &astNode: parser.program.astNodes) {
+            nodes.emplace_back(std::move(astNode));
         }
     }
 

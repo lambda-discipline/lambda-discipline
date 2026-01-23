@@ -12,6 +12,7 @@ add_library(frontend STATIC
     ${CMAKE_SOURCE_DIR}/src/frontend/token.cpp
     ${CMAKE_SOURCE_DIR}/src/frontend/lexer.cpp
     ${CMAKE_SOURCE_DIR}/src/frontend/ast.cpp
+    ${CMAKE_SOURCE_DIR}/src/frontend/program.cpp
     ${CMAKE_SOURCE_DIR}/src/frontend/parser.cpp
 )
 

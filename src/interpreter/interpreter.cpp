@@ -353,7 +353,7 @@ namespace interpreter {
             installBuiltins(*globalEnvironment);
         }
         Value resultantValue;
-        for (auto &[value]: program.nodes) {
+        for (auto &[value]: program.astNodes) {
             std::visit([&]<typename T0>(T0 &&argument) {
                 using T = std::decay_t<T0>;
                 if constexpr (std::is_same_v<T, frontend::Expression>) {

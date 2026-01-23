@@ -98,6 +98,7 @@ namespace frontend {
         friend std::ostream &operator<<(std::ostream &outputStream, const DefinitionAstNode &node);
     };
 
+    // NOTE: Owning and move-only, not copyable.
     struct AstNode {
         using NodeVariant = std::variant<Expression, DefinitionAstNode>;
 
@@ -106,11 +107,5 @@ namespace frontend {
         void print(std::ostream &outputStream, size_t indent) const;
 
         friend std::ostream &operator<<(std::ostream &outputStream, const AstNode &node);
-    };
-
-    struct Program {
-        std::vector<AstNode> nodes;
-
-        friend std::ostream &operator<<(std::ostream &outputStream, const Program &program);
     };
 }

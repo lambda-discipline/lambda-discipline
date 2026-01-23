@@ -2,7 +2,7 @@
 #include <fstream>
 #include <iostream>
 #include <lbd/repl.h>
-#include <lbd/utils/term.h>
+#include <lbd/utils/terminal.h>
 #include <lbd/frontend/lexer.h>
 #include <lbd/frontend/parser.h>
 #include <lbd/interpreter/interpreter.h>
@@ -35,7 +35,7 @@ namespace repl {
 
         frontend::Parser parser(tokens, subOptions);
         if (subOptions.debug) {
-            for (const auto &node: parser.program.nodes) {
+            for (const auto &node: parser.program.astNodes) {
                 subOptions.logger.debug(node);
             }
         }
