@@ -35,9 +35,6 @@ namespace frontend {
         interpreter::type::Type argumentType;
         std::unique_ptr<Expression> expression;
         Location location;
-        /// Maybe, this is redundant.
-        // TODO: Remove after checking.
-        interpreter::type::CompoundType lambdaExpressionType;
 
         void print(std::ostream &outputStream, size_t indent) const;
 
