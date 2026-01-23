@@ -7,29 +7,25 @@
 #include <vector>
 
 namespace frontend {
-    struct FromFile {
-    };
-
-    struct FromRepl {
-    };
-
     struct Lexer {
-        // TODO: Make factory instead of these constructors.
-        Lexer(const std::string &filepath, FromFile, global::Options options_ = {});
+        static Lexer fromFile(const std::string &filepath, global::Options options = {});
 
-        Lexer(std::string str, FromRepl, global::Options options_ = {});
+        static Lexer fromRepl(const std::string &source, global::Options options = {});
+
+        // TODO: Add fromStdin
 
         token::Token nextToken();
 
-        // TODO: Find a better name for this.
-        std::vector<token::Token> lexAll();
+        std::vector<token::Token> lex();
 
     private:
+        explicit Lexer(std::string filepath, std::string source, global::Options options = {});
+
         std::string source;
         size_t position = 0;
         size_t row = 1;
         size_t col = 1;
-        std::string filepath;
+        const std::string filepath;
 
         [[nodiscard]] char peek() const;
 

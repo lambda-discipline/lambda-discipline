@@ -25,8 +25,8 @@ namespace repl {
             subOptions.logger.error({}, "IO error: filepath ", filepath, " does not exist");
         }
 
-        frontend::Lexer lexer(filepath, frontend::FromFile{}, subOptions);
-        const auto tokens = lexer.lexAll();
+        frontend::Lexer lexer = frontend::Lexer::fromFile(filepath, subOptions);
+        const auto tokens = lexer.lex();
         if (subOptions.debug) {
             for (const auto &token: tokens) {
                 subOptions.logger.debug(token);
@@ -204,8 +204,8 @@ namespace repl {
                 buffer.clear();
 
                 // Lex
-                frontend::Lexer lexerValue(line, frontend::FromRepl{}, optionsValue);
-                const std::vector<frontend::token::Token> tokens = lexerValue.lexAll();
+                frontend::Lexer lexerValue = frontend::Lexer::fromRepl(line, optionsValue);
+                const std::vector<frontend::token::Token> tokens = lexerValue.lex();
                 if (optionsValue.debug) {
                     for (const auto &tok: tokens) {
                         optionsValue.logger.debug(tok);

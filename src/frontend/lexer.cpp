@@ -33,19 +33,23 @@ namespace frontend {
         return {row, col, filepath};
     }
 
-    Lexer::Lexer(const std::string &filepath, FromFile, global::Options options_) : filepath(filepath) {
-        std::ifstream ifs(filepath);
-        optionsValue = options_;
-        if (!ifs) {
+    Lexer Lexer::fromFile(const std::string &filepath, const global::Options options) {
+        std::ifstream fileStream(filepath);
+        if (!fileStream) {
             optionsValue.logger.error({}, "IO error: could not open file ", filepath);
         }
-        std::ostringstream ss;
-        ss << ifs.rdbuf();
-        source = ss.str();
+        std::ostringstream stringStream;
+        stringStream << fileStream.rdbuf();
+        return Lexer(filepath, stringStream.str(), options);
     }
 
-    Lexer::Lexer(std::string str, FromRepl, const global::Options options_) : source(std::move(str)) {
-        optionsValue = options_;
+    Lexer Lexer::fromRepl(const std::string &source, const global::Options options) {
+        return Lexer("", source, options);
+    }
+
+    Lexer::Lexer(std::string filepath, std::string source, const global::Options options) : source(std::move(source)),
+        filepath(std::move(filepath)) {
+        optionsValue = options;
     }
 
     token::Token Lexer::nextToken() {
@@ -152,7 +156,7 @@ namespace frontend {
         optionsValue.logger.error(currentLocation, "syntax error: unexpected character ", currentCharacter);
     }
 
-    std::vector<token::Token> Lexer::lexAll() {
+    std::vector<token::Token> Lexer::lex() {
         std::vector<token::Token> tokens;
         while (true) {
             token::Token token = nextToken();

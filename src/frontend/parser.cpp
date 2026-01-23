@@ -152,8 +152,8 @@ namespace frontend {
             return;
         }
         loadedFiles.insert(absolutePath);
-        auto lexerValue = Lexer(filepath, FromFile{}, optionsValue);
-        const auto tokens = lexerValue.lexAll();
+        auto lexerValue = Lexer::fromFile(filepath, optionsValue);
+        const auto tokens = lexerValue.lex();
         if (optionsValue.debug) {
             for (const auto &token: tokens) {
                 optionsValue.logger.debug(token);
