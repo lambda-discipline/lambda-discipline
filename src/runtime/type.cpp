@@ -107,36 +107,55 @@ namespace runtime::type {
         }
     }
 
+    const Type &FunctionType::getReturnType() const {
+        return *returnType;
+    }
+
+
     bool FunctionType::matches(const Value &value) const {
         // Only type-check function-applications, cannot type-check
         // closures/lambda-expressions due to lazy-evaluation.
-        // TODO: Complete
-        return false;
+        if (!std::holds_alternative<std::shared_ptr<NativeFunction> >(value)) {
+            return false;
+        }
+        return equals(*std::get<std::shared_ptr<NativeFunction> >(value)->getSignature());
+    }
+
+    bool FunctionType::matchesArgumentTypes(const std::vector<Value> &values) const {
+        // Perform size-check on non-variadic-functions.
+        if (!isVariadic && argumentTypes.size() != values.size()) {
+            return false;
+        }
+        for (size_t index = 0; index < argumentTypes.size(); index++) {
+            if (!argumentTypes[index] || !argumentTypes[index]->matches(values[index])) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    bool FunctionType::matchesReturnType(const Value &value) const {
+        return returnType && returnType->matches(value);
     }
 
     bool FunctionType::equals(const Type &otherType) const {
-        if (const auto *otherFunctionType = dynamic_cast<const FunctionType *>(&otherType)) {
-            // TODO: Check for variadic.
-            if (argumentTypes.size() != otherFunctionType->argumentTypes.size()) {
-                return false;
-            }
-            for (size_t i = 0; i < argumentTypes.size(); i++) {
-                if (!(argumentTypes[i] && otherFunctionType->argumentTypes[i])) {
-                    return false;
-                }
-                if (!argumentTypes[i]->equals(*otherFunctionType->argumentTypes[i])) {
-                    return false;
-                }
-            }
-            if (!(returnType && otherFunctionType->returnType)) {
-                return false;
-            }
-            if (!returnType->equals(*otherFunctionType->returnType)) {
-                return false;
-            }
-            return true;
+        const auto *otherFunctionType = dynamic_cast<const FunctionType *>(&otherType);
+        if (!otherFunctionType) {
+            return false;
         }
-        return false;
+        // Perform size-check on non-variadic-functions.
+        if (!isVariadic && argumentTypes.size() != otherFunctionType->argumentTypes.size()) {
+            return false;
+        }
+        for (size_t index = 0; index < argumentTypes.size(); index++) {
+            const auto &leftType = isVariadic ? variadicType : argumentTypes[index];
+            // ReSharper disable once CppTooWideScopeInitStatement
+            const auto &rightType = otherFunctionType->argumentTypes[index];
+            if (!leftType || !rightType || !leftType->equals(*rightType)) {
+                return false;
+            }
+        }
+        return returnType && otherFunctionType->returnType && returnType->equals(*otherFunctionType->returnType);
     }
 
     std::string FunctionType::toString() const {
@@ -165,5 +184,25 @@ namespace runtime::type {
             return -1;
         }
         return static_cast<int>(argumentTypes.size());
+    }
+
+    std::shared_ptr<Type> typeFromValue(const Value &value) {
+        return std::visit([&]<typename T0>(T0 &&) -> std::shared_ptr<Type> {
+            using T = std::decay_t<T0>;
+            if constexpr (std::is_same_v<T, double>) {
+                return std::make_shared<SimpleType>(TypeTag::Float);
+            } else if constexpr (std::is_same_v<T, std::string>) {
+                return std::make_shared<SimpleType>(TypeTag::String);
+            } else if constexpr (std::is_same_v<T, Closure>) {
+                return std::make_shared<SimpleType>(TypeTag::Closure);
+            } else if constexpr (std::is_same_v<T, std::shared_ptr<NativeFunction> >) {
+                const auto &nativeFunction = *std::get<std::shared_ptr<NativeFunction> >(value);
+                return std::make_shared<FunctionType>(*nativeFunction.getSignature());
+            } else if constexpr (std::is_same_v<T, std::shared_ptr<NativeFunction> >) {
+                return std::make_shared<ListType>(std::make_shared<SimpleType>(TypeTag::Any));
+            } else {
+                return std::make_shared<SimpleType>(TypeTag::Any);
+            }
+        }, value);
     }
 }

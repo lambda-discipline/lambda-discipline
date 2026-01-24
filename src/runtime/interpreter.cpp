@@ -241,6 +241,15 @@ namespace runtime {
         return thunk;
     }
 
+    std::vector<Value> forceArguments(const std::vector<std::shared_ptr<Thunk> > &arguments) {
+        std::vector<Value> values;
+        values.reserve(arguments.size());
+        for (const auto &argument: arguments) {
+            values.push_back(argument->force());
+        }
+        return values;
+    }
+
     Value applyFunctionApplication(Value functionName, const std::vector<std::shared_ptr<Thunk> > &arguments,
                                    const std::shared_ptr<Environment> &callSiteEnvironment,
                                    const std::optional<frontend::Location> &callLocation) {
@@ -295,19 +304,38 @@ namespace runtime {
                 if (const auto &nativeFunction = *std::get<std::shared_ptr<NativeFunction> >(currentFunction);
                     nativeFunction.getArity() != -1) {
                     const int arity = nativeFunction.getArity();
-
+                    const type::FunctionType &signature = *nativeFunction.getSignature();
                     if (workArguments.size() - index < arity) {
-                        optionsValue.logger.error(callLocation, "runtime error: native function ",
+                        optionsValue.logger.error(callLocation, "runtime error: native-function ",
                                                   nativeFunction.getName(), " expects ",
-                                                  arity, " argument(s), found ", workArguments.size() - index);
+                                                  arity, " argument(s), found ", workArguments.size() - index, "\n",
+                                                  nativeFunction.getName(), " signature: ", signature.toString());
                     }
                     std::vector<std::shared_ptr<Thunk> > slice;
                     slice.reserve(arity);
                     for (size_t i = 0; i < arity; ++i) {
                         slice.push_back(workArguments[index + i]);
                     }
+                    // // ReSharper disable once CppTooWideScopeInitStatement
+                    // std::vector<Value> releasedValues = forceArguments(slice);
+                    // // Type-Check the function-arguments.
+                    // if (!signature.matchesArgumentTypes(releasedValues)) {
+                    //     optionsValue.logger.error(callLocation,
+                    //                               "runtime error: wrong arguments provided to native-function ",
+                    //                               nativeFunction.getName(),
+                    //                               "\n", nativeFunction.getName(), " signature: ", signature.toString());
+                    //     // TODO: Also print exactly which argument caused the error.
+                    //     //       Print the signature got, with the incorrect argument color differently.
+                    // }
                     auto [resultantValue_, resultOptions] = nativeFunction.getImplementation()(
                         slice, callSiteEnvironment);
+                    // if (!signature.matchesReturnType(resultantValue_)) {
+                    //     optionsValue.logger.error(callLocation,
+                    //                               "internal error: expected native-function to return ",
+                    //                               signature.getReturnType().toString(), ", but got ",
+                    //                               type::typeFromValue(resultantValue_)->toString());
+                    //     // TODO: possibly not create an additional type-object just for printing.
+                    // }
                     resultantValue = resultantValue_;
                     globalResultOptions.interpolate(resultOptions);
                     index += arity;

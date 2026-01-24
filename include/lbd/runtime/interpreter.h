@@ -126,6 +126,8 @@ namespace runtime {
 
     Value evalExpression(const frontend::Expression &expression, std::shared_ptr<Environment> environment);
 
+    std::vector<Value> forceArguments(const std::vector<std::shared_ptr<Thunk> > &arguments);
+
     Value applyFunctionApplication(Value functionName, const std::vector<std::shared_ptr<Thunk> > &arguments,
                                    const std::shared_ptr<Environment> &callSiteEnvironment,
                                    const std::optional<frontend::Location> &callLocation = std::nullopt);

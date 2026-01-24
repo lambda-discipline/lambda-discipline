@@ -23,11 +23,12 @@ namespace runtime::type {
         Any
     };
 
-    TypeTag typeTagFromValue(const Value &value);
+    [[nodiscard]] TypeTag typeTagFromValue(const Value &value);
 
-    std::string typeTagToString(TypeTag tag);
+    [[nodiscard]] std::string typeTagToString(TypeTag tag);
 
     // TODO: Implement move-constructor and possibly move-assignment-operator.
+    // TODO: Overload operator<< for printing.
     struct Type {
         virtual ~Type() = default;
 
@@ -57,6 +58,7 @@ namespace runtime::type {
         TypeTag tag;
     };
 
+    // TODO: List should not have element-type, as we can add any type to it.
     struct ListType final : Type {
         explicit ListType(const std::shared_ptr<Type> &elementType);
 
@@ -81,7 +83,13 @@ namespace runtime::type {
 
         ~FunctionType() override = default;
 
+        [[nodiscard]] const Type &getReturnType() const;
+
         [[nodiscard]] bool matches(const Value &value) const override;
+
+        [[nodiscard]] bool matchesArgumentTypes(const std::vector<Value> &values) const;
+
+        [[nodiscard]] bool matchesReturnType(const Value &value) const;
 
         [[nodiscard]] bool equals(const Type &otherType) const override;
 
@@ -97,4 +105,6 @@ namespace runtime::type {
         bool isVariadic;
         std::shared_ptr<Type> variadicType;
     };
+
+    [[nodiscard]] std::shared_ptr<Type> typeFromValue(const Value &value);
 }
