@@ -62,7 +62,7 @@ namespace frontend::token {
 
         Token(TokenType tokenType, Location location);
 
-        friend std::ostream &operator<<(std::ostream &stream, const Token &token);
+        friend std::ostream &operator<<(std::ostream &outputStream, const Token &token);
 
         [[nodiscard]] std::string toString() const;
     };

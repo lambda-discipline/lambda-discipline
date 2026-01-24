@@ -8,19 +8,19 @@ namespace frontend::token {
                                                            tokenType(std::move(tokenType)) {
     }
 
-    std::ostream &operator<<(std::ostream &stream, const Token &token) {
-        return stream << token.location << ":\t" << token.toString();
+    std::ostream &operator<<(std::ostream &outputStream, const Token &token) {
+        return outputStream << token.location << ":\t" << token.toString();
     }
 
     std::string Token::toString() const {
-        return std::visit([&]<typename T0>(T0 &&arg) {
+        return std::visit([&]<typename T0>(T0 &&argument) {
             using T = std::decay_t<T0>;
             if constexpr (std::is_same_v<T, Identifier>) {
-                return token::toString<T>() + " <" + arg.value + ">";
+                return token::toString<T>() + " <" + argument.value + ">";
             } else if constexpr (std::is_same_v<T, String>) {
-                return token::toString<T>() + " <\"" + arg.value + "\">";
+                return token::toString<T>() + " <\"" + argument.value + "\">";
             } else if constexpr (std::is_same_v<T, Float>) {
-                return token::toString<T>() + " <" + std::to_string(arg.value) + ">";
+                return token::toString<T>() + " <" + std::to_string(argument.value) + ">";
             } else {
                 return token::toString<T>();
             }
