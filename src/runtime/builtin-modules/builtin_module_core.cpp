@@ -1,7 +1,7 @@
-#include <lbd/interpreter/builtin-modules/builtin_module_io.h>
+#include <lbd/runtime/builtin-modules/builtin_module_io.h>
 #include <lbd/utils/string_escape.h>
 
-namespace interpreter::builtins {
+namespace runtime::builtins {
     // Prints Argument to stdout and returns 0.
     NativeFunction makePrint() {
         const std::string name = "print";

@@ -1,8 +1,8 @@
 #pragma once
 
-#include <lbd/interpreter/builtins.h>
+#include <lbd/runtime/builtins.h>
 
-namespace interpreter::builtins {
+namespace runtime::builtins {
     NativeFunction makePrint();
 
     NativeFunction makeAdd();

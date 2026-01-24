@@ -1,9 +1,9 @@
 #pragma once
 
-#include <lbd/interpreter/interpreter.h>
+#include <lbd/runtime/interpreter.h>
 #include <lbd/options.h>
 
-namespace interpreter::builtins {
+namespace runtime::builtins {
     extern context::Options optionsValue;
 
     std::vector<NativeFunction> getBuiltins(context::Options options_ = {});

@@ -1,11 +1,11 @@
-#include <lbd/interpreter/builtins.h>
-#include <lbd/interpreter/builtin-modules/builtin_module_core.h>
-#include <lbd/interpreter/builtin-modules/builtin_module_list.h>
-#include <lbd/interpreter/builtin-modules/builtin_module_io.h>
+#include <lbd/runtime/builtins.h>
+#include <lbd/runtime/builtin-modules/builtin_module_core.h>
+#include <lbd/runtime/builtin-modules/builtin_module_list.h>
+#include <lbd/runtime/builtin-modules/builtin_module_io.h>
 
 // TODO: Add module system like use module io. Which dlopen's the module and loads it.
 
-namespace interpreter::builtins {
+namespace runtime::builtins {
     context::Options optionsValue;
 
     std::vector<NativeFunction> getBuiltins(const context::Options options_) {

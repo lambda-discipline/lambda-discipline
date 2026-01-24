@@ -1,6 +1,6 @@
-#include <lbd/interpreter/builtin-modules/builtin_module_list.h>
+#include <lbd/runtime/builtin-modules/builtin_module_list.h>
 
-namespace interpreter::builtins {
+namespace runtime::builtins {
     static Value listGet(const std::shared_ptr<List> &list, size_t index) {
         if (index >= list->elements.size()) {
             optionsValue.logger.error({}, "runtime error: list index out of range, index is ", index);

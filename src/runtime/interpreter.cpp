@@ -1,12 +1,12 @@
-#include <lbd/interpreter/interpreter.h>
-#include <lbd/interpreter/builtins.h>
+#include <lbd/runtime/interpreter.h>
+#include <lbd/runtime/builtins.h>
 #include <lbd/options.h>
 #include <lbd/error.h>
 #include <sstream>
 
 #include "lbd/utils/string_escape.h"
 
-namespace interpreter {
+namespace runtime {
     static context::Options optionsValue;
     static ResultOptions globalResultOptions;
 

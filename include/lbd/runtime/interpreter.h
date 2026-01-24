@@ -8,7 +8,7 @@
 #include <lbd/frontend/parser.h>
 #include <lbd/options.h>
 
-namespace interpreter {
+namespace runtime {
     struct NativeFunction;
     struct Thunk;
     struct Environment;

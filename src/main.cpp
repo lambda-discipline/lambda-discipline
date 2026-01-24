@@ -1,7 +1,7 @@
 ﻿#include <iostream>
 #include <lbd/frontend/lexer.h>
 #include <lbd/frontend/parser.h>
-#include <lbd/interpreter/interpreter.h>
+#include <lbd/runtime/interpreter.h>
 #include <lbd/cmd.h>
 #include <lbd/repl.h>
 #include <string>
@@ -32,7 +32,7 @@ int main(const int argc, char **argv) {
             std::cout << program << std::endl;
         }
         // Interpret
-        auto result = interpreter::interpret(program);
+        auto result = runtime::interpret(program);
         return EXIT_SUCCESS;
     }
 }

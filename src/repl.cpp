@@ -5,7 +5,7 @@
 #include <lbd/utils/terminal.h>
 #include <lbd/frontend/lexer.h>
 #include <lbd/frontend/parser.h>
-#include <lbd/interpreter/interpreter.h>
+#include <lbd/runtime/interpreter.h>
 #include <lbd/exceptions.h>
 
 #define onOrOff(val) ((val) ? "on " : "off")
@@ -16,7 +16,7 @@ namespace repl {
     static context::Options optionsValue;
 
     static void processLoadCommand(const std::string &argument,
-                                   std::optional<std::shared_ptr<interpreter::Environment> > &sharedEnvironment) {
+                                   std::optional<std::shared_ptr<runtime::Environment> > &sharedEnvironment) {
         const std::string &filepath = argument;
         context::Options subOptions = optionsValue;
         subOptions.logger.showLocation = true;
@@ -40,9 +40,9 @@ namespace repl {
             }
         }
 
-        const std::optional<std::shared_ptr<interpreter::Environment> > temporaryEnvironment = sharedEnvironment;
+        const std::optional<std::shared_ptr<runtime::Environment> > temporaryEnvironment = sharedEnvironment;
         // Merge loaded_env into shared_env
-        if (const auto [loadedEnvironment, _, resultantOptions] = interpreter::interpret(
+        if (const auto [loadedEnvironment, _, resultantOptions] = runtime::interpret(
             program, temporaryEnvironment, subOptions); loadedEnvironment) {
             if (!sharedEnvironment) {
                 sharedEnvironment = loadedEnvironment;
@@ -85,7 +85,7 @@ namespace repl {
 
         std::string line, buffer;
         size_t indentLevel = 0;
-        std::optional<std::shared_ptr<interpreter::Environment> > sharedGlobalEnvironment = std::nullopt;
+        std::optional<std::shared_ptr<runtime::Environment> > sharedGlobalEnvironment = std::nullopt;
 
         optionsValue.logger.info("Welcome to lambda-discipline REPL.\nType :quit to exit.");
 
@@ -219,7 +219,7 @@ namespace repl {
                 }
 
                 // Interpret
-                const auto [globalEnvironment, value, resultantOptions] = interpreter::interpret(
+                const auto [globalEnvironment, value, resultantOptions] = runtime::interpret(
                     program, sharedGlobalEnvironment, optionsValue);
                 if (resultantOptions.sideEffects) {
                     std::cout << std::endl;

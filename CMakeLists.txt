@@ -17,12 +17,12 @@ add_library(frontend STATIC
     ${CMAKE_SOURCE_DIR}/src/frontend/type.cpp
 )
 
-add_library(interpreter STATIC
-    ${CMAKE_SOURCE_DIR}/src/interpreter/interpreter.cpp
-    ${CMAKE_SOURCE_DIR}/src/interpreter/builtins.cpp
-    ${CMAKE_SOURCE_DIR}/src/interpreter/builtin-modules/builtin_module_core.cpp
-    ${CMAKE_SOURCE_DIR}/src/interpreter/builtin-modules/builtin_module_list.cpp
-    ${CMAKE_SOURCE_DIR}/src/interpreter/builtin-modules/builtin_module_io.cpp
+add_library(runtime STATIC
+    ${CMAKE_SOURCE_DIR}/src/runtime/interpreter.cpp
+    ${CMAKE_SOURCE_DIR}/src/runtime/builtins.cpp
+    ${CMAKE_SOURCE_DIR}/src/runtime/builtin-modules/builtin_module_core.cpp
+    ${CMAKE_SOURCE_DIR}/src/runtime/builtin-modules/builtin_module_list.cpp
+    ${CMAKE_SOURCE_DIR}/src/runtime/builtin-modules/builtin_module_io.cpp
 )
 
 add_executable(lbd
@@ -31,7 +31,7 @@ add_executable(lbd
     ${CMAKE_SOURCE_DIR}/src/repl.cpp
 )
 
-target_link_libraries(lbd PRIVATE frontend interpreter -static)
+target_link_libraries(lbd PRIVATE frontend runtime -static)
 
 # TODO: Add build tests
 # EXAMPLE: add_executable(lexer_test ../tests/lexer_test.cc)
