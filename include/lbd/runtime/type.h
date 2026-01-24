@@ -1,8 +1,15 @@
 #pragma once
 
-#include <lbd/runtime/interpreter.h>
+#include <string>
+#include <memory>
+#include <vector>
 
 /// These are runtime-types different from frontend::type.
+
+/// Forward declaration of value-structure, cannot import directly due to circular-dependency.
+namespace runtime {
+    struct Value;
+}
 
 namespace runtime::type {
     enum class TypeTag {
@@ -21,7 +28,9 @@ namespace runtime::type {
     struct Type {
         virtual ~Type() = default;
 
-        [[nodiscard]] virtual bool matches(const Value &value) const = 0;
+        [[nodiscard]] virtual bool matches(const Value &value) const;
+
+        [[nodiscard]] virtual bool equals(const Type &otherType) const;
 
         [[nodiscard]] virtual std::string toString() const = 0;
 
@@ -32,6 +41,8 @@ namespace runtime::type {
         explicit SimpleType(TypeTag tag);
 
         [[nodiscard]] bool matches(const Value &value) const override;
+
+        [[nodiscard]] bool equals(const Type &otherType) const override;
 
         [[nodiscard]] std::string toString() const override;
 
@@ -46,6 +57,8 @@ namespace runtime::type {
 
         [[nodiscard]] bool matches(const Value &value) const override;
 
+        [[nodiscard]] bool equals(const Type &otherType) const override;
+
         [[nodiscard]] std::string toString() const override;
 
         [[nodiscard]] bool isCallable() const override;
@@ -55,11 +68,13 @@ namespace runtime::type {
     };
 
     struct FunctionType final : Type {
-        // TODO: Add support for variadic, maybe by adding a default parameter 'isVariadic'.
+        // TODO: Add support for void return-type.
         explicit FunctionType(const std::vector<std::shared_ptr<Type> > &argumentTypes,
-                              const std::shared_ptr<Type> &returnType);
+                              const std::shared_ptr<Type> &returnType, bool isVariadic = false);
 
         [[nodiscard]] bool matches(const Value &value) const override;
+
+        [[nodiscard]] bool equals(const Type &otherType) const override;
 
         [[nodiscard]] std::string toString() const override;
 
@@ -70,5 +85,7 @@ namespace runtime::type {
     private:
         std::vector<std::shared_ptr<Type> > argumentTypes;
         std::shared_ptr<Type> returnType;
+        bool isVariadic;
+        std::shared_ptr<Type> variadicType;
     };
 }

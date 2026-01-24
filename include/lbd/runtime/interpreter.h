@@ -8,6 +8,10 @@
 #include <lbd/frontend/parser.h>
 #include <lbd/options.h>
 
+namespace runtime::type {
+    struct FunctionType;
+}
+
 namespace runtime {
     struct NativeFunction;
     struct Thunk;
@@ -62,14 +66,25 @@ namespace runtime {
         using Implementation = std::function<std::pair<Value, ResultOptions>(
             const std::vector<std::shared_ptr<Thunk> > &, const std::shared_ptr<Environment> &)>;
 
-        int arity;
-        std::string name;
-        // TODO: We can store signature of native-function here.
-        Implementation implementation;
+        NativeFunction(const std::string &name, const std::shared_ptr<type::FunctionType> &signature,
+                       const Implementation &implementation);
+
+        [[nodiscard]] std::string getName() const;
+
+        [[nodiscard]] std::shared_ptr<type::FunctionType> getSignature() const;
+
+        [[nodiscard]] Implementation getImplementation() const;
+
+        [[nodiscard]] int getArity() const;
 
         [[nodiscard]] std::string toString() const;
 
         friend std::ostream &operator<<(std::ostream &outputStream, const NativeFunction &nativeFunction);
+
+    private:
+        std::string name;
+        std::shared_ptr<type::FunctionType> signature;
+        Implementation implementation;
     };
 
     /// Lazy-Thunk (call-by-need).

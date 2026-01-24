@@ -1,4 +1,5 @@
 #include <lbd/runtime/interpreter.h>
+#include <lbd/runtime/type.h>
 #include <lbd/runtime/builtins.h>
 #include <lbd/options.h>
 #include <lbd/error.h>
@@ -63,10 +64,31 @@ namespace runtime {
         return outputStream << list.toString();
     }
 
-    [[nodiscard]] std::string NativeFunction::toString() const {
+    NativeFunction::NativeFunction(const std::string &name, const std::shared_ptr<type::FunctionType> &signature,
+                                   const Implementation &implementation) : name(name), signature(signature),
+                                                                           implementation(implementation) {
+    }
+
+    std::string NativeFunction::getName() const {
+        return name;
+    }
+
+    std::shared_ptr<type::FunctionType> NativeFunction::getSignature() const {
+        return signature;
+    }
+
+    NativeFunction::Implementation NativeFunction::getImplementation() const {
+        return implementation;
+    }
+
+    int NativeFunction::getArity() const {
+        return signature->arity();
+    }
+
+    std::string NativeFunction::toString() const {
         std::ostringstream outputStringStream;
         outputStringStream << "<NativeFunction: " << name << "(";
-        if (arity == -1) {
+        if (const int arity = getArity(); arity == -1) {
             // Variadic-Function.
             outputStringStream << "...";
         } else {
@@ -243,9 +265,9 @@ namespace runtime {
                 if (std::holds_alternative<std::shared_ptr<NativeFunction> >(currentFunction)) {
                     // Allow arity==0 and arity==-1 (variadic) to execute with zero args.
                     if (const auto &nativeFunction = *std::get<std::shared_ptr<NativeFunction> >(currentFunction);
-                        nativeFunction.arity == 0 || nativeFunction.arity == -1) {
+                        nativeFunction.getArity() == 0 || nativeFunction.getArity() == -1) {
                         std::vector<std::shared_ptr<Thunk> > slice; // empty
-                        auto [value, result_options] = nativeFunction.implementation(slice, callSiteEnvironment);
+                        auto [value, result_options] = nativeFunction.getImplementation()(slice, callSiteEnvironment);
                         globalResultOptions.interpolate(result_options);
                         return value;
                     }
@@ -269,11 +291,13 @@ namespace runtime {
             }
             // Native Function case: Consumes its arity-many Argument Thunks
             else if (std::holds_alternative<std::shared_ptr<NativeFunction> >(currentFunction)) {
-                if (const auto &[arity, name, implementation] = *std::get<std::shared_ptr<NativeFunction> >(
-                        currentFunction);
-                    arity != -1) {
+                if (const auto &nativeFunction = *std::get<std::shared_ptr<NativeFunction> >(currentFunction);
+                    nativeFunction.getArity() != -1) {
+                    const int arity = nativeFunction.getArity();
+
                     if (workArguments.size() - index < arity) {
-                        optionsValue.logger.error(callLocation, "runtime error: native function ", name, " expects ",
+                        optionsValue.logger.error(callLocation, "runtime error: native function ",
+                                                  nativeFunction.getName(), " expects ",
                                                   arity, " argument(s), found ", workArguments.size() - index);
                     }
                     std::vector<std::shared_ptr<Thunk> > slice;
@@ -281,7 +305,8 @@ namespace runtime {
                     for (size_t i = 0; i < arity; ++i) {
                         slice.push_back(workArguments[index + i]);
                     }
-                    auto [resultantValue_, resultOptions] = implementation(slice, callSiteEnvironment);
+                    auto [resultantValue_, resultOptions] = nativeFunction.getImplementation()(
+                        slice, callSiteEnvironment);
                     resultantValue = resultantValue_;
                     globalResultOptions.interpolate(resultOptions);
                     index += arity;
@@ -291,7 +316,8 @@ namespace runtime {
                     for (size_t i = 0; i < arguments.size() - index; ++i) {
                         slice.push_back(workArguments[index + i]);
                     }
-                    auto [resultantValue_, resultOptions] = implementation(slice, callSiteEnvironment);
+                    auto [resultantValue_, resultOptions] = nativeFunction.getImplementation()(
+                        slice, callSiteEnvironment);
                     resultantValue = resultantValue_;
                     globalResultOptions.interpolate(resultOptions);
                     index += arguments.size() - index;
@@ -379,7 +405,7 @@ namespace runtime {
         for (auto &nativeFunction: builtins::getBuiltins(optionsValue)) {
             const auto thunk = std::make_shared<Thunk>();
             thunk->cached = Value{std::make_shared<NativeFunction>(nativeFunction)};
-            environment->bind(nativeFunction.name, thunk);
+            environment->bind(nativeFunction.getName(), thunk);
         }
     }
 }

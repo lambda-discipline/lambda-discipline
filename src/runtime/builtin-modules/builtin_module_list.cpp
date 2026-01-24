@@ -1,4 +1,6 @@
 #include <lbd/runtime/builtin-modules/builtin_module_list.h>
+#include <lbd/runtime/builtins.h>
+#include <lbd/runtime/type.h>
 
 namespace runtime::builtins {
     static Value listGet(const std::shared_ptr<List> &list, size_t index) {
@@ -27,9 +29,11 @@ namespace runtime::builtins {
 
     NativeFunction makeList() {
         const std::string name = "list";
+        const auto signature = functionType({simpleType(type::TypeTag::Any)}, listType(simpleType(type::TypeTag::Any)),
+                                            true);
         return {
-            -1, name, [](const std::vector<std::shared_ptr<Thunk> > &arguments,
-                         const std::shared_ptr<Environment> &) -> std::pair<Value, ResultOptions> {
+            name, signature, [](const std::vector<std::shared_ptr<Thunk> > &arguments,
+                                const std::shared_ptr<Environment> &) -> std::pair<Value, ResultOptions> {
                 std::vector<Value> values;
                 for (auto &argument: arguments) {
                     values.push_back(argument->force());
@@ -41,9 +45,12 @@ namespace runtime::builtins {
 
     NativeFunction makeListSize() {
         const std::string name = "list_size";
+        const auto signature = functionType({listType(simpleType(type::TypeTag::Any))},
+                                            simpleType(type::TypeTag::Float));
         return {
-            1, name, [name](const std::vector<std::shared_ptr<Thunk> > &arguments,
-                            const std::shared_ptr<Environment> &) -> std::pair<Value, ResultOptions> {
+            name, signature, [name](const std::vector<std::shared_ptr<Thunk> > &arguments,
+                                    const std::shared_ptr<Environment> &) -> std::pair<Value, ResultOptions> {
+                // TODO: Generalize this signature type-checking.
                 const Value &argument0 = arguments[0]->force();
                 if (!std::holds_alternative<std::shared_ptr<List> >(argument0)) {
                     optionsValue.logger.error({}, "runtime error: wrong arguments provided to native function ", name,
@@ -59,10 +66,13 @@ namespace runtime::builtins {
 
     NativeFunction makeListGet() {
         const std::string name = "list_get";
+        const auto signature = functionType(
+            {listType(simpleType(type::TypeTag::Any)), simpleType(type::TypeTag::Float)},
+            simpleType(type::TypeTag::Any));
         return {
             // TODO: Add type checker to replace this manual approach.
-            2, name, [name](const std::vector<std::shared_ptr<Thunk> > &arguments,
-                            const std::shared_ptr<Environment> &) -> std::pair<Value, ResultOptions> {
+            name, signature, [name](const std::vector<std::shared_ptr<Thunk> > &arguments,
+                                    const std::shared_ptr<Environment> &) -> std::pair<Value, ResultOptions> {
                 const Value &argument0 = arguments[0]->force();
                 if (!std::holds_alternative<std::shared_ptr<List> >(argument0)) {
                     optionsValue.logger.error({}, "runtime error: wrong arguments provided to native function ", name,
@@ -87,10 +97,13 @@ namespace runtime::builtins {
 
     NativeFunction makeListRemove() {
         const std::string name = "list_remove";
+        const auto signature = functionType(
+            {listType(simpleType(type::TypeTag::Any)), simpleType(type::TypeTag::Float)},
+            simpleType(type::TypeTag::Any));
         return {
             // TODO: Add type checker to replace this manual approach
-            2, name, [name](const std::vector<std::shared_ptr<Thunk> > &arguments,
-                            const std::shared_ptr<Environment> &) -> std::pair<Value, ResultOptions> {
+            name, signature, [name](const std::vector<std::shared_ptr<Thunk> > &arguments,
+                                    const std::shared_ptr<Environment> &) -> std::pair<Value, ResultOptions> {
                 const Value &argument0 = arguments[0]->force();
                 if (!std::holds_alternative<std::shared_ptr<List> >(argument0)) {
                     optionsValue.logger.error({}, "runtime error: wrong arguments provided to native function ", name,
@@ -117,9 +130,13 @@ namespace runtime::builtins {
 
     NativeFunction makeListAppend() {
         const std::string name = "list_append";
+        // TODO: Update the return-type to void.
+        const auto signature = functionType(
+            {listType(simpleType(type::TypeTag::Any)), simpleType(type::TypeTag::Any)},
+            simpleType(type::TypeTag::Any));
         return {
-            2, name, [name](const std::vector<std::shared_ptr<Thunk> > &arguments,
-                            const std::shared_ptr<Environment> &) -> std::pair<Value, ResultOptions> {
+            name, signature, [name](const std::vector<std::shared_ptr<Thunk> > &arguments,
+                                    const std::shared_ptr<Environment> &) -> std::pair<Value, ResultOptions> {
                 const Value &argument0 = arguments[0]->force();
                 if (!std::holds_alternative<std::shared_ptr<List> >(argument0)) {
                     optionsValue.logger.error({}, "runtime error: wrong arguments provided to native function ", name,

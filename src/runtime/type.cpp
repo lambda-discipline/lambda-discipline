@@ -3,7 +3,7 @@
 
 namespace runtime::type {
     inline TypeTag typeTagFromValue(const Value &value) {
-        return std::visit([&]<typename T0>(T0 &&_) -> TypeTag {
+        return std::visit([&]<typename T0>(T0 &&) -> TypeTag {
             using T = std::decay_t<T0>;
             if constexpr (std::is_same_v<T, double>) {
                 return TypeTag::Float;
@@ -48,6 +48,13 @@ namespace runtime::type {
         return tag == TypeTag::Any || tag == typeTagFromValue(value);
     }
 
+    bool SimpleType::equals(const Type &otherType) const {
+        if (const auto *otherSimpleType = dynamic_cast<const SimpleType *>(&otherType)) {
+            return tag == otherSimpleType->tag;
+        }
+        return false;
+    }
+
     std::string SimpleType::toString() const {
         return typeTagToString(tag);
     }
@@ -69,6 +76,13 @@ namespace runtime::type {
         });
     }
 
+    bool ListType::equals(const Type &otherType) const {
+        if (const auto *otherListType = dynamic_cast<const ListType *>(&otherType)) {
+            return elementType && otherListType->elementType && elementType->equals(*otherListType->elementType);
+        }
+        return false;
+    }
+
     std::string ListType::toString() const {
         std::ostringstream outputStringStream;
         outputStringStream << "[" << elementType->toString() << "]";
@@ -80,12 +94,46 @@ namespace runtime::type {
     }
 
     FunctionType::FunctionType(const std::vector<std::shared_ptr<Type> > &argumentTypes,
-                               const std::shared_ptr<Type> &returnType) : argumentTypes(argumentTypes),
-                                                                          returnType(returnType) {
+                               const std::shared_ptr<Type> &returnType,
+                               const bool isVariadic) : argumentTypes(argumentTypes),
+                                                        returnType(returnType), isVariadic(isVariadic) {
+        if (isVariadic) {
+            if (argumentTypes.size() != 1) {
+                // TODO: Throw error
+            }
+            variadicType = argumentTypes[0];
+        }
     }
 
     bool FunctionType::matches(const Value &value) const {
-        // TODO: Complete this.
+        // Only type-check function-applications, cannot type-check
+        // closures/lambda-expressions due to lazy-evaluation.
+        // TODO: Complete
+        return false;
+    }
+
+    bool FunctionType::equals(const Type &otherType) const {
+        if (const auto *otherFunctionType = dynamic_cast<const FunctionType *>(&otherType)) {
+            // TODO: Check for variadic.
+            if (argumentTypes.size() != otherFunctionType->argumentTypes.size()) {
+                return false;
+            }
+            for (size_t i = 0; i < argumentTypes.size(); i++) {
+                if (!(argumentTypes[i] && otherFunctionType->argumentTypes[i])) {
+                    return false;
+                }
+                if (!argumentTypes[i]->equals(*otherFunctionType->argumentTypes[i])) {
+                    return false;
+                }
+            }
+            if (!(returnType && otherFunctionType->returnType)) {
+                return false;
+            }
+            if (!returnType->equals(*otherFunctionType->returnType)) {
+                return false;
+            }
+            return true;
+        }
         return false;
     }
 
@@ -111,7 +159,9 @@ namespace runtime::type {
     }
 
     int FunctionType::arity() const {
-        // TODO: For variadic-functions return '-1'.
+        if (isVariadic) {
+            return -1;
+        }
         return argumentTypes.size();
     }
 }
