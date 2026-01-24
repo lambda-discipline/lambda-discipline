@@ -1,5 +1,7 @@
-#include <lbd/runtime/type.h>
+#include <variant>
 #include <lbd/error.h>
+#include <lbd/runtime/interpreter.h>
+#include <lbd/runtime/type.h>
 
 namespace runtime::type {
     inline TypeTag typeTagFromValue(const Value &value) {
@@ -162,6 +164,6 @@ namespace runtime::type {
         if (isVariadic) {
             return -1;
         }
-        return argumentTypes.size();
+        return static_cast<int>(argumentTypes.size());
     }
 }

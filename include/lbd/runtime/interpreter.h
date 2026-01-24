@@ -4,9 +4,9 @@
 #include <optional>
 #include <string>
 #include <variant>
+#include <lbd/options.h>
 #include <lbd/frontend/ast.h>
 #include <lbd/frontend/parser.h>
-#include <lbd/options.h>
 
 namespace runtime::type {
     struct FunctionType;
@@ -66,8 +66,7 @@ namespace runtime {
         using Implementation = std::function<std::pair<Value, ResultOptions>(
             const std::vector<std::shared_ptr<Thunk> > &, const std::shared_ptr<Environment> &)>;
 
-        NativeFunction(const std::string &name, const std::shared_ptr<type::FunctionType> &signature,
-                       const Implementation &implementation);
+        NativeFunction(std::string name, std::shared_ptr<type::FunctionType> signature, Implementation implementation);
 
         [[nodiscard]] std::string getName() const;
 

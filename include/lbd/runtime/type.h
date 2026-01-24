@@ -1,7 +1,7 @@
 #pragma once
 
-#include <string>
 #include <memory>
+#include <string>
 #include <vector>
 
 /// These are runtime-types different from frontend::type.
@@ -10,6 +10,8 @@
 namespace runtime {
     struct Value;
 }
+
+// TODO: Maybe move instead of copying the reference.
 
 namespace runtime::type {
     enum class TypeTag {
@@ -25,20 +27,23 @@ namespace runtime::type {
 
     std::string typeTagToString(TypeTag tag);
 
+    // TODO: Implement move-constructor and possibly move-assignment-operator.
     struct Type {
         virtual ~Type() = default;
 
-        [[nodiscard]] virtual bool matches(const Value &value) const;
+        [[nodiscard]] virtual bool matches(const Value &value) const = 0;
 
-        [[nodiscard]] virtual bool equals(const Type &otherType) const;
+        [[nodiscard]] virtual bool equals(const Type &otherType) const = 0;
 
         [[nodiscard]] virtual std::string toString() const = 0;
 
-        [[nodiscard]] virtual bool isCallable() const;
+        [[nodiscard]] virtual bool isCallable() const = 0;
     };
 
     struct SimpleType final : Type {
         explicit SimpleType(TypeTag tag);
+
+        ~SimpleType() override = default;
 
         [[nodiscard]] bool matches(const Value &value) const override;
 
@@ -55,6 +60,8 @@ namespace runtime::type {
     struct ListType final : Type {
         explicit ListType(const std::shared_ptr<Type> &elementType);
 
+        ~ListType() override = default;
+
         [[nodiscard]] bool matches(const Value &value) const override;
 
         [[nodiscard]] bool equals(const Type &otherType) const override;
@@ -68,9 +75,11 @@ namespace runtime::type {
     };
 
     struct FunctionType final : Type {
-        // TODO: Add support for void return-type.
+        // TODO: Add support for void return-type. Maybe if return-type is nullptr: then it is void.
         explicit FunctionType(const std::vector<std::shared_ptr<Type> > &argumentTypes,
                               const std::shared_ptr<Type> &returnType, bool isVariadic = false);
+
+        ~FunctionType() override = default;
 
         [[nodiscard]] bool matches(const Value &value) const override;
 

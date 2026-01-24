@@ -1,11 +1,11 @@
+#include <sstream>
+#include <utility>
+#include <lbd/error.h>
+#include <lbd/options.h>
+#include <lbd/runtime/builtins.h>
 #include <lbd/runtime/interpreter.h>
 #include <lbd/runtime/type.h>
-#include <lbd/runtime/builtins.h>
-#include <lbd/options.h>
-#include <lbd/error.h>
-#include <sstream>
-
-#include "lbd/utils/string_escape.h"
+#include <lbd/utils/string_escape.h>
 
 namespace runtime {
     static context::Options optionsValue;
@@ -64,9 +64,10 @@ namespace runtime {
         return outputStream << list.toString();
     }
 
-    NativeFunction::NativeFunction(const std::string &name, const std::shared_ptr<type::FunctionType> &signature,
-                                   const Implementation &implementation) : name(name), signature(signature),
-                                                                           implementation(implementation) {
+    NativeFunction::NativeFunction(std::string name, std::shared_ptr<type::FunctionType> signature,
+                                   Implementation implementation) : name(std::move(name)),
+                                                                    signature(std::move(signature)),
+                                                                    implementation(std::move(implementation)) {
     }
 
     std::string NativeFunction::getName() const {

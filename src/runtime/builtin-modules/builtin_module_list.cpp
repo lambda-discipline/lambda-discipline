@@ -1,6 +1,7 @@
-#include <lbd/runtime/builtin-modules/builtin_module_list.h>
+#include <ranges>
 #include <lbd/runtime/builtins.h>
 #include <lbd/runtime/type.h>
+#include <lbd/runtime/builtin-modules/builtin_module_list.h>
 
 namespace runtime::builtins {
     static Value listGet(const std::shared_ptr<List> &list, size_t index) {
@@ -29,8 +30,11 @@ namespace runtime::builtins {
 
     NativeFunction makeList() {
         const std::string name = "list";
-        const auto signature = functionType({simpleType(type::TypeTag::Any)}, listType(simpleType(type::TypeTag::Any)),
-                                            true);
+        const auto signature = functionType(
+            {simpleType(type::TypeTag::Any)},
+            listType(simpleType(type::TypeTag::Any)),
+            true
+        );
         return {
             name, signature, [](const std::vector<std::shared_ptr<Thunk> > &arguments,
                                 const std::shared_ptr<Environment> &) -> std::pair<Value, ResultOptions> {
@@ -45,8 +49,10 @@ namespace runtime::builtins {
 
     NativeFunction makeListSize() {
         const std::string name = "list_size";
-        const auto signature = functionType({listType(simpleType(type::TypeTag::Any))},
-                                            simpleType(type::TypeTag::Float));
+        const auto signature = functionType(
+            {listType(simpleType(type::TypeTag::Any))},
+            simpleType(type::TypeTag::Float)
+        );
         return {
             name, signature, [name](const std::vector<std::shared_ptr<Thunk> > &arguments,
                                     const std::shared_ptr<Environment> &) -> std::pair<Value, ResultOptions> {
@@ -68,7 +74,8 @@ namespace runtime::builtins {
         const std::string name = "list_get";
         const auto signature = functionType(
             {listType(simpleType(type::TypeTag::Any)), simpleType(type::TypeTag::Float)},
-            simpleType(type::TypeTag::Any));
+            simpleType(type::TypeTag::Any)
+        );
         return {
             // TODO: Add type checker to replace this manual approach.
             name, signature, [name](const std::vector<std::shared_ptr<Thunk> > &arguments,
@@ -99,7 +106,8 @@ namespace runtime::builtins {
         const std::string name = "list_remove";
         const auto signature = functionType(
             {listType(simpleType(type::TypeTag::Any)), simpleType(type::TypeTag::Float)},
-            simpleType(type::TypeTag::Any));
+            simpleType(type::TypeTag::Any)
+        );
         return {
             // TODO: Add type checker to replace this manual approach
             name, signature, [name](const std::vector<std::shared_ptr<Thunk> > &arguments,
@@ -130,10 +138,10 @@ namespace runtime::builtins {
 
     NativeFunction makeListAppend() {
         const std::string name = "list_append";
-        // TODO: Update the return-type to void.
         const auto signature = functionType(
             {listType(simpleType(type::TypeTag::Any)), simpleType(type::TypeTag::Any)},
-            simpleType(type::TypeTag::Any));
+            nullptr
+        );
         return {
             name, signature, [name](const std::vector<std::shared_ptr<Thunk> > &arguments,
                                     const std::shared_ptr<Environment> &) -> std::pair<Value, ResultOptions> {
@@ -153,9 +161,18 @@ namespace runtime::builtins {
 
     NativeFunction makeMap() {
         const std::string name = "map";
+        // TODO: The type should ideally be (Any1 -> Any2) -> [Any1] -> [Any2],
+        //       instead of (Any1 -> Any2) -> [Any3] -> [Any4].
+        const auto signature = functionType(
+            {
+                functionType({simpleType(type::TypeTag::Any)}, simpleType(type::TypeTag::Any)),
+                listType(simpleType(type::TypeTag::Any))
+            },
+            listType(simpleType(type::TypeTag::Any))
+        );
         return {
-            2, name, [name](const std::vector<std::shared_ptr<Thunk> > &arguments,
-                            const std::shared_ptr<Environment> &callSiteEnvironment) -> std::pair<Value,
+            name, signature, [name](const std::vector<std::shared_ptr<Thunk> > &arguments,
+                                    const std::shared_ptr<Environment> &callSiteEnvironment) -> std::pair<Value,
         ResultOptions> {
                 const Value &functionValue = arguments[0]->force();
                 const Value &listValue = arguments[1]->force();
@@ -183,9 +200,13 @@ namespace runtime::builtins {
 
     NativeFunction makeTranspose() {
         const std::string name = "transpose";
+        const auto signature = functionType(
+            {listType(listType(simpleType(type::TypeTag::Any)))},
+            listType(listType(simpleType(type::TypeTag::Any)))
+        );
         return {
-            1, name, [name](const std::vector<std::shared_ptr<Thunk> > &arguments,
-                            const std::shared_ptr<Environment> &) -> std::pair<Value, ResultOptions> {
+            name, signature, [name](const std::vector<std::shared_ptr<Thunk> > &arguments,
+                                    const std::shared_ptr<Environment> &) -> std::pair<Value, ResultOptions> {
                 const Value &argument0 = arguments[0]->force();
                 if (!std::holds_alternative<std::shared_ptr<List> >(argument0)) {
                     optionsValue.logger.error({},
@@ -228,9 +249,13 @@ namespace runtime::builtins {
 
     NativeFunction makeSort() {
         const std::string name = "sort";
+        const auto signature = functionType(
+            {listType(simpleType(type::TypeTag::Float))},
+            listType(simpleType(type::TypeTag::Float))
+        );
         return {
-            1, name, [name](const std::vector<std::shared_ptr<Thunk> > &arguments,
-                            const std::shared_ptr<Environment> &) -> std::pair<Value, ResultOptions> {
+            name, signature, [name](const std::vector<std::shared_ptr<Thunk> > &arguments,
+                                    const std::shared_ptr<Environment> &) -> std::pair<Value, ResultOptions> {
                 const Value &argument0 = arguments[0]->force();
                 if (!std::holds_alternative<std::shared_ptr<List> >(argument0)) {
                     optionsValue.logger.error({},
@@ -264,9 +289,13 @@ namespace runtime::builtins {
 
     NativeFunction makeZip() {
         const std::string name = "zip";
+        const auto signature = functionType(
+            {listType(listType(simpleType(type::TypeTag::Any)))},
+            listType(listType(simpleType(type::TypeTag::Any)))
+        );
         return {
-            1, name, [name](const std::vector<std::shared_ptr<Thunk> > &arguments,
-                            const std::shared_ptr<Environment> &) -> std::pair<Value, ResultOptions> {
+            name, signature, [name](const std::vector<std::shared_ptr<Thunk> > &arguments,
+                                    const std::shared_ptr<Environment> &) -> std::pair<Value, ResultOptions> {
                 const Value &argument0 = arguments[0]->force();
                 if (!std::holds_alternative<std::shared_ptr<List> >(argument0)) {
                     optionsValue.logger.error({},
@@ -309,9 +338,20 @@ namespace runtime::builtins {
 
     NativeFunction makeFoldRight() {
         const std::string name = "foldr";
+        // TODO: Implement indexed any-type, as the type should ideally be:
+        //       (Any1 -> Any2 -> Any2) -> [Any1] -> Any2 -> Any2
+        const auto signature = functionType(
+            {
+                functionType({simpleType(type::TypeTag::Any), simpleType(type::TypeTag::Any)},
+                             simpleType(type::TypeTag::Any)),
+                listType(simpleType(type::TypeTag::Any)),
+                simpleType(type::TypeTag::Any)
+            },
+            simpleType(type::TypeTag::Any)
+        );
         return {
-            3, name, [name](const std::vector<std::shared_ptr<Thunk> > &arguments,
-                            const std::shared_ptr<Environment> &callSiteEnvironment) -> std::pair<Value,
+            name, signature, [name](const std::vector<std::shared_ptr<Thunk> > &arguments,
+                                    const std::shared_ptr<Environment> &callSiteEnvironment) -> std::pair<Value,
         ResultOptions> {
                 const Value &functionValue = arguments[0]->force();
                 const Value &initialValue = arguments[1]->force();
@@ -327,9 +367,9 @@ namespace runtime::builtins {
                 // Start with the initial accumulator value
                 Value accumulatedValue = initialValue;
                 // Traverse from the last element to the first
-                for (auto it = list->elements.rbegin(); it != list->elements.rend(); ++it) {
+                for (auto &element: std::ranges::reverse_view(list->elements)) {
                     auto elementThunk = std::make_shared<Thunk>();
-                    elementThunk->cached = *it;
+                    elementThunk->cached = element;
                     auto accumulatedThunk = std::make_shared<Thunk>();
                     accumulatedThunk->cached = accumulatedValue;
                     // fn takes (element, accumulator)

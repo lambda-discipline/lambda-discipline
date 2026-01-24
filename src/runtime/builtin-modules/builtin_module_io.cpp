@@ -3,17 +3,23 @@
 #include <lbd/runtime/builtin-modules/builtin_module_io.h>
 
 namespace runtime::builtins {
+    // TODO: Move print to io module.
+
     NativeFunction makeSlurpFile() {
         const std::string name = "slurp_file";
+        const auto signature = functionType(
+            {simpleType(type::TypeTag::String)},
+            simpleType(type::TypeTag::String)
+        );
         return {
-            1, name, [name](const std::vector<std::shared_ptr<Thunk> > &arguments,
-                            const std::shared_ptr<Environment> &) -> std::pair<Value, ResultOptions> {
+            name, signature, [name](const std::vector<std::shared_ptr<Thunk> > &arguments,
+                                    const std::shared_ptr<Environment> &) -> std::pair<Value, ResultOptions> {
                 const Value &argument0 = arguments[0]->force();
                 if (!std::holds_alternative<std::string>(argument0)) {
                     optionsValue.logger.error({},
-                                           "runtime error: wrong arguments provided to native function ", name,
-                                           "\n", name, " signature: String -> String\n"
-                                           "runtime error: expected <String> got ", argument0);
+                                              "runtime error: wrong arguments provided to native function ", name,
+                                              "\n", name, " signature: String -> String\n"
+                                              "runtime error: expected <String> got ", argument0);
                 }
                 const auto &path = std::get<std::string>(argument0);
                 std::ifstream file(path, std::ios::in | std::ios::binary);
@@ -27,15 +33,19 @@ namespace runtime::builtins {
 
     NativeFunction makeLines() {
         const std::string name = "lines";
+        const auto signature = functionType(
+            {simpleType(type::TypeTag::String)},
+            listType(simpleType(type::TypeTag::String))
+        );
         return {
-            1, name, [name](const std::vector<std::shared_ptr<Thunk> > &arguments,
-                            const std::shared_ptr<Environment> &) -> std::pair<Value, ResultOptions> {
+            name, signature, [name](const std::vector<std::shared_ptr<Thunk> > &arguments,
+                                    const std::shared_ptr<Environment> &) -> std::pair<Value, ResultOptions> {
                 const Value &argument0 = arguments[0]->force();
                 if (!std::holds_alternative<std::string>(argument0)) {
                     optionsValue.logger.error({},
-                                           "runtime error: wrong arguments provided to native function ", name,
-                                           "\n", name, " signature: String -> List<String>\n"
-                                           "runtime error: expected <String> got ", argument0);
+                                              "runtime error: wrong arguments provided to native function ", name,
+                                              "\n", name, " signature: String -> List<String>\n"
+                                              "runtime error: expected <String> got ", argument0);
                 }
                 const auto input = std::get<std::string>(argument0);
                 // Normalize all line endings to '\n'
@@ -66,25 +76,29 @@ namespace runtime::builtins {
 
     NativeFunction makeSplit() {
         const std::string name = "split";
+        const auto signature = functionType(
+            {simpleType(type::TypeTag::String), simpleType(type::TypeTag::String)},
+            listType(simpleType(type::TypeTag::String))
+        );
         return {
-            2, name, [name](const std::vector<std::shared_ptr<Thunk> > &arguments,
-                            const std::shared_ptr<Environment> &) -> std::pair<Value, ResultOptions> {
+            name, signature, [name](const std::vector<std::shared_ptr<Thunk> > &arguments,
+                                    const std::shared_ptr<Environment> &) -> std::pair<Value, ResultOptions> {
                 const Value &argument0 = arguments[0]->force(); // string
                 if (!std::holds_alternative<std::string>(argument0)) {
                     optionsValue.logger.error({}, "runtime error: wrong arguments provided to native function ", name,
-                                           "\n", name,
-                                           " signature: String -> String -> List<String>""\n"
-                                           "runtime error: expected <String> got ", argument0);
+                                              "\n", name,
+                                              " signature: String -> String -> List<String>""\n"
+                                              "runtime error: expected <String> got ", argument0);
                 }
                 const Value &argument1 = arguments[1]->force(); // delimiter
                 if (!std::holds_alternative<std::string>(argument1)) {
                     optionsValue.logger.error({}, "runtime error: wrong arguments provided to native function ", name,
-                                           "\n", name,
-                                           " signature: String -> String -> List""\n"
-                                           "runtime error: expected <String> got ", argument1);
+                                              "\n", name,
+                                              " signature: String -> String -> List""\n"
+                                              "runtime error: expected <String> got ", argument1);
                 }
-                const std::string &input = std::get<std::string>(argument0);
-                const std::string &delimiter = std::get<std::string>(argument1);
+                const auto &input = std::get<std::string>(argument0);
+                const auto &delimiter = std::get<std::string>(argument1);
                 if (delimiter.empty()) {
                     optionsValue.logger.error({}, "runtime error: delimiter for ", name, " cannot be empty");
                 }
