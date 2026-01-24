@@ -1,5 +1,5 @@
 #include <lbd/error.h>
-#include <lbd/interpreter/type.h>
+#include <lbd/frontend/type.h>
 
 namespace interpreter::type {
     std::ostream &operator<<(std::ostream &stream, const PrimitiveType &type) {

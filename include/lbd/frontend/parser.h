@@ -4,7 +4,7 @@
 #include <lbd/frontend/ast.h>
 #include <lbd/frontend/token.h>
 #include <lbd/frontend/program.h>
-#include <lbd/interpreter/type.h>
+#include <lbd/frontend/type.h>
 #include <vector>
 
 namespace frontend {

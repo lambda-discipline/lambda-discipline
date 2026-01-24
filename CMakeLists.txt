@@ -14,10 +14,10 @@ add_library(frontend STATIC
     ${CMAKE_SOURCE_DIR}/src/frontend/ast.cpp
     ${CMAKE_SOURCE_DIR}/src/frontend/program.cpp
     ${CMAKE_SOURCE_DIR}/src/frontend/parser.cpp
+    ${CMAKE_SOURCE_DIR}/src/frontend/type.cpp
 )
 
 add_library(interpreter STATIC
-    ${CMAKE_SOURCE_DIR}/src/interpreter/type.cpp
     ${CMAKE_SOURCE_DIR}/src/interpreter/interpreter.cpp
     ${CMAKE_SOURCE_DIR}/src/interpreter/builtins.cpp
     ${CMAKE_SOURCE_DIR}/src/interpreter/builtin-modules/builtin_module_core.cpp

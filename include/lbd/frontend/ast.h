@@ -1,7 +1,7 @@
 #pragma once
 
 #include <lbd/frontend/location.h>
-#include <lbd/interpreter/type.h>
+#include <lbd/frontend/type.h>
 #include <string>
 #include <variant>
 #include <vector>
