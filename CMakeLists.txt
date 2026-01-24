@@ -19,6 +19,7 @@ add_library(frontend STATIC
 
 add_library(runtime STATIC
     ${CMAKE_SOURCE_DIR}/src/runtime/interpreter.cpp
+    ${CMAKE_SOURCE_DIR}/src/runtime/type.cpp
     ${CMAKE_SOURCE_DIR}/src/runtime/builtins.cpp
     ${CMAKE_SOURCE_DIR}/src/runtime/builtin-modules/builtin_module_core.cpp
     ${CMAKE_SOURCE_DIR}/src/runtime/builtin-modules/builtin_module_list.cpp

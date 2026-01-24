@@ -64,6 +64,7 @@ namespace runtime {
 
         int arity;
         std::string name;
+        // TODO: We can store signature of native-function here.
         Implementation implementation;
 
         [[nodiscard]] std::string toString() const;
