@@ -11,26 +11,26 @@ namespace interpreter {
     static ResultOptions globalResultOptions;
 
     [[nodiscard]] std::string Closure::toString() const {
-        std::ostringstream oss;
-        oss << "<closure: " << parameter << ">";
-        return oss.str();
+        std::ostringstream outputStringStream;
+        outputStringStream << "<Closure: " << parameter << ">";
+        return outputStringStream.str();
     }
 
-    std::ostream &operator<<(std::ostream &stream, const Closure &closure) {
-        return stream << closure.toString();
+    std::ostream &operator<<(std::ostream &outputStream, const Closure &closure) {
+        return outputStream << closure.toString();
     }
 
     [[nodiscard]] std::string List::toString() const {
-        std::ostringstream stringStream;
-        stringStream << "[";
+        std::ostringstream outputStringStream;
+        outputStringStream << "[";
         for (size_t i = 0; i < elements.size(); ++i) {
-            stringStream << escapeString(elements[i].toString());
+            outputStringStream << escapeString(elements[i].toString());
             if (i + 1 != elements.size()) {
-                stringStream << ", ";
+                outputStringStream << ", ";
             }
         }
-        stringStream << "]";
-        return stringStream.str();
+        outputStringStream << "]";
+        return outputStringStream.str();
     }
 
     [[nodiscard]] std::string Value::toString() const {
@@ -51,27 +51,33 @@ namespace interpreter {
         }, *this);
     }
 
-    std::ostream &operator<<(std::ostream &stream, const Value &value) {
-        return stream << value.toString();
+    std::ostream &operator<<(std::ostream &outputStream, const Value &value) {
+        return outputStream << value.toString();
     }
 
-    void ResultOptions::interpolate(const ResultOptions &resultOptions_) {
-        sideEffects |= resultOptions_.sideEffects;
+    void ResultOptions::interpolate(const ResultOptions &resultOptions) {
+        sideEffects |= resultOptions.sideEffects;
     }
 
-    std::ostream &operator<<(std::ostream &stream, const List &list) {
-        return stream << list.toString();
+    std::ostream &operator<<(std::ostream &outputStream, const List &list) {
+        return outputStream << list.toString();
     }
 
     [[nodiscard]] std::string NativeFunction::toString() const {
-        std::ostringstream stringStream;
-        // TODO: Update the type name.
-        stringStream << "<native_fn: " << name << " " << arity << ">";
-        return stringStream.str();
+        std::ostringstream outputStringStream;
+        outputStringStream << "<NativeFunction: " << name << "(";
+        if (arity == -1) {
+            // Variadic-Function.
+            outputStringStream << "...";
+        } else {
+            outputStringStream << arity;
+        }
+        outputStringStream << ")>";
+        return outputStringStream.str();
     }
 
-    std::ostream &operator<<(std::ostream &stream, const NativeFunction &nativeFunction) {
-        return stream << nativeFunction.toString();
+    std::ostream &operator<<(std::ostream &outputStream, const NativeFunction &nativeFunction) {
+        return outputStream << nativeFunction.toString();
     }
 
     Thunk::Thunk(const frontend::Expression *expression, std::shared_ptr<Environment> environment,
@@ -136,7 +142,7 @@ namespace interpreter {
         std::vector<std::vector<std::string> > result;
         result.reserve(table.size());
         for (const auto &[name, thunk]: table) {
-            std::string valueString = "<thunk: unevaluated>";
+            std::string valueString = "<Thunk: unevaluated>";
             try {
                 if (force) {
                     const Value &value = thunk->force();
@@ -304,7 +310,7 @@ namespace interpreter {
                 frames.back() = std::move(*resultantValue);
                 continue;
             }
-            // Resultant is a concrete Value (different from Function Value i.e. double, string).
+            // Result is a concrete Value (different from Function Value i.e. double, string).
             // Pop the frame that produced it, and insert this Value as a thunk at the current index
             // so the previous Frame (if any) will consume it.
             Value concrete = std::move(*resultantValue);
@@ -322,9 +328,8 @@ namespace interpreter {
             }
             // There is a previous Frame; insert the concrete Value as a Thunk at the
             // current index so the previous Frame will consume it on the next iteration.
-            // TODO: Why is it named injThunk
-            auto injThunk = valueToThunk(concrete);
-            workArguments.insert(workArguments.begin() + static_cast<int>(index), injThunk);
+            auto thunk = valueToThunk(concrete);
+            workArguments.insert(workArguments.begin() + static_cast<int>(index), thunk);
             // Do NOT advance index: the inserted thunk is at position index and will be consumed
             // by the previous frame on the next iteration.
             // Loop will continue with frames.back() being the previous frame.

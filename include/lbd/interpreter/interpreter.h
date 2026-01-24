@@ -23,7 +23,7 @@ namespace interpreter {
 
         [[nodiscard]] std::string toString() const;
 
-        friend std::ostream &operator<<(std::ostream &stream, const Closure &closure);
+        friend std::ostream &operator<<(std::ostream &outputStream, const Closure &closure);
     };
 
     struct List {
@@ -31,7 +31,7 @@ namespace interpreter {
 
         [[nodiscard]] std::string toString() const;
 
-        friend std::ostream &operator<<(std::ostream &stream, const List &list);
+        friend std::ostream &operator<<(std::ostream &outputStream, const List &list);
     };
 
     using ValueVariant = std::variant<
@@ -48,14 +48,14 @@ namespace interpreter {
         /// Pretty print a runtime value for REPL/diagnostics.
         [[nodiscard]] std::string toString() const;
 
-        friend std::ostream &operator<<(std::ostream &stream, const Value &value);
+        friend std::ostream &operator<<(std::ostream &outputStream, const Value &value);
     };
 
     struct ResultOptions {
         bool sideEffects = false;
 
         // TODO: _ may not be needed here
-        void interpolate(const ResultOptions &resultOptions_);
+        void interpolate(const ResultOptions &resultOptions);
     };
 
     struct NativeFunction {
@@ -68,7 +68,7 @@ namespace interpreter {
 
         [[nodiscard]] std::string toString() const;
 
-        friend std::ostream &operator<<(std::ostream &stream, const NativeFunction &nativeFunction);
+        friend std::ostream &operator<<(std::ostream &outputStream, const NativeFunction &nativeFunction);
     };
 
     /// Lazy-Thunk (call-by-need).
