@@ -60,8 +60,6 @@ namespace runtime::type {
 
     // TODO: List should not have element-type, as we can add any type to it.
     struct ListType final : Type {
-        explicit ListType(const std::shared_ptr<Type> &elementType);
-
         ~ListType() override = default;
 
         [[nodiscard]] bool matches(const Value &value) const override;
@@ -71,9 +69,6 @@ namespace runtime::type {
         [[nodiscard]] std::string toString() const override;
 
         [[nodiscard]] bool isCallable() const override;
-
-    private:
-        std::shared_ptr<Type> elementType;
     };
 
     struct FunctionType final : Type {

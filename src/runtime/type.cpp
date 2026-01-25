@@ -65,30 +65,16 @@ namespace runtime::type {
         return false;
     }
 
-    ListType::ListType(const std::shared_ptr<Type> &elementType) : elementType(elementType) {
-    }
-
     bool ListType::matches(const Value &value) const {
-        if (typeTagFromValue(value) != TypeTag::Any) {
-            return false;
-        }
-        auto &[elements] = *std::get<std::shared_ptr<List> >(value);
-        return std::all_of(elements.begin(), elements.end(), [&](const auto &element) {
-            return elementType->matches(element);
-        });
+        return typeTagFromValue(value) == TypeTag::List;
     }
 
     bool ListType::equals(const Type &otherType) const {
-        if (const auto *otherListType = dynamic_cast<const ListType *>(&otherType)) {
-            return elementType && otherListType->elementType && elementType->equals(*otherListType->elementType);
-        }
-        return false;
+        return dynamic_cast<const ListType *>(&otherType) != nullptr;
     }
 
     std::string ListType::toString() const {
-        std::ostringstream outputStringStream;
-        outputStringStream << "[" << elementType->toString() << "]";
-        return outputStringStream.str();
+        return "[]";
     }
 
     bool ListType::isCallable() const {
@@ -135,7 +121,9 @@ namespace runtime::type {
     }
 
     bool FunctionType::matchesReturnType(const Value &value) const {
-        return returnType && returnType->matches(value);
+        // If the return-type is nullptr, i.e., return-type is void.
+        // Do not perform any check in such scenario.
+        return returnType ? returnType->matches(value) : true;
     }
 
     bool FunctionType::equals(const Type &otherType) const {
@@ -155,7 +143,11 @@ namespace runtime::type {
                 return false;
             }
         }
-        return returnType && otherFunctionType->returnType && returnType->equals(*otherFunctionType->returnType);
+        if (returnType) {
+            return otherFunctionType->returnType && returnType->equals(*otherFunctionType->returnType);
+        }
+        // Return-Type is nullptr i.e., void.
+        return true;
     }
 
     std::string FunctionType::toString() const {
@@ -198,8 +190,8 @@ namespace runtime::type {
             } else if constexpr (std::is_same_v<T, std::shared_ptr<NativeFunction> >) {
                 const auto &nativeFunction = *std::get<std::shared_ptr<NativeFunction> >(value);
                 return std::make_shared<FunctionType>(*nativeFunction.getSignature());
-            } else if constexpr (std::is_same_v<T, std::shared_ptr<NativeFunction> >) {
-                return std::make_shared<ListType>(std::make_shared<SimpleType>(TypeTag::Any));
+            } else if constexpr (std::is_same_v<T, std::shared_ptr<List> >) {
+                return std::make_shared<ListType>();
             } else {
                 return std::make_shared<SimpleType>(TypeTag::Any);
             }

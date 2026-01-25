@@ -14,14 +14,14 @@ namespace runtime::builtins {
         return std::make_shared<type::SimpleType>(tag);
     }
 
-    inline TypePointer listType(TypePointer elementType) {
-        return std::make_shared<type::ListType>(elementType);
+    inline TypePointer listType() {
+        return std::make_shared<type::ListType>();
     }
 
-    inline std::shared_ptr<type::FunctionType> functionType(std::vector<TypePointer> argumentTypes,
-                                                            TypePointer returnType,
+    inline std::shared_ptr<type::FunctionType> functionType(const std::vector<TypePointer> &argumentTypes,
+                                                            const TypePointer &returnType,
                                                             bool isVariadic = false) {
-        return std::make_shared<type::FunctionType>(std::move(argumentTypes), std::move(returnType), isVariadic);
+        return std::make_shared<type::FunctionType>(argumentTypes, returnType, isVariadic);
     }
 
     // TODO: Move the definitions to source-file.

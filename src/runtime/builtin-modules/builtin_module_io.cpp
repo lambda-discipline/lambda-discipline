@@ -35,7 +35,7 @@ namespace runtime::builtins {
         const std::string name = "lines";
         const auto signature = functionType(
             {simpleType(type::TypeTag::String)},
-            listType(simpleType(type::TypeTag::String))
+            listType()
         );
         return {
             name, signature, [name](const std::vector<std::shared_ptr<Thunk> > &arguments,
@@ -78,7 +78,7 @@ namespace runtime::builtins {
         const std::string name = "split";
         const auto signature = functionType(
             {simpleType(type::TypeTag::String), simpleType(type::TypeTag::String)},
-            listType(simpleType(type::TypeTag::String))
+            listType()
         );
         return {
             name, signature, [name](const std::vector<std::shared_ptr<Thunk> > &arguments,

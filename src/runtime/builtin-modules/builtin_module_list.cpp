@@ -32,7 +32,7 @@ namespace runtime::builtins {
         const std::string name = "list";
         const auto signature = functionType(
             {simpleType(type::TypeTag::Any)},
-            listType(simpleType(type::TypeTag::Any)),
+            listType(),
             true
         );
         return {
@@ -50,7 +50,7 @@ namespace runtime::builtins {
     NativeFunction makeListSize() {
         const std::string name = "list_size";
         const auto signature = functionType(
-            {listType(simpleType(type::TypeTag::Any))},
+            {listType()},
             simpleType(type::TypeTag::Float)
         );
         return {
@@ -73,7 +73,7 @@ namespace runtime::builtins {
     NativeFunction makeListGet() {
         const std::string name = "list_get";
         const auto signature = functionType(
-            {listType(simpleType(type::TypeTag::Any)), simpleType(type::TypeTag::Float)},
+            {listType(), simpleType(type::TypeTag::Float)},
             simpleType(type::TypeTag::Any)
         );
         return {
@@ -105,7 +105,7 @@ namespace runtime::builtins {
     NativeFunction makeListRemove() {
         const std::string name = "list_remove";
         const auto signature = functionType(
-            {listType(simpleType(type::TypeTag::Any)), simpleType(type::TypeTag::Float)},
+            {listType(), simpleType(type::TypeTag::Float)},
             simpleType(type::TypeTag::Any)
         );
         return {
@@ -139,7 +139,7 @@ namespace runtime::builtins {
     NativeFunction makeListAppend() {
         const std::string name = "list_append";
         const auto signature = functionType(
-            {listType(simpleType(type::TypeTag::Any)), simpleType(type::TypeTag::Any)},
+            {listType(), simpleType(type::TypeTag::Any)},
             nullptr
         );
         return {
@@ -152,9 +152,9 @@ namespace runtime::builtins {
                                               " signature: List -> Any -> List""\n"
                                               "runtime error: expected <List> got ", argument0);
                 }
-                auto list_v = std::get<std::shared_ptr<List> >(argument0);
-                listAppend(list_v, arguments[1]->force());
-                return std::make_pair(Value{list_v}, ResultOptions{});
+                auto list = std::get<std::shared_ptr<List> >(argument0);
+                listAppend(list, arguments[1]->force());
+                return std::make_pair(Value{list}, ResultOptions{});
             }
         };
     }
@@ -166,9 +166,9 @@ namespace runtime::builtins {
         const auto signature = functionType(
             {
                 functionType({simpleType(type::TypeTag::Any)}, simpleType(type::TypeTag::Any)),
-                listType(simpleType(type::TypeTag::Any))
+                listType()
             },
-            listType(simpleType(type::TypeTag::Any))
+            listType()
         );
         return {
             name, signature, [name](const std::vector<std::shared_ptr<Thunk> > &arguments,
@@ -201,8 +201,8 @@ namespace runtime::builtins {
     NativeFunction makeTranspose() {
         const std::string name = "transpose";
         const auto signature = functionType(
-            {listType(listType(simpleType(type::TypeTag::Any)))},
-            listType(listType(simpleType(type::TypeTag::Any)))
+            {listType()},
+            listType()
         );
         return {
             name, signature, [name](const std::vector<std::shared_ptr<Thunk> > &arguments,
@@ -250,8 +250,8 @@ namespace runtime::builtins {
     NativeFunction makeSort() {
         const std::string name = "sort";
         const auto signature = functionType(
-            {listType(simpleType(type::TypeTag::Float))},
-            listType(simpleType(type::TypeTag::Float))
+            {listType()},
+            listType()
         );
         return {
             name, signature, [name](const std::vector<std::shared_ptr<Thunk> > &arguments,
@@ -290,8 +290,8 @@ namespace runtime::builtins {
     NativeFunction makeZip() {
         const std::string name = "zip";
         const auto signature = functionType(
-            {listType(listType(simpleType(type::TypeTag::Any)))},
-            listType(listType(simpleType(type::TypeTag::Any)))
+            {listType()},
+            listType()
         );
         return {
             name, signature, [name](const std::vector<std::shared_ptr<Thunk> > &arguments,
@@ -344,7 +344,7 @@ namespace runtime::builtins {
             {
                 functionType({simpleType(type::TypeTag::Any), simpleType(type::TypeTag::Any)},
                              simpleType(type::TypeTag::Any)),
-                listType(simpleType(type::TypeTag::Any)),
+                listType(),
                 simpleType(type::TypeTag::Any)
             },
             simpleType(type::TypeTag::Any)

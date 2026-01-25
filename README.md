@@ -1,4 +1,6 @@
-> Functional Programming Language based on [Lambda Calculus](https://en.wikipedia.org/wiki/Lambda_calculus) highly inspired by this video [Programming with Math | The Lambda Calculus - Eyesomorphic](https://youtu.be/ViPNHMSUcog) made from scratch, entirely in `C++`.
+> Functional Programming Language based on [Lambda Calculus](https://en.wikipedia.org/wiki/Lambda_calculus) highly
+> inspired by this video [Programming with Math | The Lambda Calculus - Eyesomorphic](https://youtu.be/ViPNHMSUcog) made
+> from scratch, entirely in `C++`.
 
 ---
 
@@ -122,3 +124,5 @@ lbd [options]
 - TODO: Add better examples (e.g., Advent of Code snippets).
 - TODO: CI/CD for testing.
 - TODO: Fix tests output in README.
+- TODO: Step debug kind of functionality in REPL. Inside REPL, while loading a file, load one expression at a time and
+  provide user with some feedback and actions to perform. 

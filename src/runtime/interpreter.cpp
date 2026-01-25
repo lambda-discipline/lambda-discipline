@@ -329,13 +329,13 @@ namespace runtime {
                     // }
                     auto [resultantValue_, resultOptions] = nativeFunction.getImplementation()(
                         slice, callSiteEnvironment);
-                    // if (!signature.matchesReturnType(resultantValue_)) {
-                    //     optionsValue.logger.error(callLocation,
-                    //                               "internal error: expected native-function to return ",
-                    //                               signature.getReturnType().toString(), ", but got ",
-                    //                               type::typeFromValue(resultantValue_)->toString());
-                    //     // TODO: possibly not create an additional type-object just for printing.
-                    // }
+                    if (!signature.matchesReturnType(resultantValue_)) {
+                        optionsValue.logger.error(callLocation,
+                                                  "internal error: expected native-function ", nativeFunction.getName(),
+                                                  " to return ", signature.getReturnType().toString(), ", but got ",
+                                                  type::typeFromValue(resultantValue_)->toString());
+                        // TODO: possibly not create an additional type-object just for printing.
+                    }
                     resultantValue = resultantValue_;
                     globalResultOptions.interpolate(resultOptions);
                     index += arity;
