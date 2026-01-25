@@ -2,26 +2,6 @@
 #include <lbd/utils/string_escape.h>
 
 namespace runtime::builtins {
-    // Prints Argument to stdout and returns 0.
-    NativeFunction makePrint() {
-        const std::string name = "print";
-        const auto signature = functionType(
-            {simpleType(type::TypeTag::Any)},
-            nullptr,
-            true
-        );
-        return {
-            name, signature, [](const std::vector<std::shared_ptr<Thunk> > &arguments,
-                                const std::shared_ptr<Environment> &) -> std::pair<Value, ResultOptions> {
-                for (auto &argument: arguments) {
-                    const Value &value = argument->force();
-                    std::cout << value;
-                }
-                return std::make_pair(Value{static_cast<double>(0)}, ResultOptions{.sideEffects = true});
-            }
-        };
-    }
-
     NativeFunction makeAdd() {
         const std::string name = "add";
         const auto signature = functionType(
@@ -29,14 +9,10 @@ namespace runtime::builtins {
             simpleType(type::TypeTag::Float)
         );
         return {
-            name, signature, [name](const std::vector<std::shared_ptr<Thunk> > &arguments,
-                                    const std::shared_ptr<Environment> &) -> std::pair<Value, ResultOptions> {
+            name, signature, [](const std::vector<std::shared_ptr<Thunk> > &arguments,
+                                const std::shared_ptr<Environment> &) -> std::pair<Value, ResultOptions> {
                 const Value &value1 = arguments[0]->force();
                 const Value &value2 = arguments[1]->force();
-                if (!std::holds_alternative<double>(value1) || !std::holds_alternative<double>(value2)) {
-                    optionsValue.logger.error({}, "runtime error: wrong arguments provided to native function ", name,
-                                              "\n", name, " signature: Float -> Float -> Float");
-                }
                 const double result = std::get<double>(value1) + std::get<double>(value2);
                 return std::make_pair(Value{result}, ResultOptions{});
             }
@@ -50,14 +26,10 @@ namespace runtime::builtins {
             simpleType(type::TypeTag::Float)
         );
         return {
-            name, signature, [name](const std::vector<std::shared_ptr<Thunk> > &arguments,
-                                    const std::shared_ptr<Environment> &) -> std::pair<Value, ResultOptions> {
+            name, signature, [](const std::vector<std::shared_ptr<Thunk> > &arguments,
+                                const std::shared_ptr<Environment> &) -> std::pair<Value, ResultOptions> {
                 const Value &value1 = arguments[0]->force();
                 const Value &value2 = arguments[1]->force();
-                if (!std::holds_alternative<double>(value1) || !std::holds_alternative<double>(value2)) {
-                    optionsValue.logger.error({}, "runtime error: wrong arguments provided to native function ", name,
-                                              "\n", name, " signature: Float -> Float -> Float");
-                }
                 const double result = std::get<double>(value1) - std::get<double>(value2);
                 return std::make_pair(Value{result}, ResultOptions{});
             }
@@ -71,14 +43,10 @@ namespace runtime::builtins {
             simpleType(type::TypeTag::Float)
         );
         return {
-            name, signature, [name](const std::vector<std::shared_ptr<Thunk> > &arguments,
-                                    const std::shared_ptr<Environment> &) -> std::pair<Value, ResultOptions> {
+            name, signature, [](const std::vector<std::shared_ptr<Thunk> > &arguments,
+                                const std::shared_ptr<Environment> &) -> std::pair<Value, ResultOptions> {
                 const Value &value1 = arguments[0]->force();
                 const Value &value2 = arguments[1]->force();
-                if (!std::holds_alternative<double>(value1) || !std::holds_alternative<double>(value2)) {
-                    optionsValue.logger.error({}, "runtime error: wrong arguments provided to native function ", name,
-                                              "\n", name, " signature: Float -> Float -> Float");
-                }
                 const double result = std::get<double>(value1) * std::get<double>(value2);
                 return std::make_pair(Value{result}, ResultOptions{});
             }
@@ -92,14 +60,10 @@ namespace runtime::builtins {
             simpleType(type::TypeTag::Float)
         );
         return {
-            name, signature, [name](const std::vector<std::shared_ptr<Thunk> > &arguments,
-                                    const std::shared_ptr<Environment> &) -> std::pair<Value, ResultOptions> {
+            name, signature, [](const std::vector<std::shared_ptr<Thunk> > &arguments,
+                                const std::shared_ptr<Environment> &) -> std::pair<Value, ResultOptions> {
                 const Value &value1 = arguments[0]->force();
                 const Value &value2 = arguments[1]->force();
-                if (!std::holds_alternative<double>(value1) || !std::holds_alternative<double>(value2)) {
-                    optionsValue.logger.error({}, "runtime error: wrong arguments provided to native function ", name,
-                                              "\n", name, " signature: Float -> Float -> Float");
-                }
                 const double num1 = std::get<double>(value1);
                 const double num2 = std::get<double>(value2);
                 const int result = num1 < num2 ? -1 : num1 > num2 ? 1 : 0;
@@ -120,14 +84,9 @@ namespace runtime::builtins {
             simpleType(type::TypeTag::Any)
         );
         return {
-            name, signature, [name](const std::vector<std::shared_ptr<Thunk> > &arguments,
-                                    const std::shared_ptr<Environment> &) -> std::pair<Value, ResultOptions> {
+            name, signature, [](const std::vector<std::shared_ptr<Thunk> > &arguments,
+                                const std::shared_ptr<Environment> &) -> std::pair<Value, ResultOptions> {
                 const Value &conditionValue = arguments[0]->force();
-                if (!std::holds_alternative<double>(conditionValue)) {
-                    optionsValue.logger.error({}, "runtime error: wrong arguments provided to native function ", name,
-                                              "\n", name, " signature: Float -> A -> B -> A|B\n"
-                                              "runtime error: expected <double> got ", conditionValue);
-                }
                 // Lazy branching: only force the chosen clause.
                 if (const double condition = std::get<double>(conditionValue); condition == 0.0) {
                     return std::make_pair(Value{arguments[1]->force()}, ResultOptions{});
@@ -147,13 +106,6 @@ namespace runtime::builtins {
             name, signature, [name](const std::vector<std::shared_ptr<Thunk> > &arguments,
                                     const std::shared_ptr<Environment> &) -> std::pair<Value, ResultOptions> {
                 const Value &argument0 = arguments[0]->force();
-                if (!std::holds_alternative<std::string>(argument0)) {
-                    optionsValue.logger.error({},
-                                              "runtime error: wrong arguments provided to native function ", name,
-                                              "\n", name,
-                                              " signature: String -> Float\n"
-                                              "runtime error: expected String got ", argument0);
-                }
                 const auto &argumentString = std::get<std::string>(argument0);
                 try {
                     const double value = std::stod(argumentString);

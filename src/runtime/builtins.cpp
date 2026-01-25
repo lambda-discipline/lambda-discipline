@@ -1,7 +1,7 @@
 #include <lbd/runtime/builtins.h>
 #include <lbd/runtime/builtin-modules/builtin_module_core.h>
-#include <lbd/runtime/builtin-modules/builtin_module_list.h>
 #include <lbd/runtime/builtin-modules/builtin_module_io.h>
+#include <lbd/runtime/builtin-modules/builtin_module_list.h>
 
 // TODO: Add module system like use module io. Which dlopen's the module and loads it.
 
@@ -24,7 +24,6 @@ namespace runtime::builtins {
     std::vector<NativeFunction> getBuiltins(const context::Options options_) {
         optionsValue = options_;
         return {
-            {makePrint()},
             {makeAdd()},
             {makeSub()},
             {makeMul()},
@@ -43,6 +42,7 @@ namespace runtime::builtins {
             {makeZip()},
             {makeFoldRight()},
             // IO module
+            {makePrint()},
             {makeSlurpFile()},
             {makeLines()},
             {makeSplit()},

@@ -3,7 +3,25 @@
 #include <lbd/runtime/builtin-modules/builtin_module_io.h>
 
 namespace runtime::builtins {
-    // TODO: Move print to io module.
+    // Prints Argument to stdout and returns 0.
+    NativeFunction makePrint() {
+        const std::string name = "print";
+        const auto signature = functionType(
+            {simpleType(type::TypeTag::Any)},
+            nullptr,
+            true
+        );
+        return {
+            name, signature, [](const std::vector<std::shared_ptr<Thunk> > &arguments,
+                                const std::shared_ptr<Environment> &) -> std::pair<Value, ResultOptions> {
+                for (auto &argument: arguments) {
+                    const Value &value = argument->force();
+                    std::cout << value;
+                }
+                return std::make_pair(Value{static_cast<double>(0)}, ResultOptions{.sideEffects = true});
+            }
+        };
+    }
 
     NativeFunction makeSlurpFile() {
         const std::string name = "slurp_file";
@@ -12,15 +30,9 @@ namespace runtime::builtins {
             simpleType(type::TypeTag::String)
         );
         return {
-            name, signature, [name](const std::vector<std::shared_ptr<Thunk> > &arguments,
-                                    const std::shared_ptr<Environment> &) -> std::pair<Value, ResultOptions> {
+            name, signature, [](const std::vector<std::shared_ptr<Thunk> > &arguments,
+                                const std::shared_ptr<Environment> &) -> std::pair<Value, ResultOptions> {
                 const Value &argument0 = arguments[0]->force();
-                if (!std::holds_alternative<std::string>(argument0)) {
-                    optionsValue.logger.error({},
-                                              "runtime error: wrong arguments provided to native function ", name,
-                                              "\n", name, " signature: String -> String\n"
-                                              "runtime error: expected <String> got ", argument0);
-                }
                 const auto &path = std::get<std::string>(argument0);
                 std::ifstream file(path, std::ios::in | std::ios::binary);
                 if (!file) optionsValue.logger.error({}, "runtime error: could not open file ", path);
@@ -38,15 +50,9 @@ namespace runtime::builtins {
             listType()
         );
         return {
-            name, signature, [name](const std::vector<std::shared_ptr<Thunk> > &arguments,
-                                    const std::shared_ptr<Environment> &) -> std::pair<Value, ResultOptions> {
+            name, signature, [](const std::vector<std::shared_ptr<Thunk> > &arguments,
+                                const std::shared_ptr<Environment> &) -> std::pair<Value, ResultOptions> {
                 const Value &argument0 = arguments[0]->force();
-                if (!std::holds_alternative<std::string>(argument0)) {
-                    optionsValue.logger.error({},
-                                              "runtime error: wrong arguments provided to native function ", name,
-                                              "\n", name, " signature: String -> List<String>\n"
-                                              "runtime error: expected <String> got ", argument0);
-                }
                 const auto input = std::get<std::string>(argument0);
                 // Normalize all line endings to '\n'
                 std::string normalized;
@@ -65,10 +71,12 @@ namespace runtime::builtins {
                         normalized.push_back(input[i]);
                     }
                 }
-                std::istringstream stream(normalized);
+                std::istringstream inputStringStream(normalized);
                 std::string line;
                 std::vector<Value> result;
-                while (std::getline(stream, line, '\n')) result.emplace_back(line);
+                while (std::getline(inputStringStream, line, '\n')) {
+                    result.emplace_back(line);
+                }
                 return {Value{std::make_shared<List>(std::move(result))}, ResultOptions{}};
             }
         };
@@ -84,19 +92,7 @@ namespace runtime::builtins {
             name, signature, [name](const std::vector<std::shared_ptr<Thunk> > &arguments,
                                     const std::shared_ptr<Environment> &) -> std::pair<Value, ResultOptions> {
                 const Value &argument0 = arguments[0]->force(); // string
-                if (!std::holds_alternative<std::string>(argument0)) {
-                    optionsValue.logger.error({}, "runtime error: wrong arguments provided to native function ", name,
-                                              "\n", name,
-                                              " signature: String -> String -> List<String>""\n"
-                                              "runtime error: expected <String> got ", argument0);
-                }
                 const Value &argument1 = arguments[1]->force(); // delimiter
-                if (!std::holds_alternative<std::string>(argument1)) {
-                    optionsValue.logger.error({}, "runtime error: wrong arguments provided to native function ", name,
-                                              "\n", name,
-                                              " signature: String -> String -> List""\n"
-                                              "runtime error: expected <String> got ", argument1);
-                }
                 const auto &input = std::get<std::string>(argument0);
                 const auto &delimiter = std::get<std::string>(argument1);
                 if (delimiter.empty()) {

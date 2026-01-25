@@ -19,5 +19,6 @@ namespace runtime::builtins {
 
     // TODO: Generate the SIGNATURE documentation on-demand, rather than editing it manually.
 
+    /// Type-Checking of native-function's signature must be handled by the user.
     std::vector<NativeFunction> getBuiltins(context::Options options_ = {});
 }

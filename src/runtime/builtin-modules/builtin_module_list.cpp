@@ -54,16 +54,9 @@ namespace runtime::builtins {
             simpleType(type::TypeTag::Float)
         );
         return {
-            name, signature, [name](const std::vector<std::shared_ptr<Thunk> > &arguments,
-                                    const std::shared_ptr<Environment> &) -> std::pair<Value, ResultOptions> {
-                // TODO: Generalize this signature type-checking.
+            name, signature, [](const std::vector<std::shared_ptr<Thunk> > &arguments,
+                                const std::shared_ptr<Environment> &) -> std::pair<Value, ResultOptions> {
                 const Value &argument0 = arguments[0]->force();
-                if (!std::holds_alternative<std::shared_ptr<List> >(argument0)) {
-                    optionsValue.logger.error({}, "runtime error: wrong arguments provided to native function ", name,
-                                              "\n", name,
-                                              " signature: List -> Float""\n"
-                                              "runtime error: expected <List> got ", argument0);
-                }
                 const auto list = std::get<std::shared_ptr<List> >(argument0);
                 return std::make_pair(Value{static_cast<double>(list->elements.size())}, ResultOptions{});
             }
@@ -77,23 +70,10 @@ namespace runtime::builtins {
             simpleType(type::TypeTag::Any)
         );
         return {
-            // TODO: Add type checker to replace this manual approach.
-            name, signature, [name](const std::vector<std::shared_ptr<Thunk> > &arguments,
-                                    const std::shared_ptr<Environment> &) -> std::pair<Value, ResultOptions> {
+            name, signature, [](const std::vector<std::shared_ptr<Thunk> > &arguments,
+                                const std::shared_ptr<Environment> &) -> std::pair<Value, ResultOptions> {
                 const Value &argument0 = arguments[0]->force();
-                if (!std::holds_alternative<std::shared_ptr<List> >(argument0)) {
-                    optionsValue.logger.error({}, "runtime error: wrong arguments provided to native function ", name,
-                                              "\n", name,
-                                              " signature: List -> Float -> List""\n"
-                                              "runtime error: expected <List> got ", argument0);
-                }
                 const Value &argument1 = arguments[1]->force();
-                if (!std::holds_alternative<double>(argument1)) {
-                    optionsValue.logger.error({}, "runtime error: wrong arguments provided to native function ", name,
-                                              "\n", name,
-                                              " signature: List -> Float -> List""\n"
-                                              "runtime error: expected <Float> got ", argument1);
-                }
                 return std::make_pair(Value{
                                           listGet(std::get<std::shared_ptr<List> >(argument0),
                                                   static_cast<size_t>(std::get<double>(argument1)))
@@ -109,23 +89,10 @@ namespace runtime::builtins {
             simpleType(type::TypeTag::Any)
         );
         return {
-            // TODO: Add type checker to replace this manual approach
-            name, signature, [name](const std::vector<std::shared_ptr<Thunk> > &arguments,
-                                    const std::shared_ptr<Environment> &) -> std::pair<Value, ResultOptions> {
+            name, signature, [](const std::vector<std::shared_ptr<Thunk> > &arguments,
+                                const std::shared_ptr<Environment> &) -> std::pair<Value, ResultOptions> {
                 const Value &argument0 = arguments[0]->force();
-                if (!std::holds_alternative<std::shared_ptr<List> >(argument0)) {
-                    optionsValue.logger.error({}, "runtime error: wrong arguments provided to native function ", name,
-                                              "\n", name,
-                                              " signature: List -> Float -> List""\n"
-                                              "runtime error: expected <List> got ", argument0);
-                }
                 const Value &argument1 = arguments[1]->force();
-                if (!std::holds_alternative<double>(argument1)) {
-                    optionsValue.logger.error({}, "runtime error: wrong arguments provided to native function ", name,
-                                              "\n", name,
-                                              " signature: List -> Float -> List""\n"
-                                              "runtime error: expected <Float> got ", argument1);
-                }
                 return std::make_pair(
                     Value{
                         listRemove(std::get<std::shared_ptr<List> >(argument0),
@@ -171,18 +138,11 @@ namespace runtime::builtins {
             listType()
         );
         return {
-            name, signature, [name](const std::vector<std::shared_ptr<Thunk> > &arguments,
-                                    const std::shared_ptr<Environment> &callSiteEnvironment) -> std::pair<Value,
+            name, signature, [](const std::vector<std::shared_ptr<Thunk> > &arguments,
+                                const std::shared_ptr<Environment> &callSiteEnvironment) -> std::pair<Value,
         ResultOptions> {
                 const Value &functionValue = arguments[0]->force();
                 const Value &listValue = arguments[1]->force();
-                if (!std::holds_alternative<std::shared_ptr<List> >(listValue)) {
-                    optionsValue.logger.error({},
-                                              "runtime error: wrong arguments provided to native function ", name,
-                                              "\n", name,
-                                              " signature: (A -> B) -> List<A> -> List<B>\n"
-                                              "runtime error: expected List<A> got ", listValue);
-                }
                 const auto list = std::get<std::shared_ptr<List> >(listValue);
                 std::vector<Value> results;
                 results.reserve(list->elements.size());
@@ -208,13 +168,6 @@ namespace runtime::builtins {
             name, signature, [name](const std::vector<std::shared_ptr<Thunk> > &arguments,
                                     const std::shared_ptr<Environment> &) -> std::pair<Value, ResultOptions> {
                 const Value &argument0 = arguments[0]->force();
-                if (!std::holds_alternative<std::shared_ptr<List> >(argument0)) {
-                    optionsValue.logger.error({},
-                                              "runtime error: wrong arguments provided to native function ", name,
-                                              "\n", name,
-                                              " signature: List<List> -> List<List>\n"
-                                              "runtime error: expected List got ", argument0);
-                }
                 const auto outerList = std::get<std::shared_ptr<List> >(argument0);
                 if (outerList->elements.empty()) return {Value{std::make_shared<List>(List{})}, ResultOptions{}};
                 // Ensure all elements are lists
@@ -222,6 +175,7 @@ namespace runtime::builtins {
                 rows.reserve(outerList->elements.size());
                 size_t minSize = SIZE_MAX;
                 for (auto &element: outerList->elements) {
+                    // TODO: Add explicit element type test on list.
                     if (!std::holds_alternative<std::shared_ptr<List> >(element)) {
                         optionsValue.logger.error({},
                                                   "runtime error: native function ", name,
@@ -257,13 +211,6 @@ namespace runtime::builtins {
             name, signature, [name](const std::vector<std::shared_ptr<Thunk> > &arguments,
                                     const std::shared_ptr<Environment> &) -> std::pair<Value, ResultOptions> {
                 const Value &argument0 = arguments[0]->force();
-                if (!std::holds_alternative<std::shared_ptr<List> >(argument0)) {
-                    optionsValue.logger.error({},
-                                              "runtime error: wrong arguments provided to native function ", name,
-                                              "\n", name,
-                                              " signature: List<Float> -> List<Float>\n"
-                                              "runtime error: expected List<Float> got ", argument0);
-                }
                 const auto list = std::get<std::shared_ptr<List> >(argument0);
                 // Ensure all elements are floats
                 std::vector<double> floats;
@@ -297,13 +244,6 @@ namespace runtime::builtins {
             name, signature, [name](const std::vector<std::shared_ptr<Thunk> > &arguments,
                                     const std::shared_ptr<Environment> &) -> std::pair<Value, ResultOptions> {
                 const Value &argument0 = arguments[0]->force();
-                if (!std::holds_alternative<std::shared_ptr<List> >(argument0)) {
-                    optionsValue.logger.error({},
-                                              "runtime error: wrong arguments provided to native function ", name,
-                                              "\n", name,
-                                              " signature: List<List> -> List<List>\n"
-                                              "runtime error: expected List<List> got ", argument0);
-                }
                 const auto outerList = std::get<std::shared_ptr<List> >(argument0);
                 if (outerList->elements.empty()) {
                     return {Value{std::make_shared<List>(List{})}, ResultOptions{}};
@@ -350,19 +290,12 @@ namespace runtime::builtins {
             simpleType(type::TypeTag::Any)
         );
         return {
-            name, signature, [name](const std::vector<std::shared_ptr<Thunk> > &arguments,
-                                    const std::shared_ptr<Environment> &callSiteEnvironment) -> std::pair<Value,
+            name, signature, [](const std::vector<std::shared_ptr<Thunk> > &arguments,
+                                const std::shared_ptr<Environment> &callSiteEnvironment) -> std::pair<Value,
         ResultOptions> {
                 const Value &functionValue = arguments[0]->force();
                 const Value &initialValue = arguments[1]->force();
                 const Value &listValue = arguments[2]->force();
-                if (!std::holds_alternative<std::shared_ptr<List> >(listValue)) {
-                    optionsValue.logger.error({},
-                                              "runtime error: wrong arguments provided to native function ", name,
-                                              "\n", name,
-                                              " signature: (A -> B -> B) -> List<A> -> B -> B\n"
-                                              "runtime error: expected List<A> got ", listValue);
-                }
                 const auto list = std::get<std::shared_ptr<List> >(listValue);
                 // Start with the initial accumulator value
                 Value accumulatedValue = initialValue;

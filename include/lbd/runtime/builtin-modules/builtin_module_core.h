@@ -3,8 +3,6 @@
 #include <lbd/runtime/builtins.h>
 
 namespace runtime::builtins {
-    NativeFunction makePrint();
-
     NativeFunction makeAdd();
 
     NativeFunction makeSub();
