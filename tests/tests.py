@@ -43,3 +43,5 @@ if __name__ == "__main__":
             logger.error(f"Test failed '{testName}' due to output mismatch.")
             failCount += 1
     logger.info(f"Passed: {passCount}. Failed: {failCount}. Total: {totalCount}.")
+    if failCount > 0:
+        exit(1)
