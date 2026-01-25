@@ -48,7 +48,7 @@ namespace runtime::builtins {
     }
 
     NativeFunction makeListSize() {
-        const std::string name = "list_size";
+        const std::string name = "listSize";
         const auto signature = functionType(
             {listType()},
             simpleType(type::TypeTag::Float)
@@ -64,7 +64,7 @@ namespace runtime::builtins {
     }
 
     NativeFunction makeListGet() {
-        const std::string name = "list_get";
+        const std::string name = "listGet";
         const auto signature = functionType(
             {listType(), simpleType(type::TypeTag::Float)},
             simpleType(type::TypeTag::Any)
@@ -83,7 +83,7 @@ namespace runtime::builtins {
     }
 
     NativeFunction makeListRemove() {
-        const std::string name = "list_remove";
+        const std::string name = "listRemove";
         const auto signature = functionType(
             {listType(), simpleType(type::TypeTag::Float)},
             simpleType(type::TypeTag::Any)
@@ -104,7 +104,7 @@ namespace runtime::builtins {
     }
 
     NativeFunction makeListAppend() {
-        const std::string name = "list_append";
+        const std::string name = "listAppend";
         const auto signature = functionType(
             {listType(), simpleType(type::TypeTag::Any)},
             nullptr
@@ -277,7 +277,7 @@ namespace runtime::builtins {
     }
 
     NativeFunction makeFoldRight() {
-        const std::string name = "foldr";
+        const std::string name = "foldRight";
         // TODO: Implement indexed any-type, as the type should ideally be:
         //       (Any1 -> Any2 -> Any2) -> Any2 -> [Any1] -> Any2
         const auto signature = functionType(

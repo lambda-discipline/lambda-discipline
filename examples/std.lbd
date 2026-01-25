@@ -1,37 +1,37 @@
--- booleans and conditions
+-- Booleans
 true: Bool = \x: Any. \y: Any. x
 false: Bool = \x: Any. \y: Any. y
 
-if_then: Any = \condition: Any.
-    \then_clause: Any. \else_clause: Any.
-        (condition then_clause else_clause)
+if: Any = \condition: Any.
+    \thenClause: Any. \elseClause: Any.
+        (condition thenClause elseClause)
 
-bool_name: Bool = \bool: Bool. (if_then bool "true" "false")
+boolToString: Bool = \bool: Bool. (if bool "true" "false")
 
--- pairs
-pair: Any = \x: Any. \y: Any. \fn: Any. (fn x y)
-
+-- Pairs
+pair: Any = \x: Any. \y: Any. \function: Any. (function x y)
+-- Apparently, same signature as booleans
 first: Any = \x: Any. \y: Any. x
 second: Any = \x: Any. \y: Any. y
 
 -- Relational Operators
 eq: Float -> Float -> Bool = \x: Float. \y: Float.
-    (if_zero (cmp x y) true false)
+    (null (cmp x y) true false)
 
 lt: Float -> Float -> Bool = \x: Float. \y: Float.
-    (if_zero (cmp (cmp x y) -1) true false)
+    (null (cmp (cmp x y) -1) true false)
 
 gt: Float -> Float -> Bool = \x: Float. \y: Float.
-    (if_zero (cmp (cmp x y) 1) true false)
+    (null (cmp (cmp x y) 1) true false)
 
 lte: Float -> Float -> Bool = \x: Float. \y: Float.
-    (if_zero (cmp x y) true (if_zero (cmp (cmp x y) -1) true false))
+    (null (cmp x y) true (null (cmp (cmp x y) -1) true false))
 
 gte: Float -> Float -> Bool = \x: Float. \y: Float.
-    (if_zero (cmp x y) true (if_zero (cmp (cmp x y) 1) true false))
+    (null (cmp x y) true (null (cmp (cmp x y) 1) true false))
 
 -- TODO: Make a general builtin for this
-rot_2: Any -> Any -> Any -> Any = \fn: Any. \x: Any. \y: Any. (fn y x)
+rotate2: Any -> Any -> Any -> Any = \fn: Any. \x: Any. \y: Any. (fn y x)
 
 -- Math
-abs: Float -> Float = \x: Float. (if_then (lt x 0) (mul -1 x) x)
+abs: Float -> Float = \x: Float. (if (lt x 0) (mul -1 x) x)

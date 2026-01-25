@@ -11,7 +11,7 @@ namespace runtime::builtins {
 
     NativeFunction makeCmp();
 
-    NativeFunction makeIfZero();
+    NativeFunction makeNull();
 
     NativeFunction makeParseFloat();
 }

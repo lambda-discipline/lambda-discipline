@@ -40,18 +40,20 @@ Booleans and If-Then construct built entirely using Lambda Expressions.
 true: Bool = \x: Any. \y: Any. x
 false: Bool = \x: Any. \y: Any. y
 
-if_then: Any = \condition: Any.
-    \then_clause: Any. \else_clause: Any.
-        (condition then_clause else_clause)
+if: Any = \condition: Any.
+    \thenClause: Any. \elseClause: Any.
+        (condition thenClause elseClause)
 
-(print (if_then true "True" "False"))
-(print (if_then false "True" "False"))
+boolToString: Bool = \bool: Bool. (if bool "true" "false")
+
+(print (boolToString true) "\n")
+(print (boolToString false) "\n")
 ```
 
 ```console
-$ ./cmake-build-debug/lbd -f ./examples/if_then.lbd
-True
-False
+$ ./cmake-build-debug/lbd -f  ./examples/conditional_branching.lbd
+true
+false
 ```
 
 Shapes Demo
@@ -64,30 +66,28 @@ pi: Float = 3.14
 square: Float -> Float = \x: Float. (mul x x)
 
 -- Define function to calculate area of circle
-area_of_circle: Float -> Float = \r: Float.
+areaOfCircle: Float -> Float = \r: Float.
     (mul pi (square r))
 
 -- Define function to calculate volume of cylinder
-volume_of_cylinder: Float -> Float -> Float = \r: Float.
-	\h: Float. (mul (area_of_circle r) h)
+volumeOfCylinder: Float -> Float -> Float = \r: Float.
+	  \h: Float. (mul (areaOfCircle r) h)
 
 -- Calculate the volume of a cylinder
-(print "Volume of cylinder is: ")
-(print (volume_of_cylinder 5.0 10.0))
+(print "Volume of cylinder is: " (volumeOfCylinder 5.0 10.0) "\n")
 ```
 
 ```console
 $ ./cmake-build-debug/lbd -f ./examples/shapes.lbd
-Volume of cylinder is:
-785.000000
+Volume of cylinder is: 785.000000
 ```
 
 Fibonacci
 
 ```haskell
 fibonacci: Any = \num: Float.
-    (if_zero (cmp 0 num) 0
-        (if_zero (cmp 1 num) 1
+    (null (cmp 0 num) 0
+        (null (cmp 1 num) 1
             (add (fibonacci (sub num 1.0)) (fibonacci (sub num 2.0)))))
 
 (print (fibonacci 10))

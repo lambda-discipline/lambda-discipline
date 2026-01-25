@@ -28,7 +28,7 @@ namespace runtime::builtins {
             {makeSub()},
             {makeMul()},
             {makeCmp()},
-            {makeIfZero()},
+            {makeNull()},
             {makeParseFloat()},
             // List module
             {makeList()},

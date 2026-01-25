@@ -6,8 +6,8 @@
   },
   {
     "name": "Conditional branching",
-    "source": "examples/if_then.lbd",
-    "output": "examples/out/if_then.out.txt"
+    "source": "examples/conditional_branching.lbd",
+    "output": "examples/out/conditional_branching.out.txt"
   },
   {
     "name": "List",

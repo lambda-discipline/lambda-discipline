@@ -1,6 +1,6 @@
 fibonacci: Any = \num: Float.
-    (if_zero (cmp 0 num) 0
-        (if_zero (cmp 1 num) 1
+    (null (cmp 0 num) 0
+        (null (cmp 1 num) 1
             (add (fibonacci (sub num 1.0)) (fibonacci (sub num 2.0)))))
 
 (print (fibonacci 10))

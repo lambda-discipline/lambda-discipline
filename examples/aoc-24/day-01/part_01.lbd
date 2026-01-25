@@ -2,18 +2,18 @@
 
 use "examples/std.lbd"
 
-content: String = (slurp_file "examples/aoc-24/day-01/input.txt")
+content: String = (slurpFile "examples/aoc-24/day-01/input.txt")
 entries: List = (lines content)
 
 -- TODO: Add support for un-named Lambda Expressions
-tmp: String -> Any = \x: String. (rot_2 split "   " x)
+tmp: String -> Any = \x: String. (rotate2 split "   " x)
 cols: List = (transpose (map tmp entries))
 
 -- TODO: Reassigning does not work
-tmp2: List -> Any = \x: List. (map parse_float x)
+tmp2: List -> Any = \x: List. (map parseFloat x)
 lists: List = (map sort (map tmp2 cols))
 
-tmp3: List -> Float = \x: List. (abs (sub (list_get x 0) (list_get x 1)))
+tmp3: List -> Float = \x: List. (abs (sub (listGet x 0) (listGet x 1)))
 add2: Float -> Float -> Float = \x: Float. \y: Float. (add y x)
-res: Float = (foldr add2 0 (map tmp3 (zip lists)))
+res: Float = (foldRight add2 0 (map tmp3 (zip lists)))
 (print "Answer: " res "\n")

@@ -1,4 +1,4 @@
-pair: Any = \x: Any. \y: Any. \fn: Any. (fn x y)
+pair: Any = \x: Any. \y: Any. \function: Any. (function x y)
 
 first: Any = \x: Any. \y: Any. x
 second: Any = \x: Any. \y: Any. y

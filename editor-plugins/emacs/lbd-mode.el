@@ -36,10 +36,10 @@
 
 ;; Font lock
 (defconst lbd--keywords
-  '("true" "false" "if_then" "pair" "first" "second" "use"
-    "print" "add" "sub" "mul" "cmp" "if_zero" "sort" "parse_float"
-    "list" "list_size" "list_get" "list_remove" "list_append" "map" "transpose" "zip" "foldr"
-    "slurp_file" "lines" "split")
+  '("true" "false" "if" "pair" "first" "second" "use"
+    "print" "add" "sub" "mul" "cmp" "null" "sort" "parseFloat"
+    "list" "listSize" "listGet" "listRemove" "listAppend" "map" "transpose" "zip" "foldRight"
+    "slurpFile" "lines" "split")
   "Language keywords for lbd-mode.")
 
 (defvar lbd-font-lock-keywords

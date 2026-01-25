@@ -24,7 +24,7 @@ namespace runtime::builtins {
     }
 
     NativeFunction makeSlurpFile() {
-        const std::string name = "slurp_file";
+        const std::string name = "slurpFile";
         const auto signature = functionType(
             {simpleType(type::TypeTag::String)},
             simpleType(type::TypeTag::String)

@@ -72,8 +72,8 @@ namespace runtime::builtins {
         };
     }
 
-    NativeFunction makeIfZero() {
-        const std::string name = "if_zero";
+    NativeFunction makeNull() {
+        const std::string name = "null";
         // TODO: The return-type should be either argument-1 or argument-2.
         const auto signature = functionType(
             {
@@ -97,7 +97,7 @@ namespace runtime::builtins {
     }
 
     NativeFunction makeParseFloat() {
-        const std::string name = "parse_float";
+        const std::string name = "parseFloat";
         const auto signature = functionType(
             {simpleType(type::TypeTag::String)},
             simpleType(type::TypeTag::Float)
