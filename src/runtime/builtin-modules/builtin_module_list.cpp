@@ -339,13 +339,13 @@ namespace runtime::builtins {
     NativeFunction makeFoldRight() {
         const std::string name = "foldr";
         // TODO: Implement indexed any-type, as the type should ideally be:
-        //       (Any1 -> Any2 -> Any2) -> [Any1] -> Any2 -> Any2
+        //       (Any1 -> Any2 -> Any2) -> Any2 -> [Any1] -> Any2
         const auto signature = functionType(
             {
                 functionType({simpleType(type::TypeTag::Any), simpleType(type::TypeTag::Any)},
                              simpleType(type::TypeTag::Any)),
-                listType(),
-                simpleType(type::TypeTag::Any)
+                simpleType(type::TypeTag::Any),
+                listType()
             },
             simpleType(type::TypeTag::Any)
         );

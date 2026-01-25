@@ -214,7 +214,8 @@ namespace runtime {
         for (const auto &argument: functionApplication.arguments) {
             argumentThunks.push_back(std::make_shared<Thunk>(argument.get(), environment));
         }
-        return applyFunctionApplication(functionValue, argumentThunks, environment, functionApplication.location);
+        frontend::Location newLocation = functionApplication.location;
+        return applyFunctionApplication(functionValue, argumentThunks, environment, newLocation);
     }
 
     Value evalExpression(const frontend::Expression &expression, std::shared_ptr<Environment> environment) {
@@ -241,16 +242,7 @@ namespace runtime {
         return thunk;
     }
 
-    std::vector<Value> forceArguments(const std::vector<std::shared_ptr<Thunk> > &arguments) {
-        std::vector<Value> values;
-        values.reserve(arguments.size());
-        for (const auto &argument: arguments) {
-            values.push_back(argument->force());
-        }
-        return values;
-    }
-
-    Value applyFunctionApplication(Value functionName, const std::vector<std::shared_ptr<Thunk> > &arguments,
+    Value applyFunctionApplication(const Value &functionName, const std::vector<std::shared_ptr<Thunk> > &arguments,
                                    const std::shared_ptr<Environment> &callSiteEnvironment,
                                    const std::optional<frontend::Location> &callLocation) {
         // Local mutable copy of the args, for inserting evaluated values as Thunks when needed.
@@ -258,7 +250,7 @@ namespace runtime {
         // Frame Stack: Functions to which we are currently applying Arguments.
         // Start with the initial Function.
         std::vector<Value> frames;
-        frames.push_back(std::move(functionName));
+        frames.push_back(functionName);
         size_t index = 0; // Index of next Thunk to consume from work_args
         while (true) {
             // If there are no frames left, that's unexpected (shouldn't happen), bail.
@@ -316,17 +308,15 @@ namespace runtime {
                     for (size_t i = 0; i < arity; ++i) {
                         slice.push_back(workArguments[index + i]);
                     }
-                    // // ReSharper disable once CppTooWideScopeInitStatement
-                    // std::vector<Value> releasedValues = forceArguments(slice);
-                    // // Type-Check the function-arguments.
-                    // if (!signature.matchesArgumentTypes(releasedValues)) {
-                    //     optionsValue.logger.error(callLocation,
-                    //                               "runtime error: wrong arguments provided to native-function ",
-                    //                               nativeFunction.getName(),
-                    //                               "\n", nativeFunction.getName(), " signature: ", signature.toString());
-                    //     // TODO: Also print exactly which argument caused the error.
-                    //     //       Print the signature got, with the incorrect argument color differently.
-                    // }
+                    // Type-Check the function-arguments.
+                    if (!signature.matchesArgumentTypes(slice)) {
+                        optionsValue.logger.error(callLocation,
+                                                  "runtime error: wrong arguments provided to native-function ",
+                                                  nativeFunction.getName(),
+                                                  "\n", nativeFunction.getName(), " signature: ", signature.toString());
+                        // TODO: Also print exactly which argument caused the error.
+                        //       Print the signature got, with the incorrect argument color differently.
+                    }
                     auto [resultantValue_, resultOptions] = nativeFunction.getImplementation()(
                         slice, callSiteEnvironment);
                     if (!signature.matchesReturnType(resultantValue_)) {

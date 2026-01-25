@@ -112,7 +112,11 @@ namespace runtime::builtins {
         const std::string name = "if_zero";
         // TODO: The return-type should be either argument-1 or argument-2.
         const auto signature = functionType(
-            {simpleType(type::TypeTag::Float), simpleType(type::TypeTag::Any), simpleType(type::TypeTag::Any)},
+            {
+                simpleType(type::TypeTag::Float),
+                simpleType(type::TypeTag::Any, false),
+                simpleType(type::TypeTag::Any, false)
+            },
             simpleType(type::TypeTag::Any)
         );
         return {
@@ -121,8 +125,7 @@ namespace runtime::builtins {
                 const Value &conditionValue = arguments[0]->force();
                 if (!std::holds_alternative<double>(conditionValue)) {
                     optionsValue.logger.error({}, "runtime error: wrong arguments provided to native function ", name,
-                                              "\n", name,
-                                              " signature: Float -> A -> B -> A|B\n"
+                                              "\n", name, " signature: Float -> A -> B -> A|B\n"
                                               "runtime error: expected <double> got ", conditionValue);
                 }
                 // Lazy branching: only force the chosen clause.

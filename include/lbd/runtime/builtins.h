@@ -1,8 +1,8 @@
 #pragma once
 
+#include <lbd/options.h>
 #include <lbd/runtime/interpreter.h>
 #include <lbd/runtime/type.h>
-#include <lbd/options.h>
 
 namespace runtime::builtins {
     extern context::Options optionsValue;
@@ -10,21 +10,12 @@ namespace runtime::builtins {
     /// Helper functions to make defining native-functions easier.
     using TypePointer = std::shared_ptr<type::Type>;
 
-    inline TypePointer simpleType(type::TypeTag tag) {
-        return std::make_shared<type::SimpleType>(tag);
-    }
+    TypePointer simpleType(type::TypeTag tag, bool hardCheck = true);
 
-    inline TypePointer listType() {
-        return std::make_shared<type::ListType>();
-    }
+    TypePointer listType();
 
-    inline std::shared_ptr<type::FunctionType> functionType(const std::vector<TypePointer> &argumentTypes,
-                                                            const TypePointer &returnType,
-                                                            bool isVariadic = false) {
-        return std::make_shared<type::FunctionType>(argumentTypes, returnType, isVariadic);
-    }
-
-    // TODO: Move the definitions to source-file.
+    std::shared_ptr<type::FunctionType> functionType(const std::vector<TypePointer> &argumentTypes,
+                                                     const TypePointer &returnType, bool isVariadic = false);
 
     // TODO: Generate the SIGNATURE documentation on-demand, rather than editing it manually.
 

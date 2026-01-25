@@ -43,7 +43,12 @@ namespace runtime::type {
         }
     }
 
-    SimpleType::SimpleType(const TypeTag tag) : tag(tag) {
+    bool Type::allowsHardCheck() const {
+        return hardCheck;
+    }
+
+    SimpleType::SimpleType(const TypeTag tag, const bool hardCheck) : tag(tag) {
+        this->hardCheck = hardCheck;
     }
 
     bool SimpleType::matches(const Value &value) const {
@@ -51,6 +56,9 @@ namespace runtime::type {
     }
 
     bool SimpleType::equals(const Type &otherType) const {
+        if (tag == TypeTag::Any) {
+            return true;
+        }
         if (const auto *otherSimpleType = dynamic_cast<const SimpleType *>(&otherType)) {
             return tag == otherSimpleType->tag;
         }
@@ -99,21 +107,31 @@ namespace runtime::type {
 
 
     bool FunctionType::matches(const Value &value) const {
-        // Only type-check function-applications, cannot type-check
-        // closures/lambda-expressions due to lazy-evaluation.
+        // TODO: Revisit this.
+        // Cannot type-check closures due to lazy-evaluation, thus assuming it to be equal.
+        if (std::holds_alternative<Closure>(value)) {
+            return true;
+        }
         if (!std::holds_alternative<std::shared_ptr<NativeFunction> >(value)) {
             return false;
         }
         return equals(*std::get<std::shared_ptr<NativeFunction> >(value)->getSignature());
     }
 
-    bool FunctionType::matchesArgumentTypes(const std::vector<Value> &values) const {
+    bool FunctionType::matchesArgumentTypes(const std::vector<std::shared_ptr<Thunk> > &thunks) const {
         // Perform size-check on non-variadic-functions.
-        if (!isVariadic && argumentTypes.size() != values.size()) {
+        if (!isVariadic && argumentTypes.size() != thunks.size()) {
             return false;
         }
         for (size_t index = 0; index < argumentTypes.size(); index++) {
-            if (!argumentTypes[index] || !argumentTypes[index]->matches(values[index])) {
+            if (!argumentTypes[index]) {
+                return false;
+            }
+            if (!argumentTypes[index]->allowsHardCheck()) {
+                // TODO: Perform soft-check using thunk's unevaluated expression.
+                continue;
+            }
+            if (!argumentTypes[index]->matches(thunks[index]->force())) {
                 return false;
             }
         }
@@ -154,15 +172,15 @@ namespace runtime::type {
         std::ostringstream outputStringStream;
         for (auto &argumentType: argumentTypes) {
             if (argumentType->isCallable()) {
-                outputStringStream << "(" << argumentType->toString() << ") ";
+                outputStringStream << "(" << argumentType->toString() << ") -> ";
             } else {
-                outputStringStream << argumentType->toString() << " ";
+                outputStringStream << argumentType->toString() << " -> ";
             }
         }
         if (returnType->isCallable()) {
-            outputStringStream << "(" << returnType->toString() << ") ";
+            outputStringStream << "(" << returnType->toString() << ")";
         } else {
-            outputStringStream << returnType->toString() << " ";
+            outputStringStream << returnType->toString();
         }
         return outputStringStream.str();
     }

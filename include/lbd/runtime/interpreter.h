@@ -58,7 +58,6 @@ namespace runtime {
     struct ResultOptions {
         bool sideEffects = false;
 
-        // TODO: _ may not be needed here
         void interpolate(const ResultOptions &resultOptions);
     };
 
@@ -128,7 +127,7 @@ namespace runtime {
 
     std::vector<Value> forceArguments(const std::vector<std::shared_ptr<Thunk> > &arguments);
 
-    Value applyFunctionApplication(Value functionName, const std::vector<std::shared_ptr<Thunk> > &arguments,
+    Value applyFunctionApplication(const Value &functionName, const std::vector<std::shared_ptr<Thunk> > &arguments,
                                    const std::shared_ptr<Environment> &callSiteEnvironment,
                                    const std::optional<frontend::Location> &callLocation = std::nullopt);
 

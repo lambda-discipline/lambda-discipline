@@ -39,10 +39,16 @@ namespace runtime::type {
         [[nodiscard]] virtual std::string toString() const = 0;
 
         [[nodiscard]] virtual bool isCallable() const = 0;
+
+        [[nodiscard]] bool allowsHardCheck() const;
+
+    protected:
+        /// Do not force the thunk for type-checking if disabled, check using the thunk's unevaluated-expression.
+        bool hardCheck = true;
     };
 
     struct SimpleType final : Type {
-        explicit SimpleType(TypeTag tag);
+        explicit SimpleType(TypeTag tag, bool hardCheck = true);
 
         ~SimpleType() override = default;
 
@@ -72,7 +78,6 @@ namespace runtime::type {
     };
 
     struct FunctionType final : Type {
-        // TODO: Add support for void return-type. Maybe if return-type is nullptr: then it is void.
         explicit FunctionType(const std::vector<std::shared_ptr<Type> > &argumentTypes,
                               const std::shared_ptr<Type> &returnType, bool isVariadic = false);
 
@@ -82,7 +87,7 @@ namespace runtime::type {
 
         [[nodiscard]] bool matches(const Value &value) const override;
 
-        [[nodiscard]] bool matchesArgumentTypes(const std::vector<Value> &values) const;
+        [[nodiscard]] bool matchesArgumentTypes(const std::vector<std::shared_ptr<Thunk> > &thunks) const;
 
         [[nodiscard]] bool matchesReturnType(const Value &value) const;
 
