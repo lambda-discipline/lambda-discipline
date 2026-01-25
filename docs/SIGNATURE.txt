@@ -1,0 +1,20 @@
+add: Float -> Float -> Float
+sub: Float -> Float -> Float
+mul: Float -> Float -> Float
+cmp: Float -> Float -> Float
+null: Float -> Any -> Any -> Any
+parseFloat: String -> Float
+list: Any -> []
+listSize: [] -> Float
+listGet: [] -> Float -> Any
+listRemove: [] -> Float -> Any
+listAppend: [] -> Any -> Void
+map: (Any -> Any) -> [] -> []
+transpose: [] -> []
+sort: [] -> []
+zip: [] -> []
+foldRight: (Any -> Any -> Any) -> Any -> [] -> Any
+print: Any -> Void
+slurpFile: String -> String
+lines: String -> []
+split: String -> String -> []

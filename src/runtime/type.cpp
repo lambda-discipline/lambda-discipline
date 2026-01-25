@@ -177,10 +177,14 @@ namespace runtime::type {
                 outputStringStream << argumentType->toString() << " -> ";
             }
         }
-        if (returnType->isCallable()) {
-            outputStringStream << "(" << returnType->toString() << ")";
+        if (returnType) {
+            if (returnType->isCallable()) {
+                outputStringStream << "(" << returnType->toString() << ")";
+            } else {
+                outputStringStream << returnType->toString();
+            }
         } else {
-            outputStringStream << returnType->toString();
+            outputStringStream << "Void";
         }
         return outputStringStream.str();
     }

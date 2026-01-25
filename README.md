@@ -112,8 +112,12 @@ lbd [options]
 -f, --file <filepath>   Specify input source filepath to run
 -h, --help              Show this help message and exit
 -d, --debug             Enable debug mode
--r, --repl              Run in interactive REPL mode
+-r, --repl              Run in interactive REPL node
+--docs                  Generate language-reference-document
 ```
+
+> Generate the language-reference-document by using the `--docs` flag, and use it as the source of truth for
+> native-function-signatures.
 
 ## Editor Plugins
 
@@ -126,4 +130,4 @@ lbd [options]
 - TODO: Fix tests output in README.
 - TODO: Step debug kind of functionality in REPL. Inside REPL, while loading a file, load one expression at a time and
   provide user with some feedback and actions to perform.
-- TODO: Make a pre-commit-hook which does not allow to push to master, if the tests are failing.
+- TODO: Make a pre-commit-hook which does not allow to push to master, if the tests are failing. Additionally, test whether the `docs/SIGNATURE.txt` is up-to-date or not.

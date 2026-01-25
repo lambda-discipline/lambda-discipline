@@ -10,9 +10,10 @@ namespace cmd {
         bool showHelp = false;
         bool repl = false;
         bool debug = false;
+        bool generateDocs = false;
     };
 
-    void printHelp(std::ostream &os, const std::string &programName);
+    void printHelp(std::ostream &outputStream, const std::string &programName);
 
     Options parseArguments(int argc, char **argv, const std::string &programName);
 }

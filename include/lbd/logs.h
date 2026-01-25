@@ -1,9 +1,9 @@
 #pragma once
 
 #include <optional>
+#include <lbd/exceptions.h>
 #include <lbd/frontend/location.h>
 #include <lbd/utils/terminal.h>
-#include <lbd/exceptions.h>
 
 namespace logs {
     struct Logger {
