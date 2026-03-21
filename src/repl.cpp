@@ -12,47 +12,60 @@
 
 // TODO: Option :t for display type information of a symbol.
 
-namespace repl {
+namespace repl
+{
     static context::Options optionsValue;
 
-    static void processLoadCommand(const std::string &argument,
-                                   std::optional<std::shared_ptr<runtime::Environment> > &sharedEnvironment) {
-        const std::string &filepath = argument;
+    static void processLoadCommand(const std::string& argument,
+                                   std::optional<std::shared_ptr<runtime::Environment>>& sharedEnvironment)
+    {
+        const std::string& filepath = argument;
         context::Options subOptions = optionsValue;
         subOptions.logger.showLocation = true;
 
-        if (!std::filesystem::exists(filepath)) {
+        if (!std::filesystem::exists(filepath))
+        {
             subOptions.logger.error({}, "IO error: filepath ", filepath, " does not exist");
         }
 
         frontend::Lexer lexer = frontend::Lexer::fromFile(filepath, subOptions);
         const auto tokens = lexer.lex();
-        if (subOptions.debug) {
-            for (const auto &token: tokens) {
+        if (subOptions.debug)
+        {
+            for (const auto& token : tokens)
+            {
                 subOptions.logger.debug(token);
             }
         }
 
         frontend::Program program = frontend::Parser(tokens, subOptions).parse();
-        if (subOptions.debug) {
-            for (const auto &node: program.astNodes) {
+        if (subOptions.debug)
+        {
+            for (const auto& node : program.astNodes)
+            {
                 subOptions.logger.debug(node);
             }
         }
 
-        const std::optional<std::shared_ptr<runtime::Environment> > temporaryEnvironment = sharedEnvironment;
+        const std::optional<std::shared_ptr<runtime::Environment>> temporaryEnvironment = sharedEnvironment;
         // Merge loaded_env into shared_env
         if (const auto [loadedEnvironment, _, resultantOptions] = runtime::interpret(
-            program, temporaryEnvironment, subOptions); loadedEnvironment) {
-            if (!sharedEnvironment) {
+            program, temporaryEnvironment, subOptions); loadedEnvironment)
+        {
+            if (!sharedEnvironment)
+            {
                 sharedEnvironment = loadedEnvironment;
-            } else {
+            }
+            else
+            {
                 // Merge all Bindings from loaded_env into shared_env
-                for (const auto &[first, second]: loadedEnvironment->table) {
+                for (const auto& [first, second] : loadedEnvironment->table)
+                {
                     (*sharedEnvironment)->bind(first, second);
                 }
             }
-            if (resultantOptions.sideEffects) {
+            if (resultantOptions.sideEffects)
+            {
                 std::cout << std::endl;
             }
         }
@@ -60,16 +73,19 @@ namespace repl {
         subOptions.logger.info("info: file loaded ", filepath);
     }
 
-    static int computeParenthesisDepth(const std::string &data) {
+    static int computeParenthesisDepth(const std::string& data)
+    {
         int depth = 0;
-        for (const char c: data) {
+        for (const char c : data)
+        {
             if (c == '(') depth++;
             else if (c == ')') depth = std::max(0, depth - 1);
         }
         return depth;
     }
 
-    static std::string trim(const std::string &data) {
+    static std::string trim(const std::string& data)
+    {
         size_t start = 0;
         while (start < data.size() && std::isspace(static_cast<unsigned char>(data[start]))) start++;
         size_t end = data.size();
@@ -77,7 +93,8 @@ namespace repl {
         return data.substr(start, end - start);
     }
 
-    void loop(const bool debug) {
+    void loop(const bool debug)
+    {
         enableVirtualTerminal();
 
         static logs::Logger logger(false, true, false);
@@ -85,16 +102,21 @@ namespace repl {
 
         std::string line, buffer;
         size_t indentLevel = 0;
-        std::optional<std::shared_ptr<runtime::Environment> > sharedGlobalEnvironment = std::nullopt;
+        std::optional<std::shared_ptr<runtime::Environment>> sharedGlobalEnvironment = std::nullopt;
 
         optionsValue.logger.info("Welcome to lambda-discipline REPL.\nType :quit to exit.");
 
-        while (true) {
-            try {
+        while (true)
+        {
+            try
+            {
                 // Prompt depends on whether we are continuing a buffer
-                if (buffer.empty()) {
+                if (buffer.empty())
+                {
                     std::cout << colors::CYAN << "\n>> " << colors::RESET;
-                } else {
+                }
+                else
+                {
                     std::cout << colors::CYAN << ".. " << colors::RESET;
                 }
                 for (size_t i = 0; i < indentLevel; i++) std::cout << "  ";
@@ -103,12 +125,14 @@ namespace repl {
 
                 // REPL arguments parsing
                 {
-                    if (line == ":q" || line == ":quit" || line == ":exit") {
+                    if (line == ":q" || line == ":quit" || line == ":exit")
+                    {
                         optionsValue.logger.info("\nexiting REPL.");
                         break;
                     }
 
-                    if (line == ":c" || line == ":clear" || line == ":cls") {
+                    if (line == ":c" || line == ":clear" || line == ":cls")
+                    {
 #ifdef _WIN32
                         std::system("cls");
 #else
@@ -117,7 +141,8 @@ namespace repl {
                         continue;
                     }
 
-                    if (line == ":h" || line == ":help" || line == ":?") {
+                    if (line == ":h" || line == ":help" || line == ":?")
+                    {
                         std::cout << std::endl;
                         printTable({"General Commands", "Argument", "Description"}, {
                                        {":q, :quit, :exit", "", "Exit the REPL"},
@@ -143,39 +168,48 @@ namespace repl {
                         continue;
                     }
 
-                    if (line == ":env" || line == ":e") {
+                    if (line == ":env" || line == ":e")
+                    {
                         std::cout << std::endl;
-                        if (sharedGlobalEnvironment) {
+                        if (sharedGlobalEnvironment)
+                        {
                             printTable({"Symbol", "Thunk"},
                                        (*sharedGlobalEnvironment)->toVector(optionsValue.forceOnEnvironmentDump),
                                        colors::GREEN);
-                        } else {
+                        }
+                        else
+                        {
                             printTable({"Symbol", "Thunk"}, {{"Empty"}}, colors::GREEN);
                         }
                         continue;
                     }
 
-                    if (line == ":reset" || line == ":r") {
+                    if (line == ":reset" || line == ":r")
+                    {
                         sharedGlobalEnvironment.reset();
                         continue;
                     }
 
-                    if (line == ":debug" || line == ":d") {
+                    if (line == ":debug" || line == ":d")
+                    {
                         optionsValue.debug = !optionsValue.debug;
                         continue;
                     }
 
-                    if (line == ":force") {
+                    if (line == ":force")
+                    {
                         optionsValue.forceOnEnvironmentDump = !optionsValue.forceOnEnvironmentDump;
                         continue;
                     }
 
-                    if (line.rfind(":load ", 0) == 0) {
+                    if (line.rfind(":load ", 0) == 0)
+                    {
                         processLoadCommand(line.substr(6), sharedGlobalEnvironment);
                         continue;
                     }
 
-                    if (line.rfind(":l ", 0) == 0) {
+                    if (line.rfind(":l ", 0) == 0)
+                    {
                         processLoadCommand(line.substr(3), sharedGlobalEnvironment);
                         continue;
                     }
@@ -186,14 +220,16 @@ namespace repl {
                 std::string trimmed = trim(line);
                 // Continue the line with trailing '`'.
                 bool continuation = !trimmed.empty() && trimmed.back() == '`';
-                if (continuation) {
+                if (continuation)
+                {
                     trimmed.pop_back();
                 }
                 buffer += trimmed + "\n";
 
-                if (continuation) {
-                    // Indent level depends on whether the current line ends with '.' after trimming and removing trailing '`'.
-                    // Additionally, it also depends upon the current parenthesis depth.
+                if (continuation)
+                {
+                    // Indent level depends on whether the current line ends with '.' after trimming
+                    // and removing trailing '`'. Additionally, it also depends upon the current parenthesis depth.
                     indentLevel = computeParenthesisDepth(buffer);
                     trimmed = trim(trimmed);
                     if (!trimmed.empty() && trimmed.back() == '.') indentLevel++;
@@ -206,28 +242,36 @@ namespace repl {
                 // Lex
                 frontend::Lexer lexerValue = frontend::Lexer::fromRepl(line, optionsValue);
                 const std::vector<frontend::token::Token> tokens = lexerValue.lex();
-                if (optionsValue.debug) {
-                    for (const auto &tok: tokens) {
+                if (optionsValue.debug)
+                {
+                    for (const auto& tok : tokens)
+                    {
                         optionsValue.logger.debug(tok);
                     }
                 }
 
                 // Parse
                 frontend::Program program = frontend::Parser(tokens, optionsValue).parse();
-                if (optionsValue.debug) {
+                if (optionsValue.debug)
+                {
                     optionsValue.logger.debug(program);
                 }
 
                 // Interpret
                 const auto [globalEnvironment, value, resultantOptions] = runtime::interpret(
                     program, sharedGlobalEnvironment, optionsValue);
-                if (resultantOptions.sideEffects) {
+                if (resultantOptions.sideEffects)
+                {
                     std::cout << std::endl;
                 }
                 std::cout << colors::GREEN << "=> " << value << colors::RESET << std::endl;
                 sharedGlobalEnvironment = globalEnvironment;
-            } catch (const ControlledExit &) {
-            } catch (const std::exception &ex) {
+            }
+            catch (const ControlledExit&)
+            {
+            }
+            catch (const std::exception& ex)
+            {
                 optionsValue.logger.error({}, "error: ", ex.what());
             }
         }
