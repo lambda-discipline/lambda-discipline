@@ -132,12 +132,3 @@ lbd [options]
 ## Editor Plugins
 
 1. [GNU Emacs](./editor-plugins/emacs)
-
-## TODO
-
-- TODO: Add better examples (e.g., Advent of Code snippets).
-- TODO: CI/CD for testing.
-- TODO: Fix tests output in README.
-- TODO: Step debug kind of functionality in REPL. Inside REPL, while loading a file, load one expression at a time and
-  provide user with some feedback and actions to perform.
-- TODO: Make a pre-commit-hook which does not allow to push to master, if the tests are failing. Additionally, test whether the `docs/SIGNATURE.txt` is up-to-date or not.
