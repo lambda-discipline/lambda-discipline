@@ -17,7 +17,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake python3
+          sudo apt-get install -y cmake
 
       - name: Configure CMake
         run: |
@@ -27,6 +27,6 @@ jobs:
         run: |
           cmake --build cmake-build-debug --config Debug
 
-      - name: Run Python tests
+      - name: Run tests
         run: |
-          python3 tests/tests.py
+          bash tests/run_tests.sh

@@ -26,11 +26,21 @@ bash ./scripts/setup.sh
 . .\scripts\setup.ps1
 ```
 
-### Tests
+### Run Golden Tests
+
+#### GNU/Linux
+
+```bash
+bash ./tests/run_tests.sh
+```
+
+#### Windows
 
 ```powershell
-python tests/tests.py
+python .\tests\tests.py
 ```
+
+> Depricated.
 
 ## Samples
 
