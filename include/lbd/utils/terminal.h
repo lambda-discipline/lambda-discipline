@@ -54,7 +54,7 @@ inline void printTable(const std::vector<std::string> &headers, const std::vecto
     }
     for (const auto &row: data) {
         for (size_t i = 0; i < row.size(); ++i) {
-            if (static_cast<int>(row[i].size()) > widths[i]) {
+            if (row[i].size() > widths[i]) {
                 widths[i] = row[i].size();
             }
         }
