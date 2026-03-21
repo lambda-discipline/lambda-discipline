@@ -5,13 +5,13 @@
 
 set -eu
 
-SCRIPTS_DIR_PATH=$(dirname "${BASH_SOURCE[0]}")
-ROOT_PATH=$(dirname "$SCRIPTS_DIR_PATH")
+SCRIPTS_DIR_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_PATH="$(cd "$SCRIPTS_DIR_PATH/.." && pwd)"
 BUILD_DIR="$ROOT_PATH/cmake-build-debug"
+VENV_DIR="$ROOT_PATH/venv"
 
 # Install dependencies.
-# TODO: Support installing dependencies in a cross platform manner.
-sudo apt-get install -y libreadline-dev
+sudo bash "$SCRIPTS_DIR_PATH/install.sh"
 
 # CMake Project Setup.
 mkdir -p "$BUILD_DIR"
@@ -20,9 +20,6 @@ cmake "$ROOT_PATH"
 cmake --build "$BUILD_DIR"
 
 # Python Environment Setup.
-cd "$ROOT_PATH"
-
-VENV_DIR="venv"
 if [[ ! -d "$VENV_DIR" ]]; then
     python3 -m venv "$VENV_DIR"
 fi
