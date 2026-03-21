@@ -14,33 +14,15 @@
 
 ### Setup
 
-#### GNU/Linux
-
 ```bash
 bash ./scripts/setup.sh
 ```
 
-#### Windows (PowerShell)
-
-```powershell
-. .\scripts\setup.ps1
-```
-
 ### Run Golden Tests
-
-#### GNU/Linux
 
 ```bash
 bash ./tests/run_tests.sh
 ```
-
-#### Windows
-
-```powershell
-python .\tests\tests.py
-```
-
-> Depricated.
 
 ## Samples
 
@@ -132,3 +114,7 @@ lbd [options]
 ## Editor Plugins
 
 1. [GNU Emacs](./editor-plugins/emacs)
+
+## Dependencies
+
+1. [readline](https://tiswww.case.edu/php/chet/readline/rltop.html): For better REPL user experience.

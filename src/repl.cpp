@@ -7,8 +7,11 @@
 #include <lbd/frontend/parser.h>
 #include <lbd/runtime/interpreter.h>
 #include <lbd/exceptions.h>
+#include <readline/readline.h>
+#include <readline/history.h>
 
-#define onOrOff(val) ((val) ? "on " : "off")
+#define ON_OR_OFF(val) ((val) ? "on " : "off")
+#define LBD_HISTORY ".lbd_history"
 
 // TODO: Option :t for display type information of a symbol.
 
@@ -64,10 +67,7 @@ namespace repl
                     (*sharedEnvironment)->bind(first, second);
                 }
             }
-            if (resultantOptions.sideEffects)
-            {
-                std::cout << std::endl;
-            }
+            if (resultantOptions.sideEffects) std::cout << std::endl;
         }
 
         subOptions.logger.info("info: file loaded ", filepath);
@@ -97,6 +97,9 @@ namespace repl
     {
         enableVirtualTerminal();
 
+        using_history();
+        read_history(LBD_HISTORY);
+
         static logs::Logger logger(false, true, false);
         optionsValue = {.ownExpression = true, .forceOnEnvironmentDump = false, .debug = debug, .logger = logger};
 
@@ -110,18 +113,15 @@ namespace repl
         {
             try
             {
-                // Prompt depends on whether we are continuing a buffer
-                if (buffer.empty())
-                {
-                    std::cout << colors::CYAN << "\n>> " << colors::RESET;
-                }
-                else
-                {
-                    std::cout << colors::CYAN << ".. " << colors::RESET;
-                }
+                // Prompt depends on whether we are continuing a buffer or not.
+                std::string prompt = colors::CYAN + std::string(buffer.empty() ? "\n>> " : ".. ") + colors::RESET;
                 for (size_t i = 0; i < indentLevel; i++) std::cout << "  ";
 
-                if (!std::getline(std::cin, line)) break; // EOF (C-d / C-z)
+                char* input = readline(prompt.c_str());
+                if (!input) break; // EOF (C-d / C-z)
+                if (*input) add_history(input);
+                line = std::string(input);
+                free(input);
 
                 // REPL arguments parsing
                 {
@@ -159,9 +159,9 @@ namespace repl
                                    }, colors::GREEN);
                         std::cout << std::endl;
                         printTable({"Options", "State", "Help"}, {
-                                       {"debug", onOrOff(optionsValue.debug), "use :debug to toggle"},
+                                       {"debug", ON_OR_OFF(optionsValue.debug), "use :debug to toggle"},
                                        {
-                                           "force-on-env-dump", onOrOff(optionsValue.forceOnEnvironmentDump),
+                                           "force-on-env-dump", ON_OR_OFF(optionsValue.forceOnEnvironmentDump),
                                            "use :force to toggle"
                                        }
                                    }, colors::GREEN);
@@ -275,5 +275,7 @@ namespace repl
                 optionsValue.logger.error({}, "error: ", ex.what());
             }
         }
+
+        write_history(LBD_HISTORY);
     }
 }

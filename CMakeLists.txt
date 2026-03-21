@@ -36,18 +36,22 @@ target_link_libraries(lbd PRIVATE
     lbdRuntime
 )
 
+find_package(PkgConfig REQUIRED)
+# Readline.
+pkg_check_modules(READLINE REQUIRED readline)
+target_include_directories(lbd PRIVATE ${READLINE_INCLUDE_DIRS})
+target_link_libraries(lbd PRIVATE ${READLINE_LIBRARIES})
+
 # Fully static build (platform dependent).
 option(LBD_STATIC_BUILD "Build fully static binary" OFF)
-if(LBD_STATIC_BUILD)
+if (LBD_STATIC_BUILD)
     target_link_options(lbd PRIVATE -static)
-endif()
+    # Readline depends upon ncurses.
+    target_link_libraries(lbd PRIVATE ncurses tinfo)
+endif ()
 
 # Warnings.
-if(MSVC)
-    target_compile_options(lbd PRIVATE /W4)
-else()
-    target_compile_options(lbd PRIVATE -Wall -Wextra -Wpedantic)
-endif()
+target_compile_options(lbd PRIVATE -Wall -Wextra -Wpedantic)
 
 # Tests.
 enable_testing()
