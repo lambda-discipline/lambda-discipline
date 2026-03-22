@@ -2,6 +2,7 @@
 
 #include <iostream>
 
-namespace docs {
-    void dumpDocs(std::ostream &outputStream);
+namespace lbd::docs
+{
+    void dumpDocs(std::ostream& outputStream);
 }

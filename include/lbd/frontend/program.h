@@ -1,12 +1,19 @@
 #pragma once
 
-#include <lbd/frontend/ast.h>
+#include <iostream>
 #include <vector>
+#include <lbd/frontend/ast/Ast.hpp>
 
-namespace frontend {
-    struct Program {
-        std::vector<AstNode> astNodes;
+namespace lbd::frontend
+{
+    // TODO: Remove this later.
+    class Program
+    {
+    public:
+        explicit Program(std::vector<std::unique_ptr<ast::AstNode>> nodes);
 
-        friend std::ostream &operator<<(std::ostream &outputStream, const Program &program);
+        friend std::ostream& operator<<(std::ostream& outputStream, const Program& program);
+
+        std::vector<std::unique_ptr<ast::AstNode>> astNodes;
     };
 }

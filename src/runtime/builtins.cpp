@@ -3,25 +3,30 @@
 #include <lbd/runtime/builtin-modules/builtin_module_io.h>
 #include <lbd/runtime/builtin-modules/builtin_module_list.h>
 
-// TODO: Add module system like use module io. Which dlopen's the module and loads it.
+// TODO: Add module system like use module io. Which dlopen the module and loads it.
 
-namespace runtime::builtins {
-    context::Options optionsValue;
+namespace lbd::runtime::builtins
+{
+    Options optionsValue;
 
-    TypePointer simpleType(type::TypeTag tag, bool hardCheck) {
+    TypePointer simpleType(type::TypeTag tag, bool hardCheck)
+    {
         return std::make_shared<type::SimpleType>(tag, hardCheck);
     }
 
-    TypePointer listType() {
+    TypePointer listType()
+    {
         return std::make_shared<type::ListType>();
     }
 
-    std::shared_ptr<type::FunctionType> functionType(const std::vector<TypePointer> &argumentTypes,
-                                                     const TypePointer &returnType, bool isVariadic) {
+    std::shared_ptr<type::FunctionType> functionType(const std::vector<TypePointer>& argumentTypes,
+                                                     const TypePointer& returnType, bool isVariadic)
+    {
         return std::make_shared<type::FunctionType>(argumentTypes, returnType, isVariadic);
     }
 
-    std::vector<NativeFunction> getBuiltins(const context::Options options_) {
+    std::vector<NativeFunction> getBuiltins(const Options options_)
+    {
         optionsValue = options_;
         return {
             {makeAdd()},

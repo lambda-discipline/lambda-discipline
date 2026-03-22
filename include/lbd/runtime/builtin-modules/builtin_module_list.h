@@ -2,7 +2,8 @@
 
 #include <lbd/runtime/builtins.h>
 
-namespace runtime::builtins {
+namespace lbd::runtime::builtins
+{
     NativeFunction makeList();
 
     NativeFunction makeListSize();

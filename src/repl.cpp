@@ -1,29 +1,29 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
-#include <lbd/repl.h>
-#include <lbd/utils/terminal.h>
-#include <lbd/frontend/lexer.h>
-#include <lbd/frontend/parser.h>
-#include <lbd/runtime/interpreter.h>
 #include <lbd/exceptions.h>
-#include <readline/readline.h>
+#include <lbd/repl.h>
+#include <lbd/frontend/lexer/Lexer.hpp>
+#include <lbd/frontend/parser/Parser.hpp>
+#include <lbd/runtime/interpreter.h>
+#include <lbd/utils/terminal.h>
 #include <readline/history.h>
+#include <readline/readline.h>
 
 #define ON_OR_OFF(val) ((val) ? "on " : "off")
 #define LBD_HISTORY ".lbd_history"
 
 // TODO: Option :t for display type information of a symbol.
 
-namespace repl
+namespace lbd::repl
 {
-    static context::Options optionsValue;
+    static Options optionsValue;
 
-    static void processLoadCommand(const std::string& argument,
+    static void processLoadCommand(const std::string& argument, Context& context,
                                    std::optional<std::shared_ptr<runtime::Environment>>& sharedEnvironment)
     {
         const std::string& filepath = argument;
-        context::Options subOptions = optionsValue;
+        Options subOptions = optionsValue;
         subOptions.logger.showLocation = true;
 
         if (!std::filesystem::exists(filepath))
@@ -31,24 +31,29 @@ namespace repl
             subOptions.logger.error({}, "IO error: filepath ", filepath, " does not exist");
         }
 
-        frontend::Lexer lexer = frontend::Lexer::fromFile(filepath, subOptions);
-        const auto tokens = lexer.lex();
-        if (subOptions.debug)
-        {
-            for (const auto& token : tokens)
-            {
-                subOptions.logger.debug(token);
-            }
-        }
+        const source::FileId fileId = context.getSourceManager().loadFile(filepath);
+        source::Buffer buffer(fileId, context.getSourceManager());
+        frontend::lexer::Lexer lexer(buffer, context);
 
-        frontend::Program program = frontend::Parser(tokens, subOptions).parse();
-        if (subOptions.debug)
-        {
-            for (const auto& node : program.astNodes)
-            {
-                subOptions.logger.debug(node);
-            }
-        }
+        // const auto tokens = lexer.lex();
+        // if (subOptions.debug)
+        // {
+        //     for (const auto& token : tokens)
+        //     {
+        //         subOptions.logger.debug(token);
+        //     }
+        // }
+
+        auto astNodes = frontend::parser::Parser(lexer, context).parse();
+        frontend::Program program(std::move(astNodes));
+
+        // if (subOptions.debug)
+        // {
+        //     for (const auto& node : program.astNodes)
+        //     {
+        //         subOptions.logger.debug(node);
+        //     }
+        // }
 
         const std::optional<std::shared_ptr<runtime::Environment>> temporaryEnvironment = sharedEnvironment;
         // Merge loaded_env into shared_env
@@ -93,15 +98,16 @@ namespace repl
         return data.substr(start, end - start);
     }
 
-    void loop(const bool debug)
+    void loop(Context& context, const bool debug)
     {
         enableVirtualTerminal();
 
         using_history();
         read_history(LBD_HISTORY);
 
-        static logs::Logger logger(false, true, false);
-        optionsValue = {.ownExpression = true, .forceOnEnvironmentDump = false, .debug = debug, .logger = logger};
+        static Logger logger(false, true, false);
+        optionsValue = Options(true, false, debug);
+        optionsValue.logger = logger;
 
         std::string line, buffer;
         size_t indentLevel = 0;
@@ -159,9 +165,9 @@ namespace repl
                                    }, colors::GREEN);
                         std::cout << std::endl;
                         printTable({"Options", "State", "Help"}, {
-                                       {"debug", ON_OR_OFF(optionsValue.debug), "use :debug to toggle"},
+                                       {"debug", ON_OR_OFF(optionsValue.isDebug()), "use :debug to toggle"},
                                        {
-                                           "force-on-env-dump", ON_OR_OFF(optionsValue.forceOnEnvironmentDump),
+                                           "force-on-env-dump", ON_OR_OFF(optionsValue.shouldForceOnEnvironmentDump()),
                                            "use :force to toggle"
                                        }
                                    }, colors::GREEN);
@@ -174,7 +180,8 @@ namespace repl
                         if (sharedGlobalEnvironment)
                         {
                             printTable({"Symbol", "Thunk"},
-                                       (*sharedGlobalEnvironment)->toVector(optionsValue.forceOnEnvironmentDump),
+                                       (*sharedGlobalEnvironment)->
+                                       toVector(optionsValue.shouldForceOnEnvironmentDump()),
                                        colors::GREEN);
                         }
                         else
@@ -192,25 +199,25 @@ namespace repl
 
                     if (line == ":debug" || line == ":d")
                     {
-                        optionsValue.debug = !optionsValue.debug;
+                        optionsValue.toggleDebug();
                         continue;
                     }
 
                     if (line == ":force")
                     {
-                        optionsValue.forceOnEnvironmentDump = !optionsValue.forceOnEnvironmentDump;
+                        optionsValue.toggleForceOnEnvironmentDump();
                         continue;
                     }
 
                     if (line.rfind(":load ", 0) == 0)
                     {
-                        processLoadCommand(line.substr(6), sharedGlobalEnvironment);
+                        processLoadCommand(line.substr(6), context, sharedGlobalEnvironment);
                         continue;
                     }
 
                     if (line.rfind(":l ", 0) == 0)
                     {
-                        processLoadCommand(line.substr(3), sharedGlobalEnvironment);
+                        processLoadCommand(line.substr(3), context, sharedGlobalEnvironment);
                         continue;
                     }
                 }
@@ -240,22 +247,25 @@ namespace repl
                 buffer.clear();
 
                 // Lex
-                frontend::Lexer lexerValue = frontend::Lexer::fromRepl(line, optionsValue);
-                const std::vector<frontend::token::Token> tokens = lexerValue.lex();
-                if (optionsValue.debug)
-                {
-                    for (const auto& tok : tokens)
-                    {
-                        optionsValue.logger.debug(tok);
-                    }
-                }
+                source::Buffer sourceBuffer(line);
+                frontend::lexer::Lexer lexer(sourceBuffer, context);
+
+                // if (optionsValue.debug)
+                // {
+                //     for (const auto& tok : tokens)
+                //     {
+                //         optionsValue.logger.debug(tok);
+                //     }
+                // }
 
                 // Parse
-                frontend::Program program = frontend::Parser(tokens, optionsValue).parse();
-                if (optionsValue.debug)
-                {
-                    optionsValue.logger.debug(program);
-                }
+                auto astNodes = frontend::parser::Parser(lexer, context).parse();
+                frontend::Program program(std::move(astNodes));
+
+                // if (optionsValue.debug)
+                // {
+                //     optionsValue.logger.debug(program);
+                // }
 
                 // Interpret
                 const auto [globalEnvironment, value, resultantOptions] = runtime::interpret(
@@ -267,11 +277,10 @@ namespace repl
                 std::cout << colors::GREEN << "=> " << value << colors::RESET << std::endl;
                 sharedGlobalEnvironment = globalEnvironment;
             }
-            catch (const ControlledExit&)
-            {
-            }
+            catch (const ControlledExit&) {}
             catch (const std::exception& ex)
             {
+                // TODO: This exists on error.
                 optionsValue.logger.error({}, "error: ", ex.what());
             }
         }

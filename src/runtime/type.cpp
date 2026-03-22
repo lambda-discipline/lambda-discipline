@@ -3,28 +3,44 @@
 #include <lbd/runtime/interpreter.h>
 #include <lbd/runtime/type.h>
 
-namespace runtime::type {
-    inline TypeTag typeTagFromValue(const Value &value) {
-        return std::visit([&]<typename T0>(T0 &&) -> TypeTag {
+namespace lbd::runtime::type
+{
+    inline TypeTag typeTagFromValue(const Value& value)
+    {
+        return std::visit([&]<typename T0>(T0&&) -> TypeTag
+        {
             using T = std::decay_t<T0>;
-            if constexpr (std::is_same_v<T, double>) {
+            if constexpr (std::is_same_v<T, double>)
+            {
                 return TypeTag::Float;
-            } else if constexpr (std::is_same_v<T, std::string>) {
+            }
+            else if constexpr (std::is_same_v<T, std::string>)
+            {
                 return TypeTag::String;
-            } else if constexpr (std::is_same_v<T, Closure>) {
+            }
+            else if constexpr (std::is_same_v<T, Closure>)
+            {
                 return TypeTag::Closure;
-            } else if constexpr (std::is_same_v<T, std::shared_ptr<NativeFunction> >) {
+            }
+            else if constexpr (std::is_same_v<T, std::shared_ptr<NativeFunction>>)
+            {
                 return TypeTag::NativeFunction;
-            } else if constexpr (std::is_same_v<T, std::shared_ptr<List> >) {
+            }
+            else if constexpr (std::is_same_v<T, std::shared_ptr<List>>)
+            {
                 return TypeTag::List;
-            } else {
+            }
+            else
+            {
                 return TypeTag::Any;
             }
         }, value);
     }
 
-    inline std::string typeTagToString(const TypeTag tag) {
-        switch (tag) {
+    inline std::string typeTagToString(const TypeTag tag)
+    {
+        switch (tag)
+        {
             case TypeTag::Float:
                 return "Float";
             case TypeTag::String:
@@ -43,178 +59,237 @@ namespace runtime::type {
         }
     }
 
-    bool Type::allowsHardCheck() const {
+    bool Type::allowsHardCheck() const
+    {
         return hardCheck;
     }
 
-    SimpleType::SimpleType(const TypeTag tag, const bool hardCheck) : tag(tag) {
+    SimpleType::SimpleType(const TypeTag tag, const bool hardCheck) : tag(tag)
+    {
         this->hardCheck = hardCheck;
     }
 
-    bool SimpleType::matches(const Value &value) const {
+    bool SimpleType::matches(const Value& value) const
+    {
         return tag == TypeTag::Any || tag == typeTagFromValue(value);
     }
 
-    bool SimpleType::equals(const Type &otherType) const {
-        if (tag == TypeTag::Any) {
+    bool SimpleType::equals(const Type& otherType) const
+    {
+        if (tag == TypeTag::Any)
+        {
             return true;
         }
-        if (const auto *otherSimpleType = dynamic_cast<const SimpleType *>(&otherType)) {
+        if (const auto* otherSimpleType = dynamic_cast<const SimpleType*>(&otherType))
+        {
             return tag == otherSimpleType->tag;
         }
         return false;
     }
 
-    std::string SimpleType::toString() const {
+    std::string SimpleType::toString() const
+    {
         return typeTagToString(tag);
     }
 
-    bool SimpleType::isCallable() const {
+    bool SimpleType::isCallable() const
+    {
         return false;
     }
 
-    bool ListType::matches(const Value &value) const {
+    bool ListType::matches(const Value& value) const
+    {
         return typeTagFromValue(value) == TypeTag::List;
     }
 
-    bool ListType::equals(const Type &otherType) const {
-        return dynamic_cast<const ListType *>(&otherType) != nullptr;
+    bool ListType::equals(const Type& otherType) const
+    {
+        return dynamic_cast<const ListType*>(&otherType) != nullptr;
     }
 
-    std::string ListType::toString() const {
+    std::string ListType::toString() const
+    {
         return "[]";
     }
 
-    bool ListType::isCallable() const {
+    bool ListType::isCallable() const
+    {
         return false;
     }
 
-    FunctionType::FunctionType(const std::vector<std::shared_ptr<Type> > &argumentTypes,
-                               const std::shared_ptr<Type> &returnType,
+    FunctionType::FunctionType(const std::vector<std::shared_ptr<Type>>& argumentTypes,
+                               const std::shared_ptr<Type>& returnType,
                                const bool isVariadic) : argumentTypes(argumentTypes),
-                                                        returnType(returnType), isVariadic(isVariadic) {
-        if (isVariadic) {
-            if (argumentTypes.size() != 1) {
+                                                        returnType(returnType), isVariadic(isVariadic)
+    {
+        if (isVariadic)
+        {
+            if (argumentTypes.size() != 1)
+            {
                 // TODO: Throw error
             }
             variadicType = argumentTypes[0];
         }
     }
 
-    const Type &FunctionType::getReturnType() const {
+    const Type& FunctionType::getReturnType() const
+    {
         return *returnType;
     }
 
 
-    bool FunctionType::matches(const Value &value) const {
+    bool FunctionType::matches(const Value& value) const
+    {
         // TODO: Revisit this.
         // Cannot type-check closures due to lazy-evaluation, thus assuming it to be equal.
-        if (std::holds_alternative<Closure>(value)) {
+        if (std::holds_alternative<Closure>(value))
+        {
             return true;
         }
-        if (!std::holds_alternative<std::shared_ptr<NativeFunction> >(value)) {
+        if (!std::holds_alternative<std::shared_ptr<NativeFunction>>(value))
+        {
             return false;
         }
-        return equals(*std::get<std::shared_ptr<NativeFunction> >(value)->getSignature());
+        return equals(*std::get<std::shared_ptr<NativeFunction>>(value)->getSignature());
     }
 
-    bool FunctionType::matchesArgumentTypes(const std::vector<std::shared_ptr<Thunk> > &thunks) const {
+    bool FunctionType::matchesArgumentTypes(const std::vector<std::shared_ptr<Thunk>>& thunks) const
+    {
         // Perform size-check on non-variadic-functions.
-        if (!isVariadic && argumentTypes.size() != thunks.size()) {
+        if (!isVariadic && argumentTypes.size() != thunks.size())
+        {
             return false;
         }
-        for (size_t index = 0; index < argumentTypes.size(); index++) {
-            if (!argumentTypes[index]) {
+        for (size_t index = 0; index < argumentTypes.size(); index++)
+        {
+            if (!argumentTypes[index])
+            {
                 return false;
             }
-            if (!argumentTypes[index]->allowsHardCheck()) {
+            if (!argumentTypes[index]->allowsHardCheck())
+            {
                 // TODO: Perform soft-check using thunk's unevaluated expression.
                 continue;
             }
-            if (!argumentTypes[index]->matches(thunks[index]->force())) {
+            if (!argumentTypes[index]->matches(thunks[index]->force()))
+            {
                 return false;
             }
         }
         return true;
     }
 
-    bool FunctionType::matchesReturnType(const Value &value) const {
+    bool FunctionType::matchesReturnType(const Value& value) const
+    {
         // If the return-type is nullptr, i.e., return-type is void.
         // Do not perform any check in such scenario.
         return returnType ? returnType->matches(value) : true;
     }
 
-    bool FunctionType::equals(const Type &otherType) const {
-        const auto *otherFunctionType = dynamic_cast<const FunctionType *>(&otherType);
-        if (!otherFunctionType) {
+    bool FunctionType::equals(const Type& otherType) const
+    {
+        const auto* otherFunctionType = dynamic_cast<const FunctionType*>(&otherType);
+        if (!otherFunctionType)
+        {
             return false;
         }
         // Perform size-check on non-variadic-functions.
-        if (!isVariadic && argumentTypes.size() != otherFunctionType->argumentTypes.size()) {
+        if (!isVariadic && argumentTypes.size() != otherFunctionType->argumentTypes.size())
+        {
             return false;
         }
-        for (size_t index = 0; index < argumentTypes.size(); index++) {
-            const auto &leftType = isVariadic ? variadicType : argumentTypes[index];
+        for (size_t index = 0; index < argumentTypes.size(); index++)
+        {
+            const auto& leftType = isVariadic ? variadicType : argumentTypes[index];
             // ReSharper disable once CppTooWideScopeInitStatement
-            const auto &rightType = otherFunctionType->argumentTypes[index];
-            if (!leftType || !rightType || !leftType->equals(*rightType)) {
+            const auto& rightType = otherFunctionType->argumentTypes[index];
+            if (!leftType || !rightType || !leftType->equals(*rightType))
+            {
                 return false;
             }
         }
-        if (returnType) {
+        if (returnType)
+        {
             return otherFunctionType->returnType && returnType->equals(*otherFunctionType->returnType);
         }
         // Return-Type is nullptr i.e., void.
         return true;
     }
 
-    std::string FunctionType::toString() const {
+    std::string FunctionType::toString() const
+    {
         std::ostringstream outputStringStream;
-        for (auto &argumentType: argumentTypes) {
-            if (argumentType->isCallable()) {
+        for (auto& argumentType : argumentTypes)
+        {
+            if (argumentType->isCallable())
+            {
                 outputStringStream << "(" << argumentType->toString() << ") -> ";
-            } else {
+            }
+            else
+            {
                 outputStringStream << argumentType->toString() << " -> ";
             }
         }
-        if (returnType) {
-            if (returnType->isCallable()) {
+        if (returnType)
+        {
+            if (returnType->isCallable())
+            {
                 outputStringStream << "(" << returnType->toString() << ")";
-            } else {
+            }
+            else
+            {
                 outputStringStream << returnType->toString();
             }
-        } else {
+        }
+        else
+        {
             outputStringStream << "Void";
         }
         return outputStringStream.str();
     }
 
-    bool FunctionType::isCallable() const {
+    bool FunctionType::isCallable() const
+    {
         return true;
     }
 
-    int FunctionType::arity() const {
-        if (isVariadic) {
+    int FunctionType::arity() const
+    {
+        if (isVariadic)
+        {
             return -1;
         }
         return static_cast<int>(argumentTypes.size());
     }
 
-    std::shared_ptr<Type> typeFromValue(const Value &value) {
-        return std::visit([&]<typename T0>(T0 &&) -> std::shared_ptr<Type> {
+    std::shared_ptr<Type> typeFromValue(const Value& value)
+    {
+        return std::visit([&]<typename T0>(T0&&) -> std::shared_ptr<Type>
+        {
             using T = std::decay_t<T0>;
-            if constexpr (std::is_same_v<T, double>) {
+            if constexpr (std::is_same_v<T, double>)
+            {
                 return std::make_shared<SimpleType>(TypeTag::Float);
-            } else if constexpr (std::is_same_v<T, std::string>) {
+            }
+            else if constexpr (std::is_same_v<T, std::string>)
+            {
                 return std::make_shared<SimpleType>(TypeTag::String);
-            } else if constexpr (std::is_same_v<T, Closure>) {
+            }
+            else if constexpr (std::is_same_v<T, Closure>)
+            {
                 return std::make_shared<SimpleType>(TypeTag::Closure);
-            } else if constexpr (std::is_same_v<T, std::shared_ptr<NativeFunction> >) {
-                const auto &nativeFunction = *std::get<std::shared_ptr<NativeFunction> >(value);
+            }
+            else if constexpr (std::is_same_v<T, std::shared_ptr<NativeFunction>>)
+            {
+                const auto& nativeFunction = *std::get<std::shared_ptr<NativeFunction>>(value);
                 return std::make_shared<FunctionType>(*nativeFunction.getSignature());
-            } else if constexpr (std::is_same_v<T, std::shared_ptr<List> >) {
+            }
+            else if constexpr (std::is_same_v<T, std::shared_ptr<List>>)
+            {
                 return std::make_shared<ListType>();
-            } else {
+            }
+            else
+            {
                 return std::make_shared<SimpleType>(TypeTag::Any);
             }
         }, value);

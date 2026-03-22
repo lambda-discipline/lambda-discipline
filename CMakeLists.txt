@@ -1,9 +1,17 @@
 cmake_minimum_required(VERSION 3.20)
 project(lambda-discipline)
 
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+
+###### SOURCE ######
+file(GLOB_RECURSE SOURCE_SOURCE_FILES CONFIGURE_DEPENDS
+    ${PROJECT_SOURCE_DIR}/src/source/*.cpp
+)
+add_library(lbdSource STATIC)
+target_sources(lbdSource PRIVATE ${SOURCE_SOURCE_FILES})
+target_include_directories(lbdSource PUBLIC ${PROJECT_SOURCE_DIR}/include)
 
 ####### FRONTEND #######
 file(GLOB_RECURSE FRONTEND_SOURCE_FILES CONFIGURE_DEPENDS
@@ -11,6 +19,9 @@ file(GLOB_RECURSE FRONTEND_SOURCE_FILES CONFIGURE_DEPENDS
 )
 add_library(lbdFrontend STATIC)
 target_sources(lbdFrontend PRIVATE ${FRONTEND_SOURCE_FILES})
+target_link_libraries(lbdFrontend PUBLIC
+    lbdSource
+)
 target_include_directories(lbdFrontend PUBLIC
     ${PROJECT_SOURCE_DIR}/include
 )
@@ -21,6 +32,9 @@ file(GLOB_RECURSE RUNTIME_SOURCE_FILES CONFIGURE_DEPENDS
 )
 add_library(lbdRuntime STATIC)
 target_sources(lbdRuntime PRIVATE ${RUNTIME_SOURCE_FILES})
+target_link_libraries(lbdRuntime PUBLIC
+    lbdSource
+)
 target_include_directories(lbdRuntime PUBLIC
     ${PROJECT_SOURCE_DIR}/include
 )

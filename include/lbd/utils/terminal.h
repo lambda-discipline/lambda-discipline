@@ -1,32 +1,37 @@
 #pragma once
 
-#include <iostream>
 #include <iomanip>
+#include <iostream>
 #include <vector>
 
 #if defined(_WIN32)
 #include <windows.h>
 #endif
 
-inline bool enableVirtualTerminal() {
+inline bool enableVirtualTerminal()
+{
 #if defined(_WIN32)
     const HANDLE output_handle = GetStdHandle(STD_OUTPUT_HANDLE); // NOLINT(*-misplaced-const)
-    if (output_handle == INVALID_HANDLE_VALUE) {
+    if (output_handle == INVALID_HANDLE_VALUE)
+    {
         return false;
     }
     DWORD dwMode = 0;
-    if (!GetConsoleMode(output_handle, &dwMode)) {
+    if (!GetConsoleMode(output_handle, &dwMode))
+    {
         return false;
     }
     dwMode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
-    if (!SetConsoleMode(output_handle, dwMode)) {
+    if (!SetConsoleMode(output_handle, dwMode))
+    {
         return false;
     }
 #endif
     return true;
 }
 
-namespace colors {
+namespace colors
+{
     constexpr auto RESET = "\033[0m";
     constexpr auto RED = "\033[31m";
     constexpr auto GREEN = "\033[32m";
@@ -37,34 +42,43 @@ namespace colors {
     constexpr auto GREY = "\033[38;5;200m";
 }
 
-inline void printTableRow(const std::vector<std::string> &row, const std::vector<size_t> &widths,
-                          const std::string &color = "") {
+inline void printTableRow(const std::vector<std::string>& row, const std::vector<size_t>& widths,
+                          const std::string& color = "")
+{
     std::cout << color;
-    for (size_t i = 0; i < row.size(); ++i) {
+    for (size_t i = 0; i < row.size(); ++i)
+    {
         std::cout << std::setw(static_cast<int>(widths[i])) << std::left << row[i] << "  ";
     }
     std::cout << colors::RESET << std::endl;
 }
 
-inline void printTable(const std::vector<std::string> &headers, const std::vector<std::vector<std::string> > &data,
-                       const std::string &color = colors::CYAN) {
+inline void printTable(const std::vector<std::string>& headers, const std::vector<std::vector<std::string>>& data,
+                       const std::string& color = colors::CYAN)
+{
     std::vector<size_t> widths(headers.size(), 0);
-    for (size_t i = 0; i < headers.size(); ++i) {
+    for (size_t i = 0; i < headers.size(); ++i)
+    {
         widths[i] = headers[i].size();
     }
-    for (const auto &row: data) {
-        for (size_t i = 0; i < row.size(); ++i) {
-            if (row[i].size() > widths[i]) {
+    for (const auto& row : data)
+    {
+        for (size_t i = 0; i < row.size(); ++i)
+        {
+            if (row[i].size() > widths[i])
+            {
                 widths[i] = row[i].size();
             }
         }
     }
     printTableRow(headers, widths, color);
-    for (size_t i = 0; i < headers.size(); ++i) {
+    for (size_t i = 0; i < headers.size(); ++i)
+    {
         std::cout << std::string(widths[i], '-') << "  ";
     }
     std::cout << std::endl;
-    for (const auto &row: data) {
+    for (const auto& row : data)
+    {
         printTableRow(row, widths);
     }
 }

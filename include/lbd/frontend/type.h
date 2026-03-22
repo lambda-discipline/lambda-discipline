@@ -4,9 +4,12 @@
 #include <string>
 #include <variant>
 
-namespace interpreter::type {
-    struct PrimitiveType {
-        enum class Type {
+namespace interpreter::type
+{
+    struct PrimitiveType
+    {
+        enum class Type
+        {
             Float,
             String,
             Custom,
@@ -16,19 +19,20 @@ namespace interpreter::type {
         Type type;
         std::string custom;
 
-        friend std::ostream &operator<<(std::ostream &stream, const PrimitiveType &type);
+        friend std::ostream& operator<<(std::ostream& stream, const PrimitiveType& type);
     };
 
     struct CompoundType;
 
-    using Type = std::variant<PrimitiveType, std::shared_ptr<CompoundType> >;
+    using Type = std::variant<PrimitiveType, std::shared_ptr<CompoundType>>;
 
-    struct CompoundType {
+    struct CompoundType
+    {
         PrimitiveType leftType;
         Type rightType;
 
-        friend std::ostream &operator<<(std::ostream &stream, const CompoundType &type);
+        friend std::ostream& operator<<(std::ostream& stream, const CompoundType& type);
     };
 
-    std::ostream &operator<<(std::ostream &stream, const Type &type);
+    std::ostream& operator<<(std::ostream& stream, const Type& type);
 }

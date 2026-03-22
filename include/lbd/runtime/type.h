@@ -4,17 +4,20 @@
 #include <string>
 #include <vector>
 
-/// These are runtime-types different from frontend::type.
+// These are runtime-types different from frontend::type.
 
-/// Forward declaration of value-structure, cannot import directly due to circular-dependency.
-namespace runtime {
+// Forward declaration of value-structure, cannot import directly due to circular-dependency.
+namespace lbd::runtime
+{
     struct Value;
 }
 
 // TODO: Maybe move instead of copying the reference.
 
-namespace runtime::type {
-    enum class TypeTag {
+namespace lbd::runtime::type
+{
+    enum class TypeTag
+    {
         Float,
         String,
         Closure,
@@ -23,18 +26,19 @@ namespace runtime::type {
         Any
     };
 
-    [[nodiscard]] TypeTag typeTagFromValue(const Value &value);
+    [[nodiscard]] TypeTag typeTagFromValue(const Value& value);
 
     [[nodiscard]] std::string typeTagToString(TypeTag tag);
 
     // TODO: Implement move-constructor and possibly move-assignment-operator.
     // TODO: Overload operator<< for printing.
-    struct Type {
+    struct Type
+    {
         virtual ~Type() = default;
 
-        [[nodiscard]] virtual bool matches(const Value &value) const = 0;
+        [[nodiscard]] virtual bool matches(const Value& value) const = 0;
 
-        [[nodiscard]] virtual bool equals(const Type &otherType) const = 0;
+        [[nodiscard]] virtual bool equals(const Type& otherType) const = 0;
 
         [[nodiscard]] virtual std::string toString() const = 0;
 
@@ -47,14 +51,15 @@ namespace runtime::type {
         bool hardCheck = true;
     };
 
-    struct SimpleType final : Type {
+    struct SimpleType final : Type
+    {
         explicit SimpleType(TypeTag tag, bool hardCheck = true);
 
         ~SimpleType() override = default;
 
-        [[nodiscard]] bool matches(const Value &value) const override;
+        [[nodiscard]] bool matches(const Value& value) const override;
 
-        [[nodiscard]] bool equals(const Type &otherType) const override;
+        [[nodiscard]] bool equals(const Type& otherType) const override;
 
         [[nodiscard]] std::string toString() const override;
 
@@ -65,33 +70,35 @@ namespace runtime::type {
     };
 
     // TODO: List should not have element-type, as we can add any type to it.
-    struct ListType final : Type {
+    struct ListType final : Type
+    {
         ~ListType() override = default;
 
-        [[nodiscard]] bool matches(const Value &value) const override;
+        [[nodiscard]] bool matches(const Value& value) const override;
 
-        [[nodiscard]] bool equals(const Type &otherType) const override;
+        [[nodiscard]] bool equals(const Type& otherType) const override;
 
         [[nodiscard]] std::string toString() const override;
 
         [[nodiscard]] bool isCallable() const override;
     };
 
-    struct FunctionType final : Type {
-        explicit FunctionType(const std::vector<std::shared_ptr<Type> > &argumentTypes,
-                              const std::shared_ptr<Type> &returnType, bool isVariadic = false);
+    struct FunctionType final : Type
+    {
+        explicit FunctionType(const std::vector<std::shared_ptr<Type>>& argumentTypes,
+                              const std::shared_ptr<Type>& returnType, bool isVariadic = false);
 
         ~FunctionType() override = default;
 
-        [[nodiscard]] const Type &getReturnType() const;
+        [[nodiscard]] const Type& getReturnType() const;
 
-        [[nodiscard]] bool matches(const Value &value) const override;
+        [[nodiscard]] bool matches(const Value& value) const override;
 
-        [[nodiscard]] bool matchesArgumentTypes(const std::vector<std::shared_ptr<Thunk> > &thunks) const;
+        [[nodiscard]] bool matchesArgumentTypes(const std::vector<std::shared_ptr<Thunk>>& thunks) const;
 
-        [[nodiscard]] bool matchesReturnType(const Value &value) const;
+        [[nodiscard]] bool matchesReturnType(const Value& value) const;
 
-        [[nodiscard]] bool equals(const Type &otherType) const override;
+        [[nodiscard]] bool equals(const Type& otherType) const override;
 
         [[nodiscard]] std::string toString() const override;
 
@@ -100,11 +107,11 @@ namespace runtime::type {
         [[nodiscard]] int arity() const;
 
     private:
-        std::vector<std::shared_ptr<Type> > argumentTypes;
+        std::vector<std::shared_ptr<Type>> argumentTypes;
         std::shared_ptr<Type> returnType;
         bool isVariadic;
         std::shared_ptr<Type> variadicType;
     };
 
-    [[nodiscard]] std::shared_ptr<Type> typeFromValue(const Value &value);
+    [[nodiscard]] std::shared_ptr<Type> typeFromValue(const Value& value);
 }
