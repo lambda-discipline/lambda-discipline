@@ -15,7 +15,7 @@
 ### Setup
 
 ```bash
-bash ./scripts/setup.sh
+bash ./scripts/build.sh
 ```
 
 ### Run Golden Tests

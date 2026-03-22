@@ -14,18 +14,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install dependencies
-        run: |
-          sudo bash scripts/install.sh
-
-      - name: Configure CMake
-        run: |
-          cmake -S . -B cmake-build-debug -DCMAKE_BUILD_TYPE=Debug
-
       - name: Build
         run: |
-          cmake --build cmake-build-debug --config Debug
+          bash scripts/build.sh Debug
 
-      - name: Run tests
+      - name: Run Golden Tests
         run: |
           bash tests/run_tests.sh
