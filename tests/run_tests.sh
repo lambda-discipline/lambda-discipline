@@ -1,25 +1,22 @@
 #!/usr/bin/env bash
 set -eu
 
-LBD="cmake-build-debug/lbd"
-TESTS_DIR_PATH=$(dirname "${BASH_SOURCE[0]}")
-IGNORE_FILE_PATH="$TESTS_DIR_PATH/ignore_tests.list"
+TESTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "$TESTS_DIR/.." && pwd)"
+LBD="$ROOT_DIR/cmake-build-debug/lbd"
+IGNORE_FILE="$TESTS_DIR/ignore_tests.list"
 
 # Enable colored output, when inside TTY mode.
 if [ -t 1 ]; then
     RED="\033[0;31m"
     GREEN="\033[1;32m"
-    YELLOW="\033[1;33m"
     BLUE="\033[0;34m"
-    CYAN="\033[0;36m"
     GRAY="\033[0;90m"
     RESET="\033[0m"
 else
     RED=""
     GREEN=""
-    YELLOW=""
     BLUE=""
-    CYAN=""
     GRAY=""
     RESET=""
 fi
@@ -39,7 +36,7 @@ while read -r source; do
     total=$((total+1))
 
     # If file is present inside ignore list; then continue.
-    if [ -f "$IGNORE_FILE_PATH" ] && grep -Fxq "$source" "$IGNORE_FILE_PATH"; then
+    if [ -f "$IGNORE_FILE" ] && grep -Fxq "$source" "$IGNORE_FILE"; then
         log_note "Skipping tests for \"$source\"."
         skipped=$((skipped+1))
         continue

@@ -5,18 +5,18 @@
 
 set -eu
 
-SCRIPTS_DIR_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT_PATH="$(cd "$SCRIPTS_DIR_PATH/.." && pwd)"
-BUILD_DIR="$ROOT_PATH/cmake-build-debug"
-VENV_DIR="$ROOT_PATH/venv"
+SCRIPTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "$SCRIPTS_DIR/.." && pwd)"
+BUILD_DIR="$ROOT_DIR/cmake-build-debug"
+VENV_DIR="$ROOT_DIR/venv"
 
 # Install dependencies.
-sudo bash "$SCRIPTS_DIR_PATH/install.sh"
+sudo bash "$SCRIPTS_DIR/install.sh"
 
 # CMake Project Setup.
 mkdir -p "$BUILD_DIR"
 cd "$BUILD_DIR"
-cmake "$ROOT_PATH"
+cmake "$ROOT_DIR"
 cmake --build "$BUILD_DIR"
 
 # Python Environment Setup.
