@@ -1,31 +1,37 @@
 #include <filesystem>
-#include <lbd/frontend/location.h>
+#include <fmt/core.h>
+#include <lbd/diagnostics/ContextGuard.hpp>
 #include <lbd/frontend/lexer/Lexer.hpp>
 #include <lbd/frontend/parser/Parser.hpp>
 
 namespace lbd::frontend::parser
 {
-    Parser::Parser(lexer::Lexer& lexer, Context& context) : context(context), lexer(lexer) {}
+    Parser::Parser(Context& context, lexer::Lexer& lexer) noexcept : context(context), lexer(lexer) {}
 
-    std::vector<std::unique_ptr<ast::AstNode>> Parser::parse() const
+    std::vector<std::unique_ptr<ast::AstNode>> Parser::parse() const noexcept
     {
         std::vector<std::unique_ptr<ast::AstNode>> astNodes;
+
+        // Adding Context Guard for diagnostics.
+        diagnostics::ContextGuard contextGuard(
+            context.getDiagnosticEmitter(),
+            lexer.peek().range,
+            fmt::format("While parsing `{}`.", lexer.getBuffer().name));
+
         while (lexer.hasNext())
         {
-            // std::cout << "Parsing: " << lexer.peek() << std::endl;
-            switch (lexer.peek().getKind())
+            switch (lexer.peek().kind)
             {
                 case token::TokenKind::IDENTIFIER:
                     {
-                        if (lexer.peek().getLexeme() == "use")
+                        if (lexer.peek().lexeme == "use")
                         {
                             lexer.advance();
                             assertToken(token::TokenKind::STRING);
-                            std::string path(lexer.next().getLexeme());
-                            for (auto includedAstNodes = parseFile(path); auto& astNode : includedAstNodes)
-                            {
-                                astNodes.emplace_back(std::move(astNode));
-                            }
+                            std::string path(lexer.next().lexeme);
+                            // ReSharper disable once CppTooWideScopeInitStatement
+                            auto includedAstNodes = parseFile(path, lexer.peek().range);
+                            for (auto& astNode : includedAstNodes) astNodes.emplace_back(std::move(astNode));
                         }
                         else
                         {
@@ -37,90 +43,93 @@ namespace lbd::frontend::parser
                 case token::TokenKind::NUMBER:
                 case token::TokenKind::BACKWARD_SLASH:
                 case token::TokenKind::OPEN_PARENTHESIS:
-                    {
-                        astNodes.push_back(std::make_unique<ast::AstNode>(ast::AstNode{parseExpression()}));
-                        break;
-                    }
+                    astNodes.push_back(std::make_unique<ast::AstNode>(ast::AstNode{parseExpression()}));
+                    break;
                 case token::TokenKind::END_OF_FILE: break;
                 default:
-                    context.getOptions().logger.error(lexer.peek().getRange().getBegin(),
-                                                      "syntax error: unexpected token ",
-                                                      token::tokenKindToString(lexer.peek().getKind()));
+                    context.getDiagnosticEmitter().error(
+                        lexer.peek().range,
+                        diagnostics::DiagnosticId::PARSER_UNEXPECTED_TOKEN,
+                        token::tokenKindToString(lexer.peek().kind)
+                    );
             }
         }
 
         return astNodes;
     }
 
-    void Parser::assertToken(const token::TokenKind expectedKind) const
+    void Parser::assertToken(const token::TokenKind expectedKind) const noexcept
     {
-        if (lexer.peek().getKind() != expectedKind)
+        if (lexer.peek().kind != expectedKind)
         {
-            context.getOptions().logger.error(lexer.peek().getRange().getBegin(), "syntax error: expected ",
-                                              token::tokenKindToString(expectedKind), ", got ",
-                                              token::tokenKindToString(lexer.peek().getKind()));
+            context.getDiagnosticEmitter().error(
+                lexer.peek().range,
+                diagnostics::DiagnosticId::PARSER_TOKEN_MISMATCH,
+                token::tokenKindToString(expectedKind),
+                token::tokenKindToString(lexer.peek().kind)
+            );
         }
     }
 
-    void Parser::assertAndAdvance(const token::TokenKind expectedKind) const
+    void Parser::assertAndAdvance(const token::TokenKind expectedKind) const noexcept
     {
         assertToken(expectedKind);
         lexer.advance();
     }
 
-    std::vector<std::unique_ptr<ast::AstNode>> Parser::parseFile(const std::string& path) const
+    std::vector<std::unique_ptr<ast::AstNode>> Parser::parseFile(const std::string& path,
+                                                                 const source::Range& range) const noexcept
     {
         // Circular Dependency or Duplicate Load.
-        if (context.getSourceManager().isFilePathLoaded(path)) { return {}; }
+        if (context.getBufferManager().isBufferLoaded(path)) { return {}; }
 
-        source::Buffer buffer(context.getSourceManager().loadFile(path), context.getSourceManager());
-        lexer::Lexer innerLexer(buffer, context);
-        Parser parser(innerLexer, context);
+        lexer::Lexer innerLexer(context, context.getBufferManager().getBuffer(context.loadFile(path, range)));
+        const Parser parser(context, innerLexer);
         return parser.parse();
     }
 
-    ast::DefinitionAstNode Parser::parseDefinitionAstNode() const
+    ast::DefinitionAstNode Parser::parseDefinitionAstNode() const noexcept
     {
         // TODO: In future change this to range.
-        source::Location location = lexer.peek().getRange().getBegin();
-        ast::IdentifierAstNode definitionName = parseIdentifierAstNode();
+        const source::Location location = lexer.peek().range.begin;
+        const ast::IdentifierAstNode definitionName = parseIdentifierAstNode();
         assertAndAdvance(token::TokenKind::COLON);
-        interpreter::type::Type definitionType = parseType();
+        const interpreter::type::Type definitionType = parseType();
         assertAndAdvance(token::TokenKind::ASSIGNMENT);
         ast::Expression expression = parseExpression();
         return ast::DefinitionAstNode{definitionName, definitionType, std::move(expression), location};
     }
 
-    ast::IdentifierAstNode Parser::parseIdentifierAstNode() const
+    ast::IdentifierAstNode Parser::parseIdentifierAstNode() const noexcept
     {
         assertToken(token::TokenKind::IDENTIFIER);
-        const source::Location location = lexer.peek().getRange().getBegin();
-        const std::string_view name = lexer.next().getLexeme();
+        const source::Location location = lexer.peek().range.begin;
+        const std::string name = lexer.next().lexeme;
         return ast::IdentifierAstNode{std::string(name), location};
     }
 
-    ast::StringAstNode Parser::parseStringAstNode() const
+    ast::StringAstNode Parser::parseStringAstNode() const noexcept
     {
         assertToken(token::TokenKind::STRING);
-        const source::Location location = lexer.peek().getRange().getBegin();
-        const std::string_view value = lexer.next().getLexeme();
+        const source::Location location = lexer.peek().range.begin;
+        const std::string value = lexer.next().lexeme;
         // TODO: Relook whether we need to escape the string or not.
         return ast::StringAstNode{std::string(value), location};
     }
 
-    ast::FloatAstNode Parser::parseNumberAstNode() const
+    ast::FloatAstNode Parser::parseNumberAstNode() const noexcept
     {
         assertToken(token::TokenKind::NUMBER);
-        const source::Location location = lexer.peek().getRange().getBegin();
-        const double value = std::stod(std::string(lexer.next().getLexeme()));
+        const source::Location location = lexer.peek().range.begin;
+        const double value = std::stod(std::string(lexer.next().lexeme));
         return ast::FloatAstNode{value, location};
     }
 
     // TODO: Remove primitive and compound type altogether and create TypeAstNode.
-    interpreter::type::PrimitiveType Parser::parsePrimitiveTypeName() const
+    interpreter::type::PrimitiveType Parser::parsePrimitiveTypeName() const noexcept
     {
         assertToken(token::TokenKind::IDENTIFIER);
-        const std::string_view name = lexer.next().getLexeme();
+        const std::string name = lexer.next().lexeme;
         // TODO: Perform this check through interpreter::type package.
         if (name == "Float")
         {
@@ -137,11 +146,11 @@ namespace lbd::frontend::parser
         return interpreter::type::PrimitiveType{interpreter::type::PrimitiveType::Type::Custom, std::string(name)};
     }
 
-    interpreter::type::Type Parser::parseType() const
+    interpreter::type::Type Parser::parseType() const noexcept
     {
         interpreter::type::PrimitiveType typ = parsePrimitiveTypeName();
         std::vector types{typ};
-        while (lexer.hasNext() && lexer.peek().getKind() == token::TokenKind::ARROW)
+        while (lexer.hasNext() && lexer.peek().kind == token::TokenKind::ARROW)
         {
             assertAndAdvance(token::TokenKind::ARROW);
             types.push_back(parsePrimitiveTypeName());
@@ -159,10 +168,9 @@ namespace lbd::frontend::parser
         return currentType;
     }
 
-    ast::Expression Parser::parseExpression() const
+    ast::Expression Parser::parseExpression() const noexcept
     {
-        const source::Location location = lexer.peek().getRange().getBegin();
-        switch (lexer.peek().getKind())
+        switch (lexer.peek().kind)
         {
             case token::TokenKind::IDENTIFIER: return ast::Expression(parseIdentifierAstNode());
             case token::TokenKind::STRING: return ast::Expression(parseStringAstNode());
@@ -170,18 +178,20 @@ namespace lbd::frontend::parser
             case token::TokenKind::BACKWARD_SLASH: return ast::Expression(parseLambdaExpression());
             case token::TokenKind::OPEN_PARENTHESIS: return ast::Expression(parseFunctionApplication());
             default:
-                context.getOptions().logger.error(location, "syntax error: unexpected token ",
-                                                  token::tokenKindToString(lexer.peek().getKind()));
+                context.getDiagnosticEmitter().error(
+                    lexer.peek().range,
+                    diagnostics::DiagnosticId::PARSER_UNEXPECTED_TOKEN, token::tokenKindToString(lexer.peek().kind)
+                );
         }
     }
 
-    ast::LambdaExpression Parser::parseLambdaExpression() const
+    ast::LambdaExpression Parser::parseLambdaExpression() const noexcept
     {
-        const source::Location location = lexer.peek().getRange().getBegin();
+        const source::Location location = lexer.peek().range.begin;
         assertAndAdvance(token::TokenKind::BACKWARD_SLASH);
-        ast::IdentifierAstNode argument = parseIdentifierAstNode();
+        const ast::IdentifierAstNode argument = parseIdentifierAstNode();
         assertAndAdvance(token::TokenKind::COLON);
-        interpreter::type::Type argumentType = parseType();
+        const interpreter::type::Type argumentType = parseType();
         assertAndAdvance(token::TokenKind::DOT);
         ast::Expression expression = parseExpression();
         return ast::LambdaExpression{
@@ -189,13 +199,13 @@ namespace lbd::frontend::parser
         };
     }
 
-    ast::FunctionApplication Parser::parseFunctionApplication() const
+    ast::FunctionApplication Parser::parseFunctionApplication() const noexcept
     {
-        const source::Location location = lexer.peek().getRange().getBegin();
+        const source::Location location = lexer.peek().range.begin;
         assertAndAdvance(token::TokenKind::OPEN_PARENTHESIS);
         const ast::IdentifierAstNode functionName = parseIdentifierAstNode();
         std::vector<std::unique_ptr<ast::Expression>> arguments;
-        while (lexer.peek().getKind() != token::TokenKind::CLOSE_PARENTHESIS)
+        while (lexer.peek().kind != token::TokenKind::CLOSE_PARENTHESIS)
         {
             arguments.push_back(std::make_unique<ast::Expression>(std::move(parseExpression())));
         }

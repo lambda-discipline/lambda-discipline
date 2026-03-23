@@ -1,10 +1,9 @@
 #pragma once
 
-#include <iostream>
 #include <optional>
 #include <string>
 
-namespace cmd
+namespace lbd::cmd
 {
     struct Options
     {
@@ -14,8 +13,4 @@ namespace cmd
         bool debug = false;
         bool generateDocs = false;
     };
-
-    void printHelp(std::ostream& outputStream, const std::string& programName);
-
-    Options parseArguments(int argc, char** argv, const std::string& programName);
 }

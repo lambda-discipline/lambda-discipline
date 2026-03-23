@@ -1,29 +1,26 @@
 #include <cctype>
 #include <fstream>
 #include <utility>
-#include <lbd/logs.h>
+#include <fmt/core.h>
+#include <lbd/diagnostics/ContextGuard.hpp>
 #include <lbd/frontend/lexer/Lexer.hpp>
 #include <lbd/source/Range.hpp>
 
-#include "lbd/utils/string_escape.h"
-
 namespace lbd::frontend::lexer
 {
-    static bool isIdentifierStart(const char c) { return std::isalpha(c) || c == '_'; }
+    static constexpr bool isIdentifierStart(const char c) noexcept { return std::isalpha(c) || c == '_'; }
+    static constexpr bool isIdentifier(const char c) noexcept { return std::isalnum(c) || c == '_'; }
+    static constexpr bool isNumberStart(const char c) noexcept { return std::isdigit(c) || c == '-'; }
 
-    static bool isIdentifier(const char c) { return std::isalnum(c) || c == '_'; }
+    Lexer::Lexer(Context& context, const source::Buffer& buffer) noexcept : context(context), buffer(buffer) {}
 
-    static bool isNumberStart(const char c) { return std::isdigit(c) || c == '-'; }
-
-    Lexer::Lexer(source::Buffer& buffer, Context& context) : buffer(buffer), context(context) {}
-
-    token::Token Lexer::peek()
+    token::Token Lexer::peek() noexcept
     {
         if (!currentToken.has_value()) currentToken = lex();
         return currentToken.value();
     }
 
-    token::Token Lexer::next()
+    token::Token Lexer::next() noexcept
     {
         if (currentToken.has_value())
         {
@@ -34,28 +31,33 @@ namespace lbd::frontend::lexer
         return lex();
     }
 
-    void Lexer::advance() { currentToken = std::nullopt; }
+    void Lexer::advance() noexcept { currentToken = std::nullopt; }
 
-    bool Lexer::hasNext() const { return !isEof(); }
+    bool Lexer::hasNext() const noexcept { return !isEof(); }
 
-    token::Token Lexer::lex()
+    const source::Buffer& Lexer::getBuffer() const noexcept { return buffer; }
+
+    token::Token Lexer::lex() noexcept
     {
         while (std::isspace(getCurrentCharacter())) advanceCursor();
 
-        const source::Location beginLocation(buffer.getFileId(), cursor, row, column);
+        const source::Location beginLocation{buffer.id, cursor};
 
-        // TODO: Add context guards.
+        // Adding Context Guard for diagnostics.
+        diagnostics::ContextGuard contextGuard(
+            context.getDiagnosticEmitter(),
+            source::Range(beginLocation, {buffer.id, static_cast<source::Offset>(buffer.getSize())}),
+            fmt::format("While lexing `{}`.", buffer.name));
 
-        if (isEof()) return {token::TokenKind::END_OF_FILE, "", source::Range(beginLocation, beginLocation)};
+        if (isEof()) return {token::TokenKind::END_OF_FILE, "", {beginLocation, beginLocation}};
 
         // Identifier.
         if (isIdentifierStart(getCurrentCharacter()))
         {
             const source::Offset beginOffset = cursor;
             while (!isEof() && isIdentifier(getCurrentCharacter())) advanceCursor();
-            const auto lexeme = buffer.getText().substr(beginOffset, cursor - beginOffset);
-            const source::Location endLocation(buffer.getFileId(), cursor, row, column);
-            return {token::TokenKind::IDENTIFIER, lexeme, source::Range(beginLocation, endLocation)};
+            const auto lexeme = buffer.contents.substr(beginOffset, cursor - beginOffset);
+            return {token::TokenKind::IDENTIFIER, lexeme, {beginLocation, {buffer.id, cursor}}};
         }
 
         // Number.
@@ -67,7 +69,10 @@ namespace lbd::frontend::lexer
                 goto LexSymbol;
             if (getCurrentCharacter() == '-' && !std::isdigit(peekNextCurrentCharacter()))
             {
-                context.getOptions().logger.error(beginLocation, "syntax error: expected digit after - (dash).");
+                context.getDiagnosticEmitter().error(
+                    {beginLocation, {buffer.id, cursor}},
+                    diagnostics::DiagnosticId::LEXER_UNEXPECTED_CHARACTER, '-'
+                );
             }
             const source::Offset beginOffset = cursor;
             advanceCursor(); // Advance to consume possible '-'.
@@ -77,9 +82,8 @@ namespace lbd::frontend::lexer
                 advanceCursor(); // Consume '.'
                 while (!isEof() && std::isdigit(getCurrentCharacter())) advanceCursor();
             }
-            const auto lexeme = buffer.getText().substr(beginOffset, cursor - beginOffset);
-            const source::Location endLocation(buffer.getFileId(), cursor, row, column);
-            return {token::TokenKind::NUMBER, lexeme, source::Range(beginLocation, endLocation)};
+            const auto lexeme = buffer.contents.substr(beginOffset, cursor - beginOffset);
+            return {token::TokenKind::NUMBER, lexeme, {beginLocation, {buffer.id, cursor}}};
         }
 
         // String literal.
@@ -90,13 +94,15 @@ namespace lbd::frontend::lexer
             while (!isEof() && getCurrentCharacter() != '"') advanceCursor();
             if (getCurrentCharacter() != '"')
             {
-                context.getOptions().logger.error(beginLocation, "syntax error: unbalanced quote");
+                context.getDiagnosticEmitter().error(
+                    {beginLocation, {buffer.id, cursor}},
+                    diagnostics::DiagnosticId::LEXER_UNBALANCED_QUOTE
+                );
             }
             advanceCursor(); // Consume '"'
             // +1 and -1 for excluding the quotes.
-            const auto lexeme = buffer.getText().substr(beginOffset + 1, cursor - beginOffset - 2);
-            const source::Location endLocation(buffer.getFileId(), cursor, row, column);
-            return {token::TokenKind::STRING, lexeme, source::Range(beginLocation, endLocation)};
+            const auto lexeme = buffer.contents.substr(beginOffset + 1, cursor - beginOffset - 2);
+            return {token::TokenKind::STRING, lexeme, {beginLocation, {buffer.id, cursor}}};
         }
 
     LexSymbol:
@@ -111,8 +117,7 @@ namespace lbd::frontend::lexer
                 {
                     advanceCursor();
                     const auto lexeme = std::string(1, symbol);
-                    const source::Location endLocation(buffer.getFileId(), cursor, row, column);
-                    return {symbolToTokenKind(symbol), lexeme, source::Range(beginLocation, endLocation)};
+                    return {symbolToTokenKind(symbol), lexeme, {beginLocation, {buffer.id, cursor}}};
                 }
             case '-':
                 {
@@ -127,8 +132,7 @@ namespace lbd::frontend::lexer
                             {
                                 // Arrow.
                                 advanceCursor(); // Consume '>'.
-                                const source::Location endLocation(buffer.getFileId(), cursor, row, column);
-                                return {token::TokenKind::ARROW, "->", source::Range(beginLocation, endLocation)};
+                                return {token::TokenKind::ARROW, "->", {beginLocation, {buffer.id, cursor}}};
                             }
                         default:
                             break;
@@ -137,16 +141,22 @@ namespace lbd::frontend::lexer
             default:
                 break;
         }
-        context.getOptions().logger.error(beginLocation, "syntax error: unexpected character ", getCurrentCharacter());
+        context.getDiagnosticEmitter().error(
+            {beginLocation, {buffer.id, cursor}},
+            diagnostics::DiagnosticId::LEXER_UNEXPECTED_CHARACTER, getCurrentCharacter()
+        );
     }
 
-    char Lexer::getCurrentCharacter() const { return isEof() ? '\0' : buffer[cursor]; }
+    char Lexer::getCurrentCharacter() const noexcept { return isEof() ? '\0' : buffer[cursor]; }
 
-    char Lexer::peekNextCurrentCharacter() const { return cursor + 1 < buffer.getSize() ? buffer[cursor + 1] : '\0'; }
+    char Lexer::peekNextCurrentCharacter() const noexcept
+    {
+        return cursor + 1 < buffer.getSize() ? buffer[cursor + 1] : '\0';
+    }
 
-    bool Lexer::isEof() const { return cursor >= buffer.getSize(); }
+    bool Lexer::isEof() const noexcept { return cursor >= buffer.getSize(); }
 
-    void Lexer::advanceCursor()
+    void Lexer::advanceCursor() noexcept
     {
         if (getCurrentCharacter() == '\n')
         {
@@ -160,7 +170,7 @@ namespace lbd::frontend::lexer
         cursor++;
     }
 
-    token::TokenKind Lexer::symbolToTokenKind(const char symbol) const
+    token::TokenKind Lexer::symbolToTokenKind(const char symbol) const noexcept
     {
         switch (symbol)
         {
@@ -171,8 +181,11 @@ namespace lbd::frontend::lexer
             case '(': return token::TokenKind::OPEN_PARENTHESIS;
             case ')': return token::TokenKind::CLOSE_PARENTHESIS;
             default:
-                const source::Location beginLocation(buffer.getFileId(), cursor, row, column);
-                context.getOptions().logger.error(beginLocation, "syntax error: unexpected character ", symbol);
+                const source::Location location{buffer.id, cursor};
+                context.getDiagnosticEmitter().error(
+                    {location, location},
+                    diagnostics::DiagnosticId::LEXER_UNEXPECTED_CHARACTER, symbol
+                );
         }
     }
 }

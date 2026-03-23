@@ -4,11 +4,11 @@
 
 namespace lbd::runtime::builtins
 {
-    NativeFunction makePrint();
+    NativeFunction makePrint(Context& context);
 
-    NativeFunction makeSlurpFile();
+    NativeFunction makeSlurpFile(Context& context);
 
-    NativeFunction makeLines();
+    NativeFunction makeLines(Context& context);
 
-    NativeFunction makeSplit();
+    NativeFunction makeSplit(Context& context);
 }

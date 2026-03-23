@@ -5,21 +5,16 @@
 
 namespace lbd::source
 {
-    class Range
+    struct Range
     {
-    public:
-        Range(const Location& begin, const Location& end);
-
-        [[nodiscard]] bool isValid() const;
-
-        [[nodiscard]] Location getBegin() const;
-
-        [[nodiscard]] Location getEnd() const;
-
-        friend std::ostream& operator<<(std::ostream& outputStream, const Range& range);
-
-    private:
         Location begin;
         Location end;
+
+        [[nodiscard]] Range(Location begin, Location end) noexcept;
+        // For debugging.
+        [[nodiscard]] explicit Range(Location location) noexcept;
+        [[nodiscard]] Range() noexcept;
+
+        friend std::ostream& operator<<(std::ostream& outputStream, const Range& range);
     };
 }

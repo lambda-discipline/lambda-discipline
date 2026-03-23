@@ -7,9 +7,12 @@
 #include <lbd/runtime/type.h>
 #include <lbd/utils/string_escape.h>
 
+// TODO: Everywhere make context the first parameter for consistency.
+// TODO: Add Context guards.
+
 namespace lbd::runtime
 {
-    static Options optionsValue;
+    // TODO: Remove this global variable.
     static ResultOptions globalResultOptions;
 
     [[nodiscard]] std::string Closure::toString() const
@@ -136,7 +139,7 @@ namespace lbd::runtime
                                                                   environment(std::move(environment)),
                                                                   origin(origin) {}
 
-    const Value& Thunk::force() const
+    const Value& Thunk::force(Context& context) const
     {
         if (cached.has_value())
         {
@@ -145,9 +148,12 @@ namespace lbd::runtime
         // Expression is not initialized
         if (!expression)
         {
-            optionsValue.logger.error(origin, "runtime error: forcing empty thunk");
+            context.getDiagnosticEmitter().error(
+                {origin.value(), origin.value()},
+                diagnostics::DiagnosticId::RUNTIME_FORCE_EMPTY_THUNK
+            );
         }
-        cached = evalExpression(*expression, environment);
+        cached = evalExpression(*expression, environment, context);
         return cached.value();
     }
 
@@ -177,6 +183,12 @@ namespace lbd::runtime
         cached.reset();
     }
 
+    [[nodiscard]] source::Range Thunk::getRange() noexcept
+    {
+        // TODO: Return the range when we starts to store it instead of Location.
+        return {};
+    }
+
     Environment::Environment(std::shared_ptr<Environment> parent) : parent(std::move(parent)) {}
 
     std::shared_ptr<Thunk> Environment::lookup(const std::string& name) const
@@ -198,7 +210,7 @@ namespace lbd::runtime
         table[name] = std::move(thunk);
     }
 
-    std::vector<std::vector<std::string>> Environment::toVector(const bool force) const
+    std::vector<std::vector<std::string>> Environment::toVector(Context& context, const bool force) const
     {
         std::vector<std::vector<std::string>> result;
         result.reserve(table.size());
@@ -209,7 +221,7 @@ namespace lbd::runtime
             {
                 if (force)
                 {
-                    const Value& value = thunk->force();
+                    const Value& value = thunk->force(context);
                     valueString = escapeString(value.toString());
                 }
                 else if (thunk->cached)
@@ -222,7 +234,7 @@ namespace lbd::runtime
         }
         if (parent)
         {
-            auto parentVector = parent->toVector(force);
+            auto parentVector = parent->toVector(context, force);
             result.insert(result.end(), std::make_move_iterator(parentVector.begin()),
                           std::make_move_iterator(parentVector.end()));
         }
@@ -230,15 +242,17 @@ namespace lbd::runtime
     }
 
     static Value evaluateIdentifierAstNode(const frontend::ast::IdentifierAstNode& identifierAstNode,
-                                           const std::shared_ptr<Environment>& environment)
+                                           const std::shared_ptr<Environment>& environment, Context& context)
     {
         const auto thunk = environment->lookup(identifierAstNode.value);
         if (!thunk)
         {
-            optionsValue.logger.error(identifierAstNode.location, "runtime error: undefined identifier ",
-                                      identifierAstNode.value);
+            context.getDiagnosticEmitter().error(
+                source::Range(identifierAstNode.location),
+                diagnostics::DiagnosticId::RUNTIME_UNDEFINED_IDENTIFIER, identifierAstNode.value
+            );
         }
-        return thunk->force();
+        return thunk->force(context);
     }
 
     static Value evaluateLambdaExpression(const frontend::ast::LambdaExpression& lambdaExpression,
@@ -248,16 +262,18 @@ namespace lbd::runtime
     }
 
     static Value evaluateFunctionApplication(const frontend::ast::FunctionApplication& functionApplication,
-                                             const std::shared_ptr<Environment>& environment)
+                                             const std::shared_ptr<Environment>& environment, Context& context)
     {
         // Lookup the callee lazily.
         const auto calleeThunk = environment->lookup(functionApplication.functionName.value);
         if (!calleeThunk)
         {
-            optionsValue.logger.error(functionApplication.location, "runtime error: undefined function ",
-                                      functionApplication.functionName.value);
+            context.getDiagnosticEmitter().error(
+                source::Range(functionApplication.location),
+                diagnostics::DiagnosticId::RUNTIME_UNDEFINED_FUNCTION, functionApplication.functionName.value
+            );
         }
-        const Value functionValue = calleeThunk->force();
+        const Value functionValue = calleeThunk->force(context);
         std::vector<std::shared_ptr<Thunk>> argumentThunks;
         argumentThunks.reserve(functionApplication.arguments.size());
         for (const auto& argument : functionApplication.arguments)
@@ -265,17 +281,18 @@ namespace lbd::runtime
             argumentThunks.push_back(std::make_shared<Thunk>(argument.get(), environment));
         }
         source::Location newLocation = functionApplication.location;
-        return applyFunctionApplication(functionValue, argumentThunks, environment, newLocation);
+        return applyFunctionApplication(context, functionValue, argumentThunks, environment, newLocation);
     }
 
-    Value evalExpression(const frontend::ast::Expression& expression, std::shared_ptr<Environment> environment)
+    Value evalExpression(const frontend::ast::Expression& expression, std::shared_ptr<Environment> environment,
+                         Context& context)
     {
         return std::visit([&]<typename T0>(T0&& arg)
         {
             using T = std::decay_t<T0>;
             if constexpr (std::is_same_v<T, frontend::ast::IdentifierAstNode>)
             {
-                return evaluateIdentifierAstNode(arg, environment);
+                return evaluateIdentifierAstNode(arg, environment, context);
             }
             else if constexpr (std::is_same_v<T, frontend::ast::StringAstNode> || std::is_same_v<T,
                 frontend::ast::FloatAstNode>)
@@ -288,7 +305,7 @@ namespace lbd::runtime
             }
             else if constexpr (std::is_same_v<T, frontend::ast::FunctionApplication>)
             {
-                return evaluateFunctionApplication(arg, environment);
+                return evaluateFunctionApplication(arg, environment, context);
             }
             else
             {
@@ -304,7 +321,8 @@ namespace lbd::runtime
         return thunk;
     }
 
-    Value applyFunctionApplication(const Value& functionName, const std::vector<std::shared_ptr<Thunk>>& arguments,
+    Value applyFunctionApplication(Context& context, const Value& functionName,
+                                   const std::vector<std::shared_ptr<Thunk>>& arguments,
                                    const std::shared_ptr<Environment>& callSiteEnvironment,
                                    const std::optional<source::Location>& callLocation)
     {
@@ -320,7 +338,10 @@ namespace lbd::runtime
             // If there are no frames left, that's unexpected (shouldn't happen), bail.
             if (frames.empty())
             {
-                optionsValue.logger.error(callLocation, "internal error: no function frame to apply");
+                context.getDiagnosticEmitter().error(
+                    source::Range(callLocation.value()),
+                    diagnostics::DiagnosticId::RUNTIME_EMPTY_CALL_STACK
+                );
             }
             // Work on the top-most frame
             Value currentFunction = frames.back();
@@ -359,7 +380,7 @@ namespace lbd::runtime
                 const auto& argumentThunk = workArguments[index++];
                 const auto childEnvironment = std::make_shared<Environment>(env);
                 childEnvironment->bind(param, argumentThunk);
-                resultantValue = evalExpression(*body, childEnvironment);
+                resultantValue = evalExpression(*body, childEnvironment, context);
             }
             // Native Function case: Consumes its arity-many Argument Thunks
             else if (std::holds_alternative<std::shared_ptr<NativeFunction>>(currentFunction))
@@ -371,10 +392,12 @@ namespace lbd::runtime
                     const type::FunctionType& signature = *nativeFunction.getSignature();
                     if (workArguments.size() - index < arity)
                     {
-                        optionsValue.logger.error(callLocation, "runtime error: native-function ",
-                                                  nativeFunction.getName(), " expects ",
-                                                  arity, " argument(s), found ", workArguments.size() - index, "\n",
-                                                  nativeFunction.getName(), " signature: ", signature.toString());
+                        context.getDiagnosticEmitter().error(
+                            source::Range(callLocation.value()),
+                            diagnostics::DiagnosticId::RUNTIME_NATIVE_FUNCTION_SIGNATURE_MISMATCH,
+                            nativeFunction.getName(), arity, workArguments.size() - index,
+                            nativeFunction.getName(), signature.toString()
+                        );
                     }
                     std::vector<std::shared_ptr<Thunk>> slice;
                     slice.reserve(arity);
@@ -383,23 +406,27 @@ namespace lbd::runtime
                         slice.push_back(workArguments[index + i]);
                     }
                     // Type-Check the function-arguments.
-                    if (!signature.matchesArgumentTypes(slice))
+                    if (!signature.matchesArgumentTypes(context, slice))
                     {
-                        optionsValue.logger.error(callLocation,
-                                                  "runtime error: wrong arguments provided to native-function ",
-                                                  nativeFunction.getName(),
-                                                  "\n", nativeFunction.getName(), " signature: ", signature.toString());
+                        context.getDiagnosticEmitter().error(
+                            source::Range(callLocation.value()),
+                            diagnostics::DiagnosticId::RUNTIME_INVALID_INPUTS_TO_NATIVE_FUNCTION,
+                            nativeFunction.getName(),
+                            nativeFunction.getName(), signature.toString()
+                        );
                         // TODO: Also print exactly which argument caused the error.
-                        //       Print the signature got, with the incorrect argument color differently.
+                        //       Print the signature got, with the incorrect argument colored differently.
                     }
                     auto [resultantValue_, resultOptions] = nativeFunction.getImplementation()(
                         slice, callSiteEnvironment);
                     if (!signature.matchesReturnType(resultantValue_))
                     {
-                        optionsValue.logger.error(callLocation,
-                                                  "internal error: expected native-function ", nativeFunction.getName(),
-                                                  " to return ", signature.getReturnType().toString(), ", but got ",
-                                                  type::typeFromValue(resultantValue_)->toString());
+                        context.getDiagnosticEmitter().error(
+                            source::Range(callLocation.value()),
+                            diagnostics::DiagnosticId::INTERNAL_RETURN_TYPE_MISMATCH,
+                            nativeFunction.getName(), signature.getReturnType().toString(),
+                            type::typeFromValue(resultantValue_)->toString()
+                        );
                         // TODO: possibly not create an additional type-object just for printing.
                     }
                     resultantValue = resultantValue_;
@@ -424,12 +451,17 @@ namespace lbd::runtime
             else
             {
                 // Top frame is not a Function (Closure, NativeFunction) Value but there are still Arguments left
-                optionsValue.logger.error(callLocation, "runtime error: trying to apply non-function value ",
-                                          frames.back());
+                context.getDiagnosticEmitter().error(
+                    source::Range(callLocation.value()),
+                    diagnostics::DiagnosticId::RUNTIME_APPLY_NON_FUNCTION_VALUE, frames.back().toString()
+                );
             }
             if (!resultantValue)
             {
-                optionsValue.logger.error(callLocation, "internal error: application produced no result");
+                context.getDiagnosticEmitter().error(
+                    source::Range(callLocation.value()),
+                    diagnostics::DiagnosticId::INTERNAL_NO_RESULT
+                );
             }
             if (std::holds_alternative<Closure>(*resultantValue) ||
                 std::holds_alternative<std::shared_ptr<NativeFunction>>(*resultantValue))
@@ -449,9 +481,10 @@ namespace lbd::runtime
             {
                 if (index < workArguments.size())
                 {
-                    optionsValue.logger.error(callLocation,
-                                              "runtime error: too many arguments applied to non-function value ",
-                                              concrete);
+                    context.getDiagnosticEmitter().error(
+                        source::Range(callLocation.value()),
+                        diagnostics::DiagnosticId::RUNTIME_TOO_MANY_ARGUMENTS_TO_FUNCTION, concrete.toString()
+                    );
                 }
                 // No Thunks remaining then concrete Value is the result
                 return concrete;
@@ -469,11 +502,11 @@ namespace lbd::runtime
     // Creates placeholder Thunk then set body so recursion can refer to it during lazy evaluation
     static void bindDefinitionAstNodeLazy(frontend::ast::DefinitionAstNode& definitionAstNode,
                                           const std::shared_ptr<Environment>& environment,
-                                          const Options options)
+                                          Context& context)
     {
         const auto thunk = std::make_shared<Thunk>();
         environment->bind(definitionAstNode.definitionName.value, thunk);
-        if (options.shouldOwnExpression())
+        if (context.getOptions().ownExpression)
         {
             thunk->setOwned(std::move(definitionAstNode.expression), environment,
                             definitionAstNode.expression.getLocation());
@@ -484,14 +517,13 @@ namespace lbd::runtime
         }
     }
 
-    Result interpret(const frontend::Program& program, std::optional<std::shared_ptr<Environment>> globalEnvironment,
-                     const Options options_)
+    Result interpret(const frontend::Program& program, Context& context,
+                     std::optional<std::shared_ptr<Environment>> globalEnvironment) noexcept
     {
-        optionsValue = options_;
         if (!globalEnvironment)
         {
             globalEnvironment = std::make_shared<Environment>();
-            installBuiltins(*globalEnvironment);
+            installBuiltins(context, *globalEnvironment);
         }
         Value resultantValue;
         for (const auto& node : program.astNodes)
@@ -501,11 +533,11 @@ namespace lbd::runtime
                 using T = std::decay_t<T0>;
                 if constexpr (std::is_same_v<T, frontend::ast::Expression>)
                 {
-                    resultantValue = evalExpression(argument, *globalEnvironment);
+                    resultantValue = evalExpression(argument, *globalEnvironment, context);
                 }
                 else if constexpr (std::is_same_v<T, frontend::ast::DefinitionAstNode>)
                 {
-                    bindDefinitionAstNodeLazy(argument, *globalEnvironment, optionsValue);
+                    bindDefinitionAstNodeLazy(argument, *globalEnvironment, context);
                     const frontend::ast::DefinitionAstNode& definitionAstNode = argument;
                     resultantValue = definitionAstNode.definitionName.value;
                 }
@@ -518,9 +550,9 @@ namespace lbd::runtime
         return {*globalEnvironment, resultantValue, globalResultOptions};
     }
 
-    void installBuiltins(const std::shared_ptr<Environment>& environment)
+    void installBuiltins(Context& context, const std::shared_ptr<Environment>& environment)
     {
-        for (auto& nativeFunction : builtins::getBuiltins(optionsValue))
+        for (auto& nativeFunction : builtins::getBuiltins(context))
         {
             const auto thunk = std::make_shared<Thunk>();
             thunk->cached = Value{std::make_shared<NativeFunction>(nativeFunction)};

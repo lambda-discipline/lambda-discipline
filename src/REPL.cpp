@@ -2,11 +2,13 @@
 #include <fstream>
 #include <iostream>
 #include <lbd/exceptions.h>
-#include <lbd/repl.h>
+#include <lbd/REPL.hpp>
+#include <lbd/ScopedOptionsOverride.hpp>
 #include <lbd/frontend/lexer/Lexer.hpp>
 #include <lbd/frontend/parser/Parser.hpp>
 #include <lbd/runtime/interpreter.h>
-#include <lbd/utils/terminal.h>
+#include <lbd/utils/terminal/Table.hpp>
+#include <lbd/utils/terminal/Terminal.hpp>
 #include <readline/history.h>
 #include <readline/readline.h>
 
@@ -17,23 +19,15 @@
 
 namespace lbd::repl
 {
-    static Options optionsValue;
-
     static void processLoadCommand(const std::string& argument, Context& context,
                                    std::optional<std::shared_ptr<runtime::Environment>>& sharedEnvironment)
     {
-        const std::string& filepath = argument;
-        Options subOptions = optionsValue;
-        subOptions.logger.showLocation = true;
+        const std::string& path = argument;
 
-        if (!std::filesystem::exists(filepath))
-        {
-            subOptions.logger.error({}, "IO error: filepath ", filepath, " does not exist");
-        }
-
-        const source::FileId fileId = context.getSourceManager().loadFile(filepath);
-        source::Buffer buffer(fileId, context.getSourceManager());
-        frontend::lexer::Lexer lexer(buffer, context);
+        // TODO: Should an already loaded file be loaded again. Current logic does not permit that.
+        const source::BufferId bufferId = context.loadFile(path, {});
+        const source::Buffer buffer = context.getBufferManager().getBuffer(bufferId);
+        frontend::lexer::Lexer lexer(context, buffer);
 
         // const auto tokens = lexer.lex();
         // if (subOptions.debug)
@@ -44,7 +38,7 @@ namespace lbd::repl
         //     }
         // }
 
-        auto astNodes = frontend::parser::Parser(lexer, context).parse();
+        auto astNodes = frontend::parser::Parser(context, lexer).parse();
         frontend::Program program(std::move(astNodes));
 
         // if (subOptions.debug)
@@ -58,7 +52,7 @@ namespace lbd::repl
         const std::optional<std::shared_ptr<runtime::Environment>> temporaryEnvironment = sharedEnvironment;
         // Merge loaded_env into shared_env
         if (const auto [loadedEnvironment, _, resultantOptions] = runtime::interpret(
-            program, temporaryEnvironment, subOptions); loadedEnvironment)
+            program, context, temporaryEnvironment); loadedEnvironment)
         {
             if (!sharedEnvironment)
             {
@@ -75,7 +69,7 @@ namespace lbd::repl
             if (resultantOptions.sideEffects) std::cout << std::endl;
         }
 
-        subOptions.logger.info("info: file loaded ", filepath);
+        context.getLogger().info("info: file loaded ", path);
     }
 
     static int computeParenthesisDepth(const std::string& data)
@@ -100,27 +94,28 @@ namespace lbd::repl
 
     void loop(Context& context, const bool debug)
     {
-        enableVirtualTerminal();
+        utils::terminal::enableVirtualTerminal();
+        utils::terminal::Colors colors{};
 
         using_history();
         read_history(LBD_HISTORY);
 
-        static Logger logger(false, true, false);
-        optionsValue = Options(true, false, debug);
-        optionsValue.logger = logger;
+        ScopedOptionsOverride options(context);
+        options.get().ownExpression = true;
+        options.get().debug = debug;
 
         std::string line, buffer;
         size_t indentLevel = 0;
         std::optional<std::shared_ptr<runtime::Environment>> sharedGlobalEnvironment = std::nullopt;
 
-        optionsValue.logger.info("Welcome to lambda-discipline REPL.\nType :quit to exit.");
+        context.getLogger().info("Welcome to lambda-discipline REPL.\nType :quit to exit.");
 
         while (true)
         {
             try
             {
                 // Prompt depends on whether we are continuing a buffer or not.
-                std::string prompt = colors::CYAN + std::string(buffer.empty() ? "\n>> " : ".. ") + colors::RESET;
+                std::string prompt = colors.cyan + std::string(buffer.empty() ? "\n>> " : ".. ") + colors.reset;
                 for (size_t i = 0; i < indentLevel; i++) std::cout << "  ";
 
                 char* input = readline(prompt.c_str());
@@ -133,7 +128,7 @@ namespace lbd::repl
                 {
                     if (line == ":q" || line == ":quit" || line == ":exit")
                     {
-                        optionsValue.logger.info("\nexiting REPL.");
+                        context.getLogger().info("\nexiting REPL.");
                         break;
                     }
 
@@ -150,27 +145,30 @@ namespace lbd::repl
                     if (line == ":h" || line == ":help" || line == ":?")
                     {
                         std::cout << std::endl;
-                        printTable({"General Commands", "Argument", "Description"}, {
-                                       {":q, :quit, :exit", "", "Exit the REPL"},
-                                       {":c, :clear, :cls", "", "Clear the screen"},
-                                       {":h, :help, :?", "", "Display this help message"},
-                                       {":l, :load", "<filepath>", "Load file into REPL"},
-                                       {":r, :reset", "", "Reset environment"},
-                                       {":d, :debug", "", "Toggle debug mode"}
-                                   }, colors::GREEN);
+                        utils::terminal::printTable(
+                            {"General Commands", "Argument", "Description"}, {
+                                {":q, :quit, :exit", "", "Exit the REPL"},
+                                {":c, :clear, :cls", "", "Clear the screen"},
+                                {":h, :help, :?", "", "Display this help message"},
+                                {":l, :load", "<filepath>", "Load file into REPL"},
+                                {":r, :reset", "", "Reset environment"},
+                                {":d, :debug", "", "Toggle debug mode"}
+                            }, colors.green);
                         std::cout << std::endl;
-                        printTable({"Inspection Commands", "Argument", "Description"}, {
-                                       {":e, :env", "", "Dump environment bindings"},
-                                       {":force", "", "Force thunk evaluation on dump"}
-                                   }, colors::GREEN);
+                        utils::terminal::printTable(
+                            {"Inspection Commands", "Argument", "Description"}, {
+                                {":e, :env", "", "Dump environment bindings"},
+                                {":force", "", "Force thunk evaluation on dump"}
+                            }, colors.green);
                         std::cout << std::endl;
-                        printTable({"Options", "State", "Help"}, {
-                                       {"debug", ON_OR_OFF(optionsValue.isDebug()), "use :debug to toggle"},
-                                       {
-                                           "force-on-env-dump", ON_OR_OFF(optionsValue.shouldForceOnEnvironmentDump()),
-                                           "use :force to toggle"
-                                       }
-                                   }, colors::GREEN);
+                        utils::terminal::printTable(
+                            {"Options", "State", "Help"}, {
+                                {"debug", ON_OR_OFF(options.get().debug), "use :debug to toggle"},
+                                {
+                                    "force-on-env-dump", ON_OR_OFF(options.get().forceOnEnvironmentDump),
+                                    "use :force to toggle"
+                                }
+                            }, colors.green);
                         continue;
                     }
 
@@ -179,14 +177,16 @@ namespace lbd::repl
                         std::cout << std::endl;
                         if (sharedGlobalEnvironment)
                         {
-                            printTable({"Symbol", "Thunk"},
-                                       (*sharedGlobalEnvironment)->
-                                       toVector(optionsValue.shouldForceOnEnvironmentDump()),
-                                       colors::GREEN);
+                            // TODO: To vector can just accept context, forceOnEnvironmentDump
+                            //       can be extracted from the context.
+                            utils::terminal::printTable({"Symbol", "Thunk"},
+                                                        (*sharedGlobalEnvironment)->toVector(
+                                                            context, options.get().forceOnEnvironmentDump),
+                                                        colors.green);
                         }
                         else
                         {
-                            printTable({"Symbol", "Thunk"}, {{"Empty"}}, colors::GREEN);
+                            utils::terminal::printTable({"Symbol", "Thunk"}, {{"Empty"}}, colors.green);
                         }
                         continue;
                     }
@@ -199,13 +199,13 @@ namespace lbd::repl
 
                     if (line == ":debug" || line == ":d")
                     {
-                        optionsValue.toggleDebug();
+                        options.get().debug = !options.get().debug;
                         continue;
                     }
 
                     if (line == ":force")
                     {
-                        optionsValue.toggleForceOnEnvironmentDump();
+                        options.get().forceOnEnvironmentDump = !options.get().forceOnEnvironmentDump;
                         continue;
                     }
 
@@ -247,8 +247,9 @@ namespace lbd::repl
                 buffer.clear();
 
                 // Lex
-                source::Buffer sourceBuffer(line);
-                frontend::lexer::Lexer lexer(sourceBuffer, context);
+                const source::BufferId bufferId = context.getBufferManager().createBuffer("<REPL>", line);
+                const source::Buffer& sourceBuffer = context.getBufferManager().getBuffer(bufferId);
+                frontend::lexer::Lexer lexer(context, sourceBuffer);
 
                 // if (optionsValue.debug)
                 // {
@@ -259,7 +260,7 @@ namespace lbd::repl
                 // }
 
                 // Parse
-                auto astNodes = frontend::parser::Parser(lexer, context).parse();
+                auto astNodes = frontend::parser::Parser(context, lexer).parse();
                 frontend::Program program(std::move(astNodes));
 
                 // if (optionsValue.debug)
@@ -268,20 +269,22 @@ namespace lbd::repl
                 // }
 
                 // Interpret
+                // TODO: Either remove ScopedOptionsOverride, or introduce subContext, or decouple options from context.
+                context.getOptions() = options.get();
                 const auto [globalEnvironment, value, resultantOptions] = runtime::interpret(
-                    program, sharedGlobalEnvironment, optionsValue);
+                    program, context, sharedGlobalEnvironment);
                 if (resultantOptions.sideEffects)
                 {
                     std::cout << std::endl;
                 }
-                std::cout << colors::GREEN << "=> " << value << colors::RESET << std::endl;
+                std::cout << colors.green << "=> " << value << colors.reset << std::endl;
                 sharedGlobalEnvironment = globalEnvironment;
             }
             catch (const ControlledExit&) {}
             catch (const std::exception& ex)
             {
-                // TODO: This exists on error.
-                optionsValue.logger.error({}, "error: ", ex.what());
+                // TODO: This exits on error.
+                context.getLogger().error("error: ", ex.what());
             }
         }
 

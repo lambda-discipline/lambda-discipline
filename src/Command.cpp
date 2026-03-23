@@ -1,6 +1,6 @@
-#include <lbd/cmd.h>
+#include <../include/lbd/cmd/Command.hpp>
 
-namespace cmd
+namespace lbd::cmd
 {
     void printHelp(std::ostream& outputStream, const std::string& programName)
     {
@@ -18,10 +18,7 @@ namespace cmd
         Options opts;
         for (int i = 1; i < argc; ++i)
         {
-            if (std::string arg = argv[i]; arg == "-h" || arg == "--help")
-            {
-                opts.showHelp = true;
-            }
+            if (std::string arg = argv[i]; arg == "-h" || arg == "--help") opts.showHelp = true;
             else if (arg == "-f" || arg == "--file")
             {
                 if (i + 1 < argc)
@@ -35,18 +32,9 @@ namespace cmd
                     std::exit(EXIT_FAILURE);
                 }
             }
-            else if (arg == "-d" || arg == "--debug")
-            {
-                opts.debug = true;
-            }
-            else if (arg == "-r" || arg == "--repl")
-            {
-                opts.repl = true;
-            }
-            else if (arg == "--docs")
-            {
-                opts.generateDocs = true;
-            }
+            else if (arg == "-d" || arg == "--debug") opts.debug = true;
+            else if (arg == "-r" || arg == "--repl") opts.repl = true;
+            else if (arg == "--docs") opts.generateDocs = true;
             else
             {
                 std::cerr << "unknown option: " << arg << "\n";

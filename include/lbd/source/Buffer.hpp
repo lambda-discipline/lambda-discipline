@@ -1,30 +1,23 @@
 #pragma once
 
-#include <optional>
 #include <string>
 #include <string_view>
-#include <lbd/source/FileId.hpp>
-#include <lbd/source/SourceManager.hpp>
+#include <vector>
+#include <lbd/source/BufferId.hpp>
+#include <lbd/source/Location.hpp>
 
 namespace lbd::source
 {
-    class Buffer
+    struct Buffer
     {
-    public:
-        explicit Buffer(FileId fileId, const SourceManager& sourceManager);
-
-        explicit Buffer(std::string_view contents);
-
-        [[nodiscard]] std::optional<FileId> getFileId() const;
-
-        [[nodiscard]] std::string_view getText() const;
+        BufferId id;
+        std::string name;
+        std::string contents;
+        std::vector<Offset> lineOffsets;
 
         [[nodiscard]] size_t getSize() const;
-
         [[nodiscard]] char operator[](size_t index) const;
 
-    private:
-        std::optional<FileId> fileId;
-        std::string text;
+        void computeLineOffsets() noexcept;
     };
 }

@@ -1,11 +1,12 @@
 #include <fstream>
 #include <sstream>
+#include <fmt/core.h>
 #include <lbd/runtime/builtin-modules/builtin_module_io.h>
 
 namespace lbd::runtime::builtins
 {
     // Prints Argument to stdout and returns 0.
-    NativeFunction makePrint()
+    NativeFunction makePrint(Context& context)
     {
         const std::string name = "print";
         const auto signature = functionType(
@@ -14,12 +15,12 @@ namespace lbd::runtime::builtins
             true
         );
         return {
-            name, signature, [](const std::vector<std::shared_ptr<Thunk>>& arguments,
-                                const std::shared_ptr<Environment>&) -> std::pair<Value, ResultOptions>
+            name, signature, [&context](const std::vector<std::shared_ptr<Thunk>>& arguments,
+                                        const std::shared_ptr<Environment>&) -> std::pair<Value, ResultOptions>
             {
                 for (auto& argument : arguments)
                 {
-                    const Value& value = argument->force();
+                    const Value& value = argument->force(context);
                     std::cout << value;
                 }
                 return std::make_pair(Value{static_cast<double>(0)}, ResultOptions{.sideEffects = true});
@@ -27,7 +28,7 @@ namespace lbd::runtime::builtins
         };
     }
 
-    NativeFunction makeSlurpFile()
+    NativeFunction makeSlurpFile(Context& context)
     {
         const std::string name = "slurpFile";
         const auto signature = functionType(
@@ -35,13 +36,19 @@ namespace lbd::runtime::builtins
             simpleType(type::TypeTag::String)
         );
         return {
-            name, signature, [](const std::vector<std::shared_ptr<Thunk>>& arguments,
-                                const std::shared_ptr<Environment>&) -> std::pair<Value, ResultOptions>
+            name, signature, [&context](const std::vector<std::shared_ptr<Thunk>>& arguments,
+                                        const std::shared_ptr<Environment>&) -> std::pair<Value, ResultOptions>
             {
-                const Value& argument0 = arguments[0]->force();
+                const Value& argument0 = arguments[0]->force(context);
                 const auto& path = std::get<std::string>(argument0);
                 std::ifstream file(path, std::ios::in | std::ios::binary);
-                if (!file) optionsValue.logger.error({}, "runtime error: could not open file ", path);
+                if (!file)
+                {
+                    context.getDiagnosticEmitter().error(
+                        arguments[0]->getRange(),
+                        diagnostics::DiagnosticId::IO_COULD_NOT_OPEN_FILE, path
+                    );
+                }
                 std::ostringstream buffer;
                 buffer << file.rdbuf();
                 return {Value{buffer.str()}, ResultOptions{}};
@@ -49,7 +56,7 @@ namespace lbd::runtime::builtins
         };
     }
 
-    NativeFunction makeLines()
+    NativeFunction makeLines(Context& context)
     {
         const std::string name = "lines";
         const auto signature = functionType(
@@ -57,10 +64,10 @@ namespace lbd::runtime::builtins
             listType()
         );
         return {
-            name, signature, [](const std::vector<std::shared_ptr<Thunk>>& arguments,
-                                const std::shared_ptr<Environment>&) -> std::pair<Value, ResultOptions>
+            name, signature, [&context](const std::vector<std::shared_ptr<Thunk>>& arguments,
+                                        const std::shared_ptr<Environment>&) -> std::pair<Value, ResultOptions>
             {
-                const Value& argument0 = arguments[0]->force();
+                const Value& argument0 = arguments[0]->force(context);
                 const auto input = std::get<std::string>(argument0);
                 // Normalize all line endings to '\n'
                 std::string normalized;
@@ -98,7 +105,7 @@ namespace lbd::runtime::builtins
         };
     }
 
-    NativeFunction makeSplit()
+    NativeFunction makeSplit(Context& context)
     {
         const std::string name = "split";
         const auto signature = functionType(
@@ -106,16 +113,19 @@ namespace lbd::runtime::builtins
             listType()
         );
         return {
-            name, signature, [name](const std::vector<std::shared_ptr<Thunk>>& arguments,
-                                    const std::shared_ptr<Environment>&) -> std::pair<Value, ResultOptions>
+            name, signature, [&name, &context](const std::vector<std::shared_ptr<Thunk>>& arguments,
+                                               const std::shared_ptr<Environment>&) -> std::pair<Value, ResultOptions>
             {
-                const Value& argument0 = arguments[0]->force(); // string
-                const Value& argument1 = arguments[1]->force(); // delimiter
+                const Value& argument0 = arguments[0]->force(context); // string
+                const Value& argument1 = arguments[1]->force(context); // delimiter
                 const auto& input = std::get<std::string>(argument0);
                 const auto& delimiter = std::get<std::string>(argument1);
                 if (delimiter.empty())
                 {
-                    optionsValue.logger.error({}, "runtime error: delimiter for ", name, " cannot be empty");
+                    context.getDiagnosticEmitter().error(
+                        arguments[1]->getRange(),
+                        diagnostics::DiagnosticId::INVALID_INPUTS, name, "Delimiter cannot be empty."
+                    );
                 }
                 std::vector<Value> result;
                 size_t start = 0;

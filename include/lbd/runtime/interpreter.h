@@ -4,11 +4,10 @@
 #include <optional>
 #include <string>
 #include <variant>
-#include <lbd/Options.hpp>
+#include <lbd/Context.hpp>
+#include <lbd/frontend/program.h>
 #include <lbd/frontend/ast/Ast.hpp>
 #include <lbd/frontend/parser/Parser.hpp>
-
-#include "lbd/frontend/program.h"
 
 namespace lbd::runtime::type
 {
@@ -45,7 +44,7 @@ namespace lbd::runtime
     };
 
     using ValueVariant = std::variant<
-        double,
+        double, // TODO: Create a type alias called Number for this.
         std::string,
         Closure,
         std::shared_ptr<NativeFunction>,
@@ -109,7 +108,7 @@ namespace lbd::runtime
               const std::optional<source::Location>& origin = std::nullopt);
 
         /// Force computation on Thunk and return a const reference to Value.
-        const Value& force() const; /// Marked const as cached is mutable.
+        const Value& force(Context& context) const; /// Marked const as cached is mutable.
 
         /// Sets Thunk's fields after construction.
         /// Allows for recursive reference.
@@ -118,6 +117,8 @@ namespace lbd::runtime
 
         void setOwned(frontend::ast::Expression expression_, std::shared_ptr<Environment> environment_,
                       std::optional<source::Location> origin_ = std::nullopt);
+
+        [[nodiscard]] source::Range getRange() noexcept;
     };
 
     struct Environment : std::enable_shared_from_this<Environment>
@@ -131,14 +132,16 @@ namespace lbd::runtime
 
         void bind(const std::string& name, std::shared_ptr<Thunk> thunk);
 
-        std::vector<std::vector<std::string>> toVector(bool force) const;
+        std::vector<std::vector<std::string>> toVector(Context& context, bool force) const;
     };
 
-    Value evalExpression(const frontend::ast::Expression& expression, std::shared_ptr<Environment> environment);
+    Value evalExpression(const frontend::ast::Expression& expression, std::shared_ptr<Environment> environment,
+                         Context& context);
 
     std::vector<Value> forceArguments(const std::vector<std::shared_ptr<Thunk>>& arguments);
 
-    Value applyFunctionApplication(const Value& functionName, const std::vector<std::shared_ptr<Thunk>>& arguments,
+    Value applyFunctionApplication(Context& context, const Value& functionName,
+                                   const std::vector<std::shared_ptr<Thunk>>& arguments,
                                    const std::shared_ptr<Environment>& callSiteEnvironment,
                                    const std::optional<source::Location>& callLocation = std::nullopt);
 
@@ -150,10 +153,9 @@ namespace lbd::runtime
         ResultOptions options = {};
     };
 
-    Result interpret(const frontend::Program& program,
-                     std::optional<std::shared_ptr<Environment>> globalEnvironment = std::nullopt,
-                     Options options_ = Options());
+    Result interpret(const frontend::Program& program, Context& context,
+                     std::optional<std::shared_ptr<Environment>> globalEnvironment = std::nullopt) noexcept;
 
     /// Add builtins Native Functions into Environment.
-    void installBuiltins(const std::shared_ptr<Environment>& environment);
+    void installBuiltins(Context& context, const std::shared_ptr<Environment>& environment);
 }

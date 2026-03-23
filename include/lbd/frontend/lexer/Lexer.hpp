@@ -10,32 +10,29 @@ namespace lbd::frontend::lexer
     class Lexer
     {
     public:
-        // TODO: Fix this options handling.
-        explicit Lexer(source::Buffer& buffer, Context& context);
+        [[nodiscard]] explicit Lexer(Context& context, const source::Buffer& buffer) noexcept;
 
-        [[nodiscard]] token::Token peek();
+        [[nodiscard]] token::Token peek() noexcept;
+        [[nodiscard]] token::Token next() noexcept;
+        void advance() noexcept;
+        [[nodiscard]] bool hasNext() const noexcept;
 
-        [[nodiscard]] token::Token next();
-
-        void advance();
-
-        [[nodiscard]] bool hasNext() const;
+        [[nodiscard]] const source::Buffer& getBuffer() const noexcept;
 
     private:
-        [[nodiscard]] token::Token lex();
+        [[nodiscard]] token::Token lex() noexcept;
 
-        [[nodiscard]] char getCurrentCharacter() const;
+        [[nodiscard]] char getCurrentCharacter() const noexcept;
+        [[nodiscard]] char peekNextCurrentCharacter() const noexcept;
 
-        [[nodiscard]] char peekNextCurrentCharacter() const;
+        [[nodiscard]] bool isEof() const noexcept;
 
-        [[nodiscard]] bool isEof() const;
+        void advanceCursor() noexcept;
 
-        void advanceCursor();
+        [[nodiscard]] token::TokenKind symbolToTokenKind(char symbol) const noexcept;
 
-        [[nodiscard]] token::TokenKind symbolToTokenKind(char symbol) const;
-
-        source::Buffer& buffer;
         Context& context;
+        const source::Buffer& buffer;
         source::Offset cursor = 0;
         source::RowNumber row = 1;
         source::ColumnNumber column = 1;

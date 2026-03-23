@@ -6,6 +6,8 @@
 #include <lbd/frontend/type.h>
 #include <lbd/source/Location.hpp>
 
+#include "lbd/source/Range.hpp"
+
 namespace lbd::frontend::ast
 {
     struct IdentifierAstNode
@@ -86,6 +88,8 @@ namespace lbd::frontend::ast
         friend std::ostream& operator<<(std::ostream& outputStream, const Expression& expression);
 
         [[nodiscard]] source::Location getLocation() const;
+
+        [[nodiscard]] source::Range getRange() const noexcept;
 
         Expression(const Expression&) = delete;
 

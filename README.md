@@ -8,9 +8,8 @@
 
 ### Prerequisites
 
-- **CMake** (version 3.16+ recommended)
-- **Python 3.8+** (for development environment and tooling)
-- A C++17 capable compiler (e.g. `g++`, `clang++`, or MSVC on Windows)
+- **CMake** (version 3.20+ recommended)
+- A C++23 capable compiler (e.g. `g++`, `clang++`, or MSVC on Windows)
 
 ### Setup
 
@@ -117,4 +116,5 @@ lbd [options]
 
 ## Dependencies
 
-1. [readline](https://tiswww.case.edu/php/chet/readline/rltop.html): For better REPL user experience.
+1. [readline](https://man7.org/linux/man-pages/man3/readline.3.html): For better REPL user experience.
+2. [fmt](https://github.com/fmtlib/fmt): For formatting strings.

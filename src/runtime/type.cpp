@@ -1,3 +1,4 @@
+#include <sstream>
 #include <variant>
 #include <lbd/error.h>
 #include <lbd/runtime/interpreter.h>
@@ -153,7 +154,7 @@ namespace lbd::runtime::type
         return equals(*std::get<std::shared_ptr<NativeFunction>>(value)->getSignature());
     }
 
-    bool FunctionType::matchesArgumentTypes(const std::vector<std::shared_ptr<Thunk>>& thunks) const
+    bool FunctionType::matchesArgumentTypes(Context& context, const std::vector<std::shared_ptr<Thunk>>& thunks) const
     {
         // Perform size-check on non-variadic-functions.
         if (!isVariadic && argumentTypes.size() != thunks.size())
@@ -171,7 +172,7 @@ namespace lbd::runtime::type
                 // TODO: Perform soft-check using thunk's unevaluated expression.
                 continue;
             }
-            if (!argumentTypes[index]->matches(thunks[index]->force()))
+            if (!argumentTypes[index]->matches(thunks[index]->force(context)))
             {
                 return false;
             }

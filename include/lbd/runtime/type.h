@@ -94,7 +94,7 @@ namespace lbd::runtime::type
 
         [[nodiscard]] bool matches(const Value& value) const override;
 
-        [[nodiscard]] bool matchesArgumentTypes(const std::vector<std::shared_ptr<Thunk>>& thunks) const;
+        [[nodiscard]] bool matchesArgumentTypes(Context& context, const std::vector<std::shared_ptr<Thunk>>& thunks) const;
 
         [[nodiscard]] bool matchesReturnType(const Value& value) const;
 

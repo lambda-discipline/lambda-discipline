@@ -19,7 +19,7 @@ esac
 # Install dependencies.
 log_info "Installing dependencies."
 sudo apt-get update
-sudo apt-get install -y  cmake libreadline-dev
+sudo apt-get install -y cmake libreadline-dev libfmt-dev
 
 # CMake Project Setup.
 mkdir -p "$BUILD_DIR"

@@ -1,3 +1,4 @@
+#include <lbd/Context.hpp>
 #include <lbd/runtime/builtins.h>
 #include <lbd/runtime/builtin-modules/builtin_module_core.h>
 #include <lbd/runtime/builtin-modules/builtin_module_io.h>
@@ -7,17 +8,12 @@
 
 namespace lbd::runtime::builtins
 {
-    Options optionsValue;
-
     TypePointer simpleType(type::TypeTag tag, bool hardCheck)
     {
         return std::make_shared<type::SimpleType>(tag, hardCheck);
     }
 
-    TypePointer listType()
-    {
-        return std::make_shared<type::ListType>();
-    }
+    TypePointer listType() { return std::make_shared<type::ListType>(); }
 
     std::shared_ptr<type::FunctionType> functionType(const std::vector<TypePointer>& argumentTypes,
                                                      const TypePointer& returnType, bool isVariadic)
@@ -25,32 +21,31 @@ namespace lbd::runtime::builtins
         return std::make_shared<type::FunctionType>(argumentTypes, returnType, isVariadic);
     }
 
-    std::vector<NativeFunction> getBuiltins(const Options options_)
+    std::vector<NativeFunction> getBuiltins(Context& context)
     {
-        optionsValue = options_;
         return {
-            {makeAdd()},
-            {makeSub()},
-            {makeMul()},
-            {makeCmp()},
-            {makeNull()},
-            {makeParseFloat()},
+            {makeAdd(context)},
+            {makeSub(context)},
+            {makeMul(context)},
+            {makeCmp(context)},
+            {makeNull(context)},
+            {makeParseFloat(context)},
             // List module
-            {makeList()},
-            {makeListSize()},
-            {makeListGet()},
-            {makeListRemove()},
-            {makeListAppend()},
-            {makeMap()},
-            {makeTranspose()},
-            {makeSort()},
-            {makeZip()},
-            {makeFoldRight()},
+            {makeList(context)},
+            {makeListSize(context)},
+            {makeListGet(context)},
+            {makeListRemove(context)},
+            {makeListAppend(context)},
+            {makeMap(context)},
+            {makeTranspose(context)},
+            {makeSort(context)},
+            {makeZip(context)},
+            {makeFoldRight(context)},
             // IO module
-            {makePrint()},
-            {makeSlurpFile()},
-            {makeLines()},
-            {makeSplit()},
+            {makePrint(context)},
+            {makeSlurpFile(context)},
+            {makeLines(context)},
+            {makeSplit(context)},
         };
     }
 }

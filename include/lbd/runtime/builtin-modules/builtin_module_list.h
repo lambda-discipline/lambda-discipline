@@ -4,23 +4,23 @@
 
 namespace lbd::runtime::builtins
 {
-    NativeFunction makeList();
+    NativeFunction makeList(Context& context);
 
-    NativeFunction makeListSize();
+    NativeFunction makeListSize(Context& context);
 
-    NativeFunction makeListGet();
+    NativeFunction makeListGet(Context& context);
 
-    NativeFunction makeListRemove();
+    NativeFunction makeListRemove(Context& context);
 
-    NativeFunction makeListAppend();
+    NativeFunction makeListAppend(Context& context);
 
-    NativeFunction makeMap();
+    NativeFunction makeMap(Context& context);
 
-    NativeFunction makeTranspose();
+    NativeFunction makeTranspose(Context& context);
 
-    NativeFunction makeSort();
+    NativeFunction makeSort(Context& context);
 
-    NativeFunction makeZip();
+    NativeFunction makeZip(Context& context);
 
-    NativeFunction makeFoldRight();
+    NativeFunction makeFoldRight(Context& context);
 }

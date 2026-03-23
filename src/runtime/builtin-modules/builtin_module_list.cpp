@@ -1,41 +1,12 @@
 #include <ranges>
+#include <fmt/core.h>
 #include <lbd/runtime/builtins.h>
 #include <lbd/runtime/type.h>
 #include <lbd/runtime/builtin-modules/builtin_module_list.h>
 
 namespace lbd::runtime::builtins
 {
-    static Value listGet(const std::shared_ptr<List>& list, size_t index)
-    {
-        if (index >= list->elements.size())
-        {
-            optionsValue.logger.error({}, "runtime error: list index out of range, index is ", index);
-        }
-        return list->elements[index];
-    }
-
-    static Value listRemove(const std::shared_ptr<List>& list, size_t index)
-    {
-        if (index >= list->elements.size())
-        {
-            optionsValue.logger.error({}, "runtime error: list index out of range, index is ", index);
-        }
-        Value value = list->elements[index];
-        list->elements.erase(list->elements.begin() + static_cast<std::vector<Value>::difference_type>(index));
-        return value;
-    }
-
-    static void listAppend(const std::shared_ptr<List>& list, Value value)
-    {
-        list->elements.push_back(std::move(value));
-    }
-
-    std::shared_ptr<List> makeListObject(const std::vector<Value>& elements)
-    {
-        return std::make_shared<List>(List{elements});
-    }
-
-    NativeFunction makeList()
+    NativeFunction makeList(Context& context)
     {
         const std::string name = "list";
         const auto signature = functionType(
@@ -44,20 +15,20 @@ namespace lbd::runtime::builtins
             true
         );
         return {
-            name, signature, [](const std::vector<std::shared_ptr<Thunk>>& arguments,
-                                const std::shared_ptr<Environment>&) -> std::pair<Value, ResultOptions>
+            name, signature, [&context](const std::vector<std::shared_ptr<Thunk>>& arguments,
+                                        const std::shared_ptr<Environment>&) -> std::pair<Value, ResultOptions>
             {
                 std::vector<Value> values;
                 for (auto& argument : arguments)
                 {
-                    values.push_back(argument->force());
+                    values.push_back(argument->force(context));
                 }
-                return std::make_pair(Value{makeListObject(values)}, ResultOptions{});
+                return std::make_pair(Value{std::make_shared<List>(List{values})}, ResultOptions{});
             }
         };
     }
 
-    NativeFunction makeListSize()
+    NativeFunction makeListSize(Context& context)
     {
         const std::string name = "listSize";
         const auto signature = functionType(
@@ -65,17 +36,17 @@ namespace lbd::runtime::builtins
             simpleType(type::TypeTag::Float)
         );
         return {
-            name, signature, [](const std::vector<std::shared_ptr<Thunk>>& arguments,
-                                const std::shared_ptr<Environment>&) -> std::pair<Value, ResultOptions>
+            name, signature, [&context](const std::vector<std::shared_ptr<Thunk>>& arguments,
+                                        const std::shared_ptr<Environment>&) -> std::pair<Value, ResultOptions>
             {
-                const Value& argument0 = arguments[0]->force();
+                const Value& argument0 = arguments[0]->force(context);
                 const auto list = std::get<std::shared_ptr<List>>(argument0);
                 return std::make_pair(Value{static_cast<double>(list->elements.size())}, ResultOptions{});
             }
         };
     }
 
-    NativeFunction makeListGet()
+    NativeFunction makeListGet(Context& context)
     {
         const std::string name = "listGet";
         const auto signature = functionType(
@@ -83,20 +54,26 @@ namespace lbd::runtime::builtins
             simpleType(type::TypeTag::Any)
         );
         return {
-            name, signature, [](const std::vector<std::shared_ptr<Thunk>>& arguments,
-                                const std::shared_ptr<Environment>&) -> std::pair<Value, ResultOptions>
+            name, signature, [&context](const std::vector<std::shared_ptr<Thunk>>& arguments,
+                                        const std::shared_ptr<Environment>&) -> std::pair<Value, ResultOptions>
             {
-                const Value& argument0 = arguments[0]->force();
-                const Value& argument1 = arguments[1]->force();
-                return std::make_pair(Value{
-                                          listGet(std::get<std::shared_ptr<List>>(argument0),
-                                                  static_cast<size_t>(std::get<double>(argument1)))
-                                      }, ResultOptions{});
+                const Value& argument0 = arguments[0]->force(context);
+                const Value& argument1 = arguments[1]->force(context);
+                const std::shared_ptr<List> list = std::get<std::shared_ptr<List>>(argument0);
+                const auto index = static_cast<size_t>(std::get<double>(argument1));
+                if (index >= list->elements.size())
+                {
+                    context.getDiagnosticEmitter().error(
+                        arguments[1]->getRange(),
+                        diagnostics::DiagnosticId::KEY_OUT_OF_BOUNDS, index
+                    );
+                }
+                return std::make_pair(Value{list->elements[index]}, ResultOptions{});
             }
         };
     }
 
-    NativeFunction makeListRemove()
+    NativeFunction makeListRemove(Context& context)
     {
         const std::string name = "listRemove";
         const auto signature = functionType(
@@ -104,22 +81,28 @@ namespace lbd::runtime::builtins
             simpleType(type::TypeTag::Any)
         );
         return {
-            name, signature, [](const std::vector<std::shared_ptr<Thunk>>& arguments,
-                                const std::shared_ptr<Environment>&) -> std::pair<Value, ResultOptions>
+            name, signature, [&context](const std::vector<std::shared_ptr<Thunk>>& arguments,
+                                        const std::shared_ptr<Environment>&) -> std::pair<Value, ResultOptions>
             {
-                const Value& argument0 = arguments[0]->force();
-                const Value& argument1 = arguments[1]->force();
-                return std::make_pair(
-                    Value{
-                        listRemove(std::get<std::shared_ptr<List>>(argument0),
-                                   static_cast<size_t>(std::get<double>(argument1)))
-                    },
-                    ResultOptions{});
+                const Value& argument0 = arguments[0]->force(context);
+                const Value& argument1 = arguments[1]->force(context);
+                const std::shared_ptr<List> list = std::get<std::shared_ptr<List>>(argument0);
+                const auto index = static_cast<size_t>(std::get<double>(argument1));
+                if (index >= list->elements.size())
+                {
+                    context.getDiagnosticEmitter().error(
+                        arguments[1]->getRange(),
+                        diagnostics::DiagnosticId::KEY_OUT_OF_BOUNDS, index
+                    );
+                }
+                const Value value = list->elements[index];
+                list->elements.erase(list->elements.begin() + static_cast<std::vector<Value>::difference_type>(index));
+                return std::make_pair(Value{value}, ResultOptions{});
             }
         };
     }
 
-    NativeFunction makeListAppend()
+    NativeFunction makeListAppend(Context& context)
     {
         const std::string name = "listAppend";
         const auto signature = functionType(
@@ -127,25 +110,26 @@ namespace lbd::runtime::builtins
             nullptr
         );
         return {
-            name, signature, [name](const std::vector<std::shared_ptr<Thunk>>& arguments,
-                                    const std::shared_ptr<Environment>&) -> std::pair<Value, ResultOptions>
+            name, signature, [&context](const std::vector<std::shared_ptr<Thunk>>& arguments,
+                                        const std::shared_ptr<Environment>&) -> std::pair<Value, ResultOptions>
             {
-                const Value& argument0 = arguments[0]->force();
+                const Value& argument0 = arguments[0]->force(context);
+                // TODO: Test whether this validation even needed here.
                 if (!std::holds_alternative<std::shared_ptr<List>>(argument0))
                 {
-                    optionsValue.logger.error({}, "runtime error: wrong arguments provided to native function ", name,
-                                              "\n", name,
-                                              " signature: List -> Any -> List""\n"
-                                              "runtime error: expected <List> got ", argument0);
+                    context.getDiagnosticEmitter().error(
+                        arguments[0]->getRange(),
+                        diagnostics::DiagnosticId::TYPE_MISMATCH, "List"
+                    );
                 }
                 auto list = std::get<std::shared_ptr<List>>(argument0);
-                listAppend(list, arguments[1]->force());
+                list->elements.push_back(arguments[1]->force(context));
                 return std::make_pair(Value{list}, ResultOptions{});
             }
         };
     }
 
-    NativeFunction makeMap()
+    NativeFunction makeMap(Context& context)
     {
         const std::string name = "map";
         // TODO: The type should ideally be (Any1 -> Any2) -> [Any1] -> [Any2],
@@ -158,12 +142,12 @@ namespace lbd::runtime::builtins
             listType()
         );
         return {
-            name, signature, [](const std::vector<std::shared_ptr<Thunk>>& arguments,
-                                const std::shared_ptr<Environment>& callSiteEnvironment) -> std::pair<Value,
+            name, signature, [&context](const std::vector<std::shared_ptr<Thunk>>& arguments,
+                                        const std::shared_ptr<Environment>& callSiteEnvironment) -> std::pair<Value,
             ResultOptions>
             {
-                const Value& functionValue = arguments[0]->force();
-                const Value& listValue = arguments[1]->force();
+                const Value& functionValue = arguments[0]->force(context);
+                const Value& listValue = arguments[1]->force(context);
                 const auto list = std::get<std::shared_ptr<List>>(listValue);
                 std::vector<Value> results;
                 results.reserve(list->elements.size());
@@ -172,7 +156,8 @@ namespace lbd::runtime::builtins
                     auto elementThunk = std::make_shared<Thunk>();
                     elementThunk->cached = element;
                     // TODO: Accumulate ResultOptions from applyFunctionApplication
-                    auto mappedValue = applyFunctionApplication(functionValue, {elementThunk}, callSiteEnvironment);
+                    auto mappedValue = applyFunctionApplication(context, functionValue, {elementThunk},
+                                                                callSiteEnvironment);
                     results.push_back(mappedValue);
                 }
                 return {Value{std::make_shared<List>(List{std::move(results)})}, ResultOptions{}};
@@ -180,7 +165,7 @@ namespace lbd::runtime::builtins
         };
     }
 
-    NativeFunction makeTranspose()
+    NativeFunction makeTranspose(Context& context)
     {
         const std::string name = "transpose";
         const auto signature = functionType(
@@ -188,10 +173,10 @@ namespace lbd::runtime::builtins
             listType()
         );
         return {
-            name, signature, [name](const std::vector<std::shared_ptr<Thunk>>& arguments,
-                                    const std::shared_ptr<Environment>&) -> std::pair<Value, ResultOptions>
+            name, signature, [&context](const std::vector<std::shared_ptr<Thunk>>& arguments,
+                                        const std::shared_ptr<Environment>&) -> std::pair<Value, ResultOptions>
             {
-                const Value& argument0 = arguments[0]->force();
+                const Value& argument0 = arguments[0]->force(context);
                 const auto outerList = std::get<std::shared_ptr<List>>(argument0);
                 if (outerList->elements.empty()) return {Value{std::make_shared<List>(List{})}, ResultOptions{}};
                 // Ensure all elements are lists
@@ -203,9 +188,10 @@ namespace lbd::runtime::builtins
                     // TODO: Add explicit element type test on list.
                     if (!std::holds_alternative<std::shared_ptr<List>>(element))
                     {
-                        optionsValue.logger.error({},
-                                                  "runtime error: native function ", name,
-                                                  " expects List<List>, but got element ", element);
+                        context.getDiagnosticEmitter().error(
+                            arguments[0]->getRange(),
+                            diagnostics::DiagnosticId::TYPE_MISMATCH, "List<List>"
+                        );
                     }
                     auto row = std::get<std::shared_ptr<List>>(element);
                     rows.push_back(row);
@@ -229,7 +215,7 @@ namespace lbd::runtime::builtins
         };
     }
 
-    NativeFunction makeSort()
+    NativeFunction makeSort(Context& context)
     {
         const std::string name = "sort";
         const auto signature = functionType(
@@ -237,10 +223,10 @@ namespace lbd::runtime::builtins
             listType()
         );
         return {
-            name, signature, [name](const std::vector<std::shared_ptr<Thunk>>& arguments,
-                                    const std::shared_ptr<Environment>&) -> std::pair<Value, ResultOptions>
+            name, signature, [&context](const std::vector<std::shared_ptr<Thunk>>& arguments,
+                                        const std::shared_ptr<Environment>&) -> std::pair<Value, ResultOptions>
             {
-                const Value& argument0 = arguments[0]->force();
+                const Value& argument0 = arguments[0]->force(context);
                 const auto list = std::get<std::shared_ptr<List>>(argument0);
                 // Ensure all elements are floats
                 std::vector<double> floats;
@@ -249,9 +235,10 @@ namespace lbd::runtime::builtins
                 {
                     if (!std::holds_alternative<double>(element))
                     {
-                        optionsValue.logger.error({},
-                                                  "runtime error: native function ", name,
-                                                  "expects List of Float, but got element ", element);
+                        context.getDiagnosticEmitter().error(
+                            arguments[0]->getRange(),
+                            diagnostics::DiagnosticId::TYPE_MISMATCH, "List<Number>"
+                        );
                     }
                     floats.push_back(std::get<double>(element));
                 }
@@ -267,7 +254,7 @@ namespace lbd::runtime::builtins
         };
     }
 
-    NativeFunction makeZip()
+    NativeFunction makeZip(Context& context)
     {
         const std::string name = "zip";
         const auto signature = functionType(
@@ -275,10 +262,10 @@ namespace lbd::runtime::builtins
             listType()
         );
         return {
-            name, signature, [name](const std::vector<std::shared_ptr<Thunk>>& arguments,
-                                    const std::shared_ptr<Environment>&) -> std::pair<Value, ResultOptions>
+            name, signature, [&context](const std::vector<std::shared_ptr<Thunk>>& arguments,
+                                        const std::shared_ptr<Environment>&) -> std::pair<Value, ResultOptions>
             {
-                const Value& argument0 = arguments[0]->force();
+                const Value& argument0 = arguments[0]->force(context);
                 const auto outerList = std::get<std::shared_ptr<List>>(argument0);
                 if (outerList->elements.empty())
                 {
@@ -292,9 +279,10 @@ namespace lbd::runtime::builtins
                 {
                     if (!std::holds_alternative<std::shared_ptr<List>>(element))
                     {
-                        optionsValue.logger.error({},
-                                                  "runtime error: native function ", name,
-                                                  "expects List of List, but got element ", element);
+                        context.getDiagnosticEmitter().error(
+                            arguments[0]->getRange(),
+                            diagnostics::DiagnosticId::TYPE_MISMATCH, "List<List>"
+                        );
                     }
                     auto list = std::get<std::shared_ptr<List>>(element);
                     lists.push_back(list);
@@ -315,7 +303,7 @@ namespace lbd::runtime::builtins
         };
     }
 
-    NativeFunction makeFoldRight()
+    NativeFunction makeFoldRight(Context& context)
     {
         const std::string name = "foldRight";
         // TODO: Implement indexed any-type, as the type should ideally be:
@@ -330,13 +318,13 @@ namespace lbd::runtime::builtins
             simpleType(type::TypeTag::Any)
         );
         return {
-            name, signature, [](const std::vector<std::shared_ptr<Thunk>>& arguments,
-                                const std::shared_ptr<Environment>& callSiteEnvironment) -> std::pair<Value,
+            name, signature, [&context](const std::vector<std::shared_ptr<Thunk>>& arguments,
+                                        const std::shared_ptr<Environment>& callSiteEnvironment) -> std::pair<Value,
             ResultOptions>
             {
-                const Value& functionValue = arguments[0]->force();
-                const Value& initialValue = arguments[1]->force();
-                const Value& listValue = arguments[2]->force();
+                const Value& functionValue = arguments[0]->force(context);
+                const Value& initialValue = arguments[1]->force(context);
+                const Value& listValue = arguments[2]->force(context);
                 const auto list = std::get<std::shared_ptr<List>>(listValue);
                 // Start with the initial accumulator value
                 Value accumulatedValue = initialValue;
@@ -348,8 +336,8 @@ namespace lbd::runtime::builtins
                     auto accumulatedThunk = std::make_shared<Thunk>();
                     accumulatedThunk->cached = accumulatedValue;
                     // fn takes (element, accumulator)
-                    accumulatedValue = applyFunctionApplication(functionValue, {elementThunk, accumulatedThunk},
-                                                                callSiteEnvironment);
+                    accumulatedValue = applyFunctionApplication(context, functionValue,
+                                                                {elementThunk, accumulatedThunk}, callSiteEnvironment);
                 }
                 return {accumulatedValue, ResultOptions{}};
             }

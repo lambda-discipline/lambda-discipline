@@ -4,5 +4,5 @@
 
 namespace lbd::source
 {
-    using FileId = std::uint32_t;
+    using BufferId = std::uint32_t;
 }

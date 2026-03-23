@@ -4,15 +4,15 @@
 
 namespace lbd::runtime::builtins
 {
-    NativeFunction makeAdd();
+    NativeFunction makeAdd(Context &context);
 
-    NativeFunction makeSub();
+    NativeFunction makeSub(Context &context);
 
-    NativeFunction makeMul();
+    NativeFunction makeMul(Context &context);
 
-    NativeFunction makeCmp();
+    NativeFunction makeCmp(Context &context);
 
-    NativeFunction makeNull();
+    NativeFunction makeNull(Context &context);
 
-    NativeFunction makeParseFloat();
+    NativeFunction makeParseFloat(Context &context);
 }

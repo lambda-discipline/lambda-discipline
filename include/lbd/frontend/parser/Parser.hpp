@@ -11,34 +11,26 @@ namespace lbd::frontend::parser
     class Parser
     {
     public:
-        explicit Parser(lexer::Lexer& lexer, Context& context);
+        [[nodiscard]] explicit Parser(Context& context, lexer::Lexer& lexer) noexcept;
 
-        [[nodiscard]] std::vector<std::unique_ptr<ast::AstNode>> parse() const;
+        [[nodiscard]] std::vector<std::unique_ptr<ast::AstNode>> parse() const noexcept;
 
     private:
-        void assertToken(token::TokenKind expectedKind) const;
+        void assertToken(token::TokenKind expectedKind) const noexcept;
+        void assertAndAdvance(token::TokenKind expectedKind) const noexcept;
 
-        void assertAndAdvance(token::TokenKind expectedKind) const;
+        [[nodiscard]] std::vector<std::unique_ptr<ast::AstNode>> parseFile(const std::string& path,
+                                                                           const source::Range& range) const noexcept;
 
-        [[nodiscard]] std::vector<std::unique_ptr<ast::AstNode>> parseFile(const std::string& path) const;
-
-        [[nodiscard]] ast::DefinitionAstNode parseDefinitionAstNode() const;
-
-        [[nodiscard]] ast::IdentifierAstNode parseIdentifierAstNode() const;
-
-        [[nodiscard]] ast::StringAstNode parseStringAstNode() const;
-
-        [[nodiscard]] ast::FloatAstNode parseNumberAstNode() const;
-
-        [[nodiscard]] interpreter::type::PrimitiveType parsePrimitiveTypeName() const;
-
-        [[nodiscard]] interpreter::type::Type parseType() const;
-
-        [[nodiscard]] ast::Expression parseExpression() const;
-
-        [[nodiscard]] ast::LambdaExpression parseLambdaExpression() const;
-
-        [[nodiscard]] ast::FunctionApplication parseFunctionApplication() const;
+        [[nodiscard]] ast::DefinitionAstNode parseDefinitionAstNode() const noexcept;
+        [[nodiscard]] ast::IdentifierAstNode parseIdentifierAstNode() const noexcept;
+        [[nodiscard]] ast::StringAstNode parseStringAstNode() const noexcept;
+        [[nodiscard]] ast::FloatAstNode parseNumberAstNode() const noexcept;
+        [[nodiscard]] interpreter::type::PrimitiveType parsePrimitiveTypeName() const noexcept;
+        [[nodiscard]] interpreter::type::Type parseType() const noexcept;
+        [[nodiscard]] ast::Expression parseExpression() const noexcept;
+        [[nodiscard]] ast::LambdaExpression parseLambdaExpression() const noexcept;
+        [[nodiscard]] ast::FunctionApplication parseFunctionApplication() const noexcept;
 
         Context& context;
         lexer::Lexer& lexer;

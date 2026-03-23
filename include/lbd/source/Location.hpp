@@ -1,8 +1,6 @@
 #pragma once
 
-#include <cstdint>
-#include <optional>
-#include <lbd/source/FileId.hpp>
+#include <lbd/source/BufferId.hpp>
 
 namespace lbd::source
 {
@@ -10,23 +8,9 @@ namespace lbd::source
     using RowNumber = uint32_t;
     using ColumnNumber = uint32_t;
 
-    class Location
+    struct Location
     {
-    public:
-        Location(std::optional<FileId> fileId, Offset offset, RowNumber row, ColumnNumber column);
-
-        [[nodiscard]] std::optional<FileId> getFileId() const;
-
-        [[nodiscard]] Offset getOffset() const;
-
-        [[nodiscard]] RowNumber getRow() const;
-
-        [[nodiscard]] ColumnNumber getColumn() const;
-
-    private:
-        std::optional<FileId> fileId;
+        BufferId bufferId;
         Offset offset;
-        RowNumber row;
-        ColumnNumber column;
     };
 }

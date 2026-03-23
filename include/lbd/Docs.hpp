@@ -2,7 +2,7 @@
 
 #include <iostream>
 
-namespace lbd::docs
+namespace lbd
 {
     void dumpDocs(std::ostream& outputStream);
 }

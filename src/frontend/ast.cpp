@@ -61,7 +61,7 @@ namespace lbd::frontend::ast
 
     Expression::Expression(StringAstNode value) : value(std::move(value)) {}
 
-    Expression::Expression(FloatAstNode value) : value(std::move(value)) {}
+    Expression::Expression(FloatAstNode value) : value(value) {}
 
     Expression::Expression(LambdaExpression value) : value(std::move(value)) {}
 
@@ -101,6 +101,16 @@ namespace lbd::frontend::ast
         return std::visit([&](auto&& arg)
         {
             return arg.location;
+        }, value);
+    }
+
+
+    source::Range Expression::getRange() const noexcept
+    {
+        return std::visit([&](auto&& arg)
+        {
+            // TODO: Fix this when the expression starts to store Range instead of Location.
+            return source::Range(arg.location, arg.location);
         }, value);
     }
 
