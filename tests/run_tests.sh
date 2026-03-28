@@ -8,6 +8,12 @@ IGNORE_FILE="$TESTS_DIR/ignore_tests.list"
 
 source "$ROOT_DIR/scripts/commons.sh"
 
+GENERATE=0
+if [[ "${1:-}" == "--generate" ]]; then
+    GENERATE=1
+    log_info "Golden output generation mode enabled."
+fi
+
 passed=0
 failed=0
 skipped=0
@@ -23,8 +29,16 @@ while read -r source; do
         continue
     fi
 
-    rel_test_file_path="${source#examples/}"
-    out_file_path="examples/out/${rel_test_file_path%.lbd}.out.txt"
+    out_file_path="${source%.lbd}.out"
+
+    if [ "$GENERATE" -eq 1 ]; then
+        if ! "$LBD" -f "$source" > "$out_file_path" 2>&1; then
+            log_note "Generated (with errors) \"$out_file_path\"."
+        else
+            log_note "Generated \"$out_file_path\"."
+        fi
+        continue
+    fi
 
     if [ ! -f "$out_file_path" ]; then
         log_error "Missing output file \"$out_file_path\"."
@@ -33,7 +47,7 @@ while read -r source; do
     fi
 
     start=$(date +%s%N)
-    if diff -u <("$LBD" -f "$source") "$out_file_path"; then
+    if diff -u <("$LBD" -f "$source" 2>&1 || true) "$out_file_path"; then
         end=$(date +%s%N)
         elapsed=$(( (end - start) / 1000000 ))
         log_pass "Test \"$source\" passed. (${elapsed} ms)"
@@ -44,7 +58,11 @@ while read -r source; do
         log_fail "Test \"$source\" failed. (${elapsed} ms)"
         failed=$((failed+1))
     fi
-done < <(find examples -name "*lbd")
+done < <(find tests -name "*lbd")
+
+if [ "$GENERATE" -eq 1 ]; then
+    exit 0
+fi
 
 log_info "===================="
 log_info "Total: $total"

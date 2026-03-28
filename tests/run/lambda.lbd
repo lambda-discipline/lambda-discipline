@@ -1,0 +1,2 @@
+add2: Number -> Number -> Number = \x: Number. \y: Number. (add x y)
+(print (add2 5 7) "\n")

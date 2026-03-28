@@ -1,0 +1,3 @@
+nums: List = (list 1 2 3 4)
+square: Number -> Number = \x: Number. (mul x x)
+(print (map square nums) "\n")

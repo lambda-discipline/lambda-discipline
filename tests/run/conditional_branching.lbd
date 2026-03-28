@@ -1,0 +1,11 @@
+true: Bool = \x: Any. \y: Any. x
+false: Bool = \x: Any. \y: Any. y
+
+if: Any = \condition: Any.
+    \thenClause: Any. \elseClause: Any.
+        (condition thenClause elseClause)
+
+boolToString: Bool = \bool: Bool. (if bool "true" "false")
+
+(print (boolToString true) "\n")
+(print (boolToString false) "\n")
