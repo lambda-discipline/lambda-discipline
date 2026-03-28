@@ -12,7 +12,6 @@ namespace lbd::frontend::ast
 {
     struct IdentifierAstNode
     {
-        // TODO: This can be a std::string_view.
         std::string value;
         source::Location location;
 

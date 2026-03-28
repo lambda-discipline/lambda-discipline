@@ -1,0 +1,16 @@
+#pragma once
+
+namespace lbd::frontend::ast
+{
+    enum class AstNodeKind
+    {
+        IDENTIFIER_EXPRESSION,
+        STRING_EXPRESSION,
+        NUMBER_EXPRESSION,
+        LAMBDA_EXPRESSION,
+        FUNCTION_APPLICATION_EXPRESSION,
+        SYMBOL_DEFINITION,
+        EXPRESSION_STATEMENT,
+        SYMBOL_DEFINITION_STATEMENT,
+    };
+}
