@@ -19,6 +19,6 @@ namespace lbd::diagnostics
         const std::string message = fmt::vformat(getDiagnosticInfo(id).message, arguments);
         const Diagnostic diagnostic(severity, range, message, contextStack);
         diagnosticRenderer.render(diagnostic);
-        if (severity == Severity::ERROR) std::exit(EXIT_FAILURE);
+        if (severity == Severity::ERR) std::exit(EXIT_FAILURE);
     }
 }

@@ -1,0 +1,2 @@
+tests/diagnostics/type_error.lbd
+tests/diagnostics/unexpected_token.lbd

@@ -1,7 +1,2 @@
 ERROR: Invalid inputs to native function `add`.
 `add` signature: Float -> Float -> Float
-    +- /home/nosferatu/Projects/lambda-discipline/tests/diagnostics/type_error.lbd:7..7
-    |
-  1 | (print (add "hello" 5))
-    |        ^
-    |

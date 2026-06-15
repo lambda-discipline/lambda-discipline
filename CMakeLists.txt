@@ -1,97 +1,147 @@
 cmake_minimum_required(VERSION 3.20)
-project(lambda-discipline)
 
-set(CMAKE_CXX_STANDARD 23)
+project(lambda_discipline)
+
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-find_package(PkgConfig REQUIRED)
+include(FetchContent)
+
+FetchContent_Declare(
+    fmt
+    GIT_REPOSITORY https://github.com/fmtlib/fmt.git
+    GIT_TAG 11.2.0
+)
+
+FetchContent_Declare(
+    replxx
+    GIT_REPOSITORY https://github.com/AmokHuginnsson/replxx.git
+    GIT_TAG master
+)
+
+FetchContent_MakeAvailable(fmt)
+FetchContent_MakeAvailable(replxx)
+
+###### WARNINGS ######
+
+add_library(lbdWarnings INTERFACE)
+
+if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(lbdWarnings INTERFACE
+        -Wall
+        -Wextra
+#        -Wpedantic
+#        -Wconversion
+#        -Wshadow
+    )
+endif ()
 
 ###### SOURCE ######
+
 file(GLOB_RECURSE SOURCE_SOURCE_FILES CONFIGURE_DEPENDS
     ${PROJECT_SOURCE_DIR}/src/source/*.cpp
 )
-add_library(lbdSource STATIC)
-target_sources(lbdSource PRIVATE ${SOURCE_SOURCE_FILES})
-target_include_directories(lbdSource PUBLIC ${PROJECT_SOURCE_DIR}/include)
+
+add_library(lbdSource STATIC
+    ${SOURCE_SOURCE_FILES}
+)
+
+target_include_directories(lbdSource PUBLIC
+    ${PROJECT_SOURCE_DIR}/include
+)
+
+target_link_libraries(lbdSource PUBLIC
+    lbdWarnings
+)
 
 ###### DIAGNOSTICS ######
+
 file(GLOB_RECURSE DIAGNOSTICS_SOURCE_FILES CONFIGURE_DEPENDS
     ${PROJECT_SOURCE_DIR}/src/diagnostics/*.cpp
 )
-add_library(lbdDiagnostics STATIC)
-target_sources(lbdDiagnostics PRIVATE ${DIAGNOSTICS_SOURCE_FILES})
+
+add_library(lbdDiagnostics STATIC
+    ${DIAGNOSTICS_SOURCE_FILES}
+)
+
+target_include_directories(lbdDiagnostics PUBLIC
+    ${PROJECT_SOURCE_DIR}/include
+)
+
 target_link_libraries(lbdDiagnostics PUBLIC
     lbdSource
+    lbdWarnings
+    fmt::fmt
 )
-target_include_directories(lbdDiagnostics PUBLIC ${PROJECT_SOURCE_DIR}/include)
 
-# Fmt.
-pkg_check_modules(FMT REQUIRED fmt)
+###### FRONTEND ######
 
-####### FRONTEND #######
 file(GLOB_RECURSE FRONTEND_SOURCE_FILES CONFIGURE_DEPENDS
     ${PROJECT_SOURCE_DIR}/src/frontend/*.cpp
 )
-add_library(lbdFrontend STATIC)
-target_sources(lbdFrontend PRIVATE ${FRONTEND_SOURCE_FILES})
-target_include_directories(lbdFrontend PUBLIC
-    ${PROJECT_SOURCE_DIR}/include
-    ${FMT_INCLUDE_DIRS}
-)
-target_link_libraries(lbdFrontend PRIVATE
-    lbdDiagnostics
-    ${FMT_LIBRARIES}
+
+add_library(lbdFrontend STATIC
+    ${FRONTEND_SOURCE_FILES}
 )
 
-####### RUNTIME #######
+target_include_directories(lbdFrontend PUBLIC
+    ${PROJECT_SOURCE_DIR}/include
+)
+
+target_link_libraries(lbdFrontend PUBLIC
+    lbdDiagnostics
+    lbdWarnings
+)
+
+###### RUNTIME ######
+
 file(GLOB_RECURSE RUNTIME_SOURCE_FILES CONFIGURE_DEPENDS
     ${PROJECT_SOURCE_DIR}/src/runtime/*.cpp
 )
-add_library(lbdRuntime STATIC)
-target_sources(lbdRuntime PRIVATE ${RUNTIME_SOURCE_FILES})
+
+add_library(lbdRuntime STATIC
+    ${RUNTIME_SOURCE_FILES}
+)
+
 target_include_directories(lbdRuntime PUBLIC
     ${PROJECT_SOURCE_DIR}/include
-    ${FMT_INCLUDE_DIRS}
 )
-target_link_libraries(lbdRuntime PRIVATE
+
+target_link_libraries(lbdRuntime PUBLIC
     lbdDiagnostics
-    ${FMT_LIBRARIES}
+    lbdWarnings
 )
 
 ###### MAIN EXECUTABLE ######
+
 file(GLOB LBD_SOURCE_FILES CONFIGURE_DEPENDS
     ${PROJECT_SOURCE_DIR}/src/*.cpp
     ${PROJECT_SOURCE_DIR}/src/utils/terminal/*.cpp
 )
-add_executable(lbd)
-target_sources(lbd PRIVATE ${LBD_SOURCE_FILES})
+
+add_executable(lbd
+    ${LBD_SOURCE_FILES}
+)
+
+target_include_directories(lbd PRIVATE
+    ${PROJECT_SOURCE_DIR}/include
+)
+
 target_link_libraries(lbd PRIVATE
+    lbdWarnings
     lbdDiagnostics
     lbdFrontend
     lbdRuntime
+    replxx
 )
 
-# Readline.
-pkg_check_modules(READLINE REQUIRED readline)
-target_include_directories(lbd PRIVATE ${READLINE_INCLUDE_DIRS})
-target_link_libraries(lbd PRIVATE ${READLINE_LIBRARIES})
+target_link_options(lbd PRIVATE -static-libstdc++)
 
-# Fully static build (platform dependent).
-option(LBD_STATIC_BUILD "Build fully static binary" OFF)
-if (LBD_STATIC_BUILD)
-    target_link_options(lbd PRIVATE -static)
-    # Readline depends upon ncurses.
-    target_link_libraries(lbd PRIVATE ncurses tinfo)
-endif ()
+###### TESTS ######
 
-# Warnings.
-target_compile_options(lbd PRIVATE -Wall -Wextra -Wpedantic)
-
-# Tests.
 enable_testing()
 
-# Example test
 # add_executable(lexer_test tests/lexer_test.cc)
 # target_link_libraries(lexer_test PRIVATE lbdFrontend)
 # add_test(NAME lexer_test COMMAND lexer_test)

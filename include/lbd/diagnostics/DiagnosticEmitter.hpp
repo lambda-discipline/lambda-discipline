@@ -26,8 +26,8 @@ namespace lbd::diagnostics
         {
             fmt::dynamic_format_arg_store<fmt::format_context> store;
             (store.push_back(std::forward<Args>(args)), ...);
-            emit(Severity::ERROR, id, range, store);
-            std::unreachable();
+            emit(Severity::ERR, id, range, store);
+            unreachable_impl();
         }
 
         template <typename... Args>
