@@ -1,0 +1,15 @@
+stages:
+  - test
+
+linux:
+  stage: test
+  image: python:3.12
+
+  before_script:
+    - apt-get update
+    - apt-get install -y build-essential cmake ninja-build
+
+  script:
+    - python make.py setup
+    - python make.py build
+    - python make.py test

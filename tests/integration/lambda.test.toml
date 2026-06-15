@@ -1,0 +1,7 @@
+file = "lambda.lbd"
+
+[expect]
+exit_code = 0
+stdout = """
+12.000000
+"""

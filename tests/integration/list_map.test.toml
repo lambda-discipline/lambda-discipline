@@ -1,0 +1,7 @@
+file = "list_map.lbd"
+
+[expect]
+exit_code = 0
+stdout = """
+[1.000000, 4.000000, 9.000000, 16.000000]
+"""

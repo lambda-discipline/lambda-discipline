@@ -1,0 +1,7 @@
+file = "shapes.lbd"
+
+[expect]
+exit_code = 0
+stdout = """
+Volume of cylinder is: 785.000000
+"""

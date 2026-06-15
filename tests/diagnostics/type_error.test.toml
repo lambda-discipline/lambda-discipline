@@ -1,0 +1,10 @@
+file = "type_error.lbd"
+
+[expect]
+exit_code = 1
+stderr_contains = [
+    "ERROR: Invalid inputs to native function `add`.",
+    "`add` signature: Float -> Float -> Float",
+    "type_error.lbd:7..7",
+    "(print (add \"hello\" 5))",
+]

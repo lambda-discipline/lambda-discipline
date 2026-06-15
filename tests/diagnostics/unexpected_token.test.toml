@@ -1,0 +1,9 @@
+file = "unexpected_token.lbd"
+
+[expect]
+exit_code = 1
+stderr_contains = [
+    "ERROR: Unexpected character `;`.",
+    "unexpected_token.lbd:13..13",
+    "a: Number = 1;",
+]

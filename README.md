@@ -13,14 +13,14 @@
 
 ### Setup
 
-```bash
-bash ./scripts/build.sh
+```shell
+python make.py setup
 ```
 
 ### Run Golden Tests
 
-```bash
-bash ./tests/run_tests.sh
+```shell
+python make.py test
 ```
 
 ## Samples
@@ -42,7 +42,7 @@ boolToString: Bool = \bool: Bool. (if bool "true" "false")
 ```
 
 ```console
-$ ./cmake-build-debug/lbd -f  ./examples/conditional_branching.lbd
+$ ./cmake-build-debug/lbd run ./examples/conditional_branching.lbd
 true
 false
 ```
@@ -69,7 +69,7 @@ volumeOfCylinder: Float -> Float -> Float = \r: Float.
 ```
 
 ```console
-$ ./cmake-build-debug/lbd -f ./examples/shapes.lbd
+$ ./cmake-build-debug/lbd run ./examples/shapes.lbd
 Volume of cylinder is: 785.000000
 ```
 
@@ -85,7 +85,7 @@ fibonacci: Any = \num: Float.
 ```
 
 ```console
-$ ./cmake-build-debug/lbd -f ./examples/math_demos.lbd
+$ ./cmake-build-debug/lbd run ./examples/math_demos.lbd
 55.000000
 ```
 

@@ -1,0 +1,7 @@
+file = "fold_list.lbd"
+
+[expect]
+exit_code = 0
+stdout = """
+10.000000
+"""

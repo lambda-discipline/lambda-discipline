@@ -1,8 +1,0 @@
-ERROR: Unexpected character `;`.
-    +- /home/nosferatu/Projects/lambda-discipline/tests/diagnostics/unexpected_token.lbd:13..13
-    |
-  1 | a: Number = 1;
-    |              ^
-    |
-    +- NOTE: While parsing `/home/nosferatu/Projects/lambda-discipline/tests/diagnostics/unexpected_token.lbd`.
-    +- NOTE: While lexing `/home/nosferatu/Projects/lambda-discipline/tests/diagnostics/unexpected_token.lbd`.

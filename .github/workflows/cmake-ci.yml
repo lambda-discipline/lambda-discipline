@@ -1,23 +1,31 @@
-name: Test examples on debug-build
+name: CI/CD Test Pipeline
 
 on:
   push:
-    branches: [ "master" ]
   pull_request:
-    branches: [ "master" ]
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
+  test:
+    strategy:
+      matrix:
+        os: [ ubuntu-latest, windows-latest ]
+
+    runs-on: ${{ matrix.os }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Build
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Build CMake project
         run: |
-          bash scripts/build.sh Debug
+          python make.py setup
+          python make.py build
 
       - name: Run Golden Tests
         run: |
-          bash tests/run_tests.sh
+          python make.py test
