@@ -47,7 +47,7 @@ while read -r source; do
     fi
 
     start=$(date +%s%N)
-    if diff -u <("$LBD" -f "$source" 2>&1 || true) "$out_file_path"; then
+    if diff -u <("$LBD" run "$source" 2>&1 || true) "$out_file_path"; then
         end=$(date +%s%N)
         elapsed=$(( (end - start) / 1000000 ))
         log_pass "Test \"$source\" passed. (${elapsed} ms)"

@@ -4,12 +4,13 @@
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
-#include <cstdio>
 #include <io.h>
 #include <windows.h>
 #else
 #include <unistd.h>
 #endif
+
+#include <cstdio>
 
 namespace lbd::utils::terminal
 {

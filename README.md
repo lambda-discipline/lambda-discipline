@@ -9,7 +9,7 @@
 ### Prerequisites
 
 - **CMake** (version 3.20+ recommended)
-- A C++23 capable compiler (e.g. `g++`, `clang++`, or MSVC on Windows)
+- A C++20 capable compiler (e.g. `g++`, `clang++`, or MSVC on Windows)
 
 ### Setup
 
@@ -94,20 +94,23 @@ $ ./cmake-build-debug/lbd -f ./examples/math_demos.lbd
 After building, you can run the interpreter with:
 
 ```bash
-lbd [options]
+lbd [subcommands] <options>
 ```
 
 ### Options
 
 ```
--f, --file <filepath>   Specify input source filepath to run
--h, --help              Show this help message and exit
--d, --debug             Enable debug mode
--r, --repl              Run in interactive REPL node
---docs                  Generate language-reference-document
+OPTIONS:
+  -h,     --help              Print this help message and exit
+  -d,     --debug
+
+SUBCOMMANDS:
+  run                         Run a Lambda Discipline source file
+  docs                        Generate native function signatures for reference
+  repl                        Start an interactive Read-Eval-Print Loop (REPL)
 ```
 
-> Generate the language-reference-document by using the `--docs` flag, and use it as the source of truth for
+> Generate the language-reference-document by using the `docs` subcommand, and use it as the source of truth for
 > native-function-signatures.
 
 ## Editor Plugins
@@ -116,5 +119,6 @@ lbd [options]
 
 ## Dependencies
 
-1. [readline](https://man7.org/linux/man-pages/man3/readline.3.html): For better REPL user experience.
-2. [fmt](https://github.com/fmtlib/fmt): For formatting strings.
+1. [fmt](https://github.com/fmtlib/fmt.git): For formatting strings.
+2. [replxx](https://github.com/AmokHuginnsson/replxx.git): For better REPL user experience.
+3. [CLI11](https://github.com/CLIUtils/CLI11.git): For better CLI support.

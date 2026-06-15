@@ -20,8 +20,15 @@ FetchContent_Declare(
     GIT_TAG master
 )
 
+FetchContent_Declare(
+    CLI11
+    GIT_REPOSITORY https://github.com/CLIUtils/CLI11.git
+    GIT_TAG v2.5.0
+)
+
 FetchContent_MakeAvailable(fmt)
 FetchContent_MakeAvailable(replxx)
+FetchContent_MakeAvailable(CLI11)
 
 ###### WARNINGS ######
 
@@ -31,9 +38,9 @@ if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(lbdWarnings INTERFACE
         -Wall
         -Wextra
-#        -Wpedantic
-#        -Wconversion
-#        -Wshadow
+        #        -Wpedantic
+        #        -Wconversion
+        #        -Wshadow
     )
 endif ()
 
@@ -118,6 +125,8 @@ target_link_libraries(lbdRuntime PUBLIC
 file(GLOB LBD_SOURCE_FILES CONFIGURE_DEPENDS
     ${PROJECT_SOURCE_DIR}/src/*.cpp
     ${PROJECT_SOURCE_DIR}/src/utils/terminal/*.cpp
+    ${PROJECT_SOURCE_DIR}/src/cli/*.cpp
+    ${PROJECT_SOURCE_DIR}/src/cli/commands/*.cpp
 )
 
 add_executable(lbd
@@ -134,6 +143,7 @@ target_link_libraries(lbd PRIVATE
     lbdFrontend
     lbdRuntime
     replxx
+    CLI11::CLI11
 )
 
 target_link_options(lbd PRIVATE -static-libstdc++)
