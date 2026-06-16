@@ -1,16 +1,16 @@
+import argparse
 import subprocess
 import sys
 from pathlib import Path
-import argparse
 
 
 def log(level, message):
     print(f"[{level}] {message}")
 
 
-def error(message, shouldExit=False):
+def error(message, should_exit=False):
     log("ERROR", message)
-    if shouldExit:
+    if should_exit:
         sys.exit(1)
 
 
@@ -18,8 +18,7 @@ def info(message):
     log("INFO", message)
 
 
-BUILD_DIR = "cmake-build-debug"
-VENV_DIR = "venv"
+ROOT = Path(__file__).resolve().parent
 
 
 def python():
@@ -50,17 +49,24 @@ def subcommand_build():
 
 
 def subcommand_test():
-    subprocess.run([python(), "-m", "pytest", "-v"], check=True)
+    subprocess.run([python(), "-m", "pytest", f'--build-dir={BUILD_DIR}', "-v"], cwd=ROOT, check=True)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog="make.py", description="Lambda Discipline build tool")
+    parser.add_argument("--build-dir", default="cmake-build-debug", help="CMake build directory (default: %(default)s)")
+    parser.add_argument("--venv-dir", default="venv",
+                        help="Python virtual environment directory (default: %(default)s)")
+
     subparsers = parser.add_subparsers(dest="command", required=True)
     subparsers.add_parser("setup", help="Create venv, install dependencies, and configure CMake")
     subparsers.add_parser("build", help="Build the project")
     subparsers.add_parser("test", help="Run tests")
 
     args = parser.parse_args()
+    BUILD_DIR = args.build_dir
+    VENV_DIR = args.venv_dir
+
     match args.command:
         case "setup":
             subcommand_setup()

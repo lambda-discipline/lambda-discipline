@@ -7,27 +7,27 @@
 
 namespace lbd
 {
-    class Context
-    {
-    public:
-        explicit Context(std::ostream& outputStream, Options options = {});
+  class Context
+  {
+  public:
+    explicit Context(std::ostream &outputStream, Options options = {});
 
-        [[nodiscard]] source::BufferManager& getBufferManager();
+    [[nodiscard]] source::BufferManager &getBufferManager();
 
-        [[nodiscard]] diagnostics::DiagnosticEmitter& getDiagnosticEmitter();
+    [[nodiscard]] diagnostics::DiagnosticEmitter &getDiagnosticEmitter();
 
-        [[nodiscard]] Options& getOptions();
+    [[nodiscard]] Options &getOptions();
 
-        [[nodiscard]] Logger& getLogger();
+    [[nodiscard]] Logger &getLogger();
 
-        /// Emits error upon unable to load the file.
-        [[nodiscard]] source::BufferId loadFile(const std::string& path, const source::Range& range);
+    /// Emits error upon unable to load the file.
+    [[nodiscard]] source::BufferId loadFile(const std::string &path, const source::Range &range);
 
-    private:
-        Options options;
-        Logger logger;
-        source::BufferManager bufferManager;
-        diagnostics::DiagnosticRenderer diagnosticRenderer;
-        diagnostics::DiagnosticEmitter diagnosticEmitter;
-    };
+  private:
+    Options options;
+    Logger logger;
+    source::BufferManager bufferManager;
+    diagnostics::DiagnosticRenderer diagnosticRenderer;
+    diagnostics::DiagnosticEmitter diagnosticEmitter;
+  };
 }

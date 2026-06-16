@@ -8,16 +8,17 @@
 
 namespace lbd::source
 {
-    struct Buffer
-    {
-        BufferId id;
-        std::string name;
-        std::string contents;
-        std::vector<Offset> lineOffsets;
+  struct Buffer
+  {
+    BufferId id;
+    std::string name;
+    std::string contents;
+    std::vector<Offset> lineOffsets;
 
-        [[nodiscard]] size_t getSize() const;
-        [[nodiscard]] char operator[](size_t index) const;
+    [[nodiscard]] size_t getSize() const;
 
-        void computeLineOffsets() noexcept;
-    };
+    [[nodiscard]] char operator[](size_t index) const;
+
+    void computeLineOffsets() noexcept;
+  };
 }

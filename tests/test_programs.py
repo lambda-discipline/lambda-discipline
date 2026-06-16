@@ -1,13 +1,12 @@
-from pathlib import Path
-import subprocess
 import re
+import subprocess
 import tomllib
+from pathlib import Path
+
 import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 TESTS = ROOT / "tests"
-LBD = ROOT / "cmake-build-debug" / "lbd"
-
 
 def discover_tests():
     return sorted(TESTS.rglob("*.test.toml"))
@@ -17,18 +16,32 @@ def make_test_id(path: Path) -> str:
     return str(path.relative_to(TESTS))
 
 
+def lbd(build_dir: Path) -> str:
+    candidates = [
+        build_dir / "lbd",
+        build_dir / "Debug" / "lbd",
+        build_dir / "Debug" / "lbd.exe",
+        build_dir / "lbd.exe",
+    ]
+
+    exe = next((p for p in candidates if p.exists()), None)
+    if exe is None:
+        raise FileNotFoundError("Could not locate lbd executable")
+    return str(exe)
+
+
 @pytest.mark.parametrize(
     "manifest_path",
     discover_tests(),
     ids=make_test_id,
 )
-def test_program(manifest_path: Path):
+def test_program(manifest_path: Path, build_dir: Path):
     manifest = tomllib.loads(manifest_path.read_text())
 
     source = manifest_path.parent / manifest["file"]
 
     result = subprocess.run(
-        [str(LBD), "run", str(source)],
+        [lbd(build_dir), "run", str(source)],
         capture_output=True,
         text=True,
     )

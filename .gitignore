@@ -3,5 +3,6 @@ cmake-build-debug/
 venv/
 **__pycache__/
 dump/
+.pytest_cache/
 .lbd_history
 .direnv.ps1

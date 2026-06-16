@@ -7,24 +7,24 @@
 
 namespace lbd::diagnostics
 {
-    class Diagnostic
-    {
-    public:
-        Diagnostic(Severity severity, const source::Range& range, std::string message,
-                   const std::vector<ContextFrame>& contextStack);
+  class Diagnostic
+  {
+  public:
+    Diagnostic(Severity severity, const source::Range &range, std::string message,
+               const std::vector<ContextFrame> &contextStack);
 
-        [[nodiscard]] Severity getSeverity() const;
+    [[nodiscard]] Severity getSeverity() const;
 
-        [[nodiscard]] source::Range getRange() const;
+    [[nodiscard]] source::Range getRange() const;
 
-        [[nodiscard]] std::string_view getMessage() const;
+    [[nodiscard]] std::string_view getMessage() const;
 
-        [[nodiscard]] const std::vector<ContextFrame>& getContextStack() const;
+    [[nodiscard]] const std::vector<ContextFrame> &getContextStack() const;
 
-    private:
-        Severity severity;
-        source::Range range;
-        std::string message;
-        std::vector<ContextFrame> contextStack;
-    };
+  private:
+    Severity severity;
+    source::Range range;
+    std::string message;
+    std::vector<ContextFrame> contextStack;
+  };
 }

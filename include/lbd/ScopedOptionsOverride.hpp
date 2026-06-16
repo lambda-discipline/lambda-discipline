@@ -4,17 +4,17 @@
 
 namespace lbd
 {
-    class ScopedOptionsOverride
-    {
-    public:
-        explicit ScopedOptionsOverride(Context& context);
+  class ScopedOptionsOverride
+  {
+  public:
+    explicit ScopedOptionsOverride(Context &context);
 
-        ~ScopedOptionsOverride();
+    ~ScopedOptionsOverride();
 
-        Options& get() const;
+    Options &get() const;
 
-    private:
-        Context& context;
-        Options oldOptions;
-    };
+  private:
+    Context &context;
+    Options oldOptions;
+  };
 }

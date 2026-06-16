@@ -6,14 +6,14 @@
 
 namespace lbd::diagnostics
 {
-    class [[nodiscard]] ContextGuard
-    {
-    public:
-        ContextGuard(DiagnosticEmitter& diagnosticEmitter, const source::Range& range, std::string message);
+  class [[nodiscard]] ContextGuard
+  {
+  public:
+    ContextGuard(DiagnosticEmitter &diagnosticEmitter, const source::Range &range, std::string message);
 
-        ~ContextGuard();
+    ~ContextGuard();
 
-    private:
-        DiagnosticEmitter& diagnosticEmitter;
-    };
+  private:
+    DiagnosticEmitter &diagnosticEmitter;
+  };
 }

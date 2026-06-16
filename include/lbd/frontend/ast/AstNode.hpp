@@ -5,20 +5,22 @@
 
 namespace lbd::frontend::ast
 {
-    class AstNode
-    {
-    public:
-        AstNode(AstNodeKind kind, source::Range range);
-        virtual ~AstNode() = default;
+  class AstNode
+  {
+  public:
+    AstNode(AstNodeKind kind, source::Range range);
 
-        virtual void print(std::ostream& outputStream, size_t indent) const noexcept = 0;
-        friend std::ostream& operator<<(std::ostream& outputStream, const AstNode& node);
+    virtual ~AstNode() = default;
 
-    private:
-        const AstNodeKind kind;
-        const source::Range range;
+    virtual void print(std::ostream &outputStream, size_t indent) const noexcept = 0;
 
-    protected:
-        static void printIndent(std::ostream& outputStream, size_t indent) noexcept;
-    };
+    friend std::ostream &operator<<(std::ostream &outputStream, const AstNode &node);
+
+  private:
+    const AstNodeKind kind;
+    const source::Range range;
+
+  protected:
+    static void printIndent(std::ostream &outputStream, size_t indent) noexcept;
+  };
 }

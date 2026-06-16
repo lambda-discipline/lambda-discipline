@@ -2,8 +2,8 @@
 
 namespace lbd::frontend::token
 {
-    std::ostream& operator<<(std::ostream& outputStream, const Token& token)
-    {
-        return outputStream << token.range << " <" << tokenKindToString(token.kind) << "> " << token.lexeme;
-    }
+  std::ostream &operator<<(std::ostream &outputStream, const Token &token)
+  {
+    return outputStream << token.range << " <" << tokenKindToString(token.kind) << "> " << token.lexeme;
+  }
 }

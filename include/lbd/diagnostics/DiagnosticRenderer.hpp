@@ -5,15 +5,15 @@
 
 namespace lbd::diagnostics
 {
-    class DiagnosticRenderer
-    {
-    public:
-        DiagnosticRenderer(std::ostream& outputStream, source::BufferManager& sourceManager);
+  class DiagnosticRenderer
+  {
+  public:
+    DiagnosticRenderer(std::ostream &outputStream, source::BufferManager &sourceManager);
 
-        void render(const Diagnostic& diagnostic) const;
+    void render(const Diagnostic &diagnostic) const;
 
-    private:
-        std::ostream& outputStream;
-        const source::BufferManager& sourceManager;
-    };
+  private:
+    std::ostream &outputStream;
+    const source::BufferManager &sourceManager;
+  };
 }

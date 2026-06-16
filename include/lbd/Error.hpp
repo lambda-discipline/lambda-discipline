@@ -2,7 +2,7 @@
 
 #include <cassert>
 
-template <typename>
+template<typename>
 inline constexpr bool alwaysFalseValue = false;
 
 #define STATIC_ASSERT(VAL, MSG) \

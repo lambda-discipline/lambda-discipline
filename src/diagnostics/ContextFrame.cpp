@@ -2,10 +2,10 @@
 
 namespace lbd::diagnostics
 {
-    ContextFrame::ContextFrame(const source::Range& range, std::string message) : range(range),
-        message(std::move(message)) {}
+  ContextFrame::ContextFrame(const source::Range &range, std::string message) : range(range),
+    message(std::move(message)) {}
 
-    source::Range ContextFrame::getRange() const { return range; }
+  source::Range ContextFrame::getRange() const { return range; }
 
-    std::string ContextFrame::getMessage() const { return message; }
+  std::string ContextFrame::getMessage() const { return message; }
 }

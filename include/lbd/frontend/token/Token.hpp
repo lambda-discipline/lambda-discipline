@@ -5,13 +5,13 @@
 
 namespace lbd::frontend::token
 {
-    struct Token
-    {
-        TokenKind kind;
-        std::string lexeme;
-        source::Range range;
+  struct Token
+  {
+    TokenKind kind;
+    std::string lexeme;
+    source::Range range;
 
-        // For debugging.
-        friend std::ostream& operator<<(std::ostream& outputStream, const Token& token);
-    };
+    // For debugging.
+    friend std::ostream &operator<<(std::ostream &outputStream, const Token &token);
+  };
 }

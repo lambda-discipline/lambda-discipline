@@ -30,19 +30,25 @@ FetchContent_MakeAvailable(fmt)
 FetchContent_MakeAvailable(replxx)
 FetchContent_MakeAvailable(CLI11)
 
-###### WARNINGS ######
-
-add_library(lbdWarnings INTERFACE)
-
-if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-    target_compile_options(lbdWarnings INTERFACE
-        -Wall
-        -Wextra
-        #        -Wpedantic
-        #        -Wconversion
-        #        -Wshadow
-    )
-endif ()
+function(enable_warnings target)
+    if (MSVC)
+        target_compile_options(${target} PRIVATE
+            /W4
+            /permissive-
+        )
+    else ()
+        target_compile_options(${target} PRIVATE
+            -Wall
+            -Wextra
+            # -Wpedantic
+            # -Wconversion
+            # -Wshadow
+            # -Wnon-virtual-dtor
+            # -Wold-style-cast
+            # -Woverloaded-virtual
+        )
+    endif ()
+endfunction()
 
 ###### SOURCE ######
 
@@ -56,10 +62,6 @@ add_library(lbdSource STATIC
 
 target_include_directories(lbdSource PUBLIC
     ${PROJECT_SOURCE_DIR}/include
-)
-
-target_link_libraries(lbdSource PUBLIC
-    lbdWarnings
 )
 
 ###### DIAGNOSTICS ######
@@ -78,7 +80,6 @@ target_include_directories(lbdDiagnostics PUBLIC
 
 target_link_libraries(lbdDiagnostics PUBLIC
     lbdSource
-    lbdWarnings
     fmt::fmt
 )
 
@@ -86,6 +87,10 @@ target_link_libraries(lbdDiagnostics PUBLIC
 
 file(GLOB_RECURSE FRONTEND_SOURCE_FILES CONFIGURE_DEPENDS
     ${PROJECT_SOURCE_DIR}/src/frontend/*.cpp
+)
+
+list(FILTER FRONTEND_SOURCE_FILES EXCLUDE REGEX
+    ".*/src/frontend/ast/.*\\.cpp$"
 )
 
 add_library(lbdFrontend STATIC
@@ -98,7 +103,6 @@ target_include_directories(lbdFrontend PUBLIC
 
 target_link_libraries(lbdFrontend PUBLIC
     lbdDiagnostics
-    lbdWarnings
 )
 
 ###### RUNTIME ######
@@ -117,7 +121,6 @@ target_include_directories(lbdRuntime PUBLIC
 
 target_link_libraries(lbdRuntime PUBLIC
     lbdDiagnostics
-    lbdWarnings
 )
 
 ###### MAIN EXECUTABLE ######
@@ -138,7 +141,6 @@ target_include_directories(lbd PRIVATE
 )
 
 target_link_libraries(lbd PRIVATE
-    lbdWarnings
     lbdDiagnostics
     lbdFrontend
     lbdRuntime
@@ -146,7 +148,20 @@ target_link_libraries(lbd PRIVATE
     CLI11::CLI11
 )
 
-target_link_options(lbd PRIVATE -static-libstdc++)
+if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_link_options(lbd PRIVATE
+        -static-libstdc++
+        -static-libgcc
+    )
+endif ()
+
+###### WARNINGS ######
+
+enable_warnings(lbdSource)
+enable_warnings(lbdDiagnostics)
+enable_warnings(lbdFrontend)
+enable_warnings(lbdRuntime)
+enable_warnings(lbd)
 
 ###### TESTS ######
 

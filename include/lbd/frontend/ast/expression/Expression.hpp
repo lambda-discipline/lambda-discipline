@@ -4,8 +4,8 @@
 
 namespace lbd::frontend::ast::expression
 {
-    class Expression : public AstNode
-    {
-        using AstNode::AstNode;
-    };
+  class Expression : public AstNode
+  {
+    using AstNode::AstNode;
+  };
 }

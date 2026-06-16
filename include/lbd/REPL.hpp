@@ -4,5 +4,5 @@
 
 namespace lbd::repl
 {
-    void loop(Context& context, bool debug = false);
+  void loop(Context &context, bool debug = false);
 }

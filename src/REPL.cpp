@@ -2,12 +2,12 @@
 #include <fstream>
 #include <iostream>
 #include <replxx.hxx>
-#include <lbd/exceptions.h>
+#include <lbd/Exceptions.hpp>
 #include <lbd/REPL.hpp>
 #include <lbd/ScopedOptionsOverride.hpp>
 #include <lbd/frontend/lexer/Lexer.hpp>
 #include <lbd/frontend/parser/Parser.hpp>
-#include <lbd/runtime/interpreter.h>
+#include <lbd/runtime/Interpreter.hpp>
 #include <lbd/utils/terminal/Table.hpp>
 #include <lbd/utils/terminal/Terminal.hpp>
 

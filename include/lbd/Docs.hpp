@@ -4,5 +4,5 @@
 
 namespace lbd
 {
-    void dumpDocs(std::ostream& outputStream);
+  void dumpDocs(std::ostream & outputStream);
 }
