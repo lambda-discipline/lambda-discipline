@@ -119,5 +119,6 @@ SUBCOMMANDS:
 
 ## Dependencies
 
-1. [replxx](https://github.com/AmokHuginnsson/replxx.git): For better REPL user experience.
-2. [CLI11](https://github.com/CLIUtils/CLI11.git): For better CLI support.
+1. [fmt](https://github.com/fmtlib/fmt.git): String formatting.
+2. [replxx](https://github.com/AmokHuginnsson/replxx.git): For better REPL user experience.
+3. [CLI11](https://github.com/CLIUtils/CLI11.git): For better CLI support.

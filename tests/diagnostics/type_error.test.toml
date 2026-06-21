@@ -5,6 +5,6 @@ exit_code = 1
 stderr_contains = [
     "ERROR: Invalid inputs to native function `add`.",
     "`add` signature: Float -> Float -> Float",
-    "type_error.lbd:7..7",
+    "type_error.lbd:7..22",
     "(print (add \"hello\" 5))",
 ]

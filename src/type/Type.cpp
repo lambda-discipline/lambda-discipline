@@ -209,7 +209,7 @@ namespace lbd::type
           if (i) os << ", ";
 
           // Parenthesize if the argument is a function.
-          if (type.from->getKind() == TypeKind::FUNCTION)
+          if (type.arguments[i]->getKind() == TypeKind::FUNCTION)
             os << "(" << *type.arguments[i] << ")";
           else
             os << *type.arguments[i];

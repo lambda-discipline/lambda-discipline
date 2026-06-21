@@ -23,8 +23,11 @@ namespace lbd
     }
 
     auto astNodes = frontend::parser::Parser(context, lexer).parse();
-    const frontend::Program program(std::move(astNodes));
-    // TODO: Render AST nodes if debug is enabled.
+    frontend::Program program(std::move(astNodes));
+    if (context.getOptions().debug)
+    {
+      std::cout << program << std::endl;
+    }
 
     return runtime::interpret(program, context);
   }

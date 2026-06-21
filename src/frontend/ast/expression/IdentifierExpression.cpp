@@ -10,4 +10,6 @@ namespace lbd::frontend::ast::expression
     printIndent(outputStream, indent);
     outputStream << name;
   }
+
+  const std::string &IdentifierExpression::getName() const noexcept { return name; }
 }

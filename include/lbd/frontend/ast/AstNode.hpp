@@ -1,10 +1,14 @@
 #pragma once
 
+#include <memory>
 #include <lbd/frontend/ast/AstNodeKind.hpp>
 #include <lbd/source/Range.hpp>
 
 namespace lbd::frontend::ast
 {
+  class AstNode;
+  using AstNodePtr = std::unique_ptr<AstNode>;
+
   class AstNode
   {
   public:
@@ -12,9 +16,15 @@ namespace lbd::frontend::ast
 
     virtual ~AstNode() = default;
 
+    [[nodiscard]] source::Range getRange() const;
+
     virtual void print(std::ostream &outputStream, size_t indent) const noexcept = 0;
 
     friend std::ostream &operator<<(std::ostream &outputStream, const AstNode &node);
+
+    AstNode(const AstNode &) = delete;
+
+    AstNode &operator=(const AstNode &) = delete;
 
   private:
     const AstNodeKind kind;

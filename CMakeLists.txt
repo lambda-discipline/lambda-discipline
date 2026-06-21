@@ -83,14 +83,25 @@ target_link_libraries(lbdDiagnostics PUBLIC
     fmt::fmt
 )
 
+
+###### TYPE ######
+
+file(GLOB_RECURSE TYPE_SOURCE_FILES CONFIGURE_DEPENDS
+    ${PROJECT_SOURCE_DIR}/src/type/*.cpp
+)
+
+add_library(lbdType STATIC
+    ${TYPE_SOURCE_FILES}
+)
+
+target_include_directories(lbdType PUBLIC
+    ${PROJECT_SOURCE_DIR}/include
+)
+
 ###### FRONTEND ######
 
 file(GLOB_RECURSE FRONTEND_SOURCE_FILES CONFIGURE_DEPENDS
     ${PROJECT_SOURCE_DIR}/src/frontend/*.cpp
-)
-
-list(FILTER FRONTEND_SOURCE_FILES EXCLUDE REGEX
-    ".*/src/frontend/ast/.*\\.cpp$"
 )
 
 add_library(lbdFrontend STATIC
@@ -144,6 +155,7 @@ target_link_libraries(lbd PRIVATE
     lbdDiagnostics
     lbdFrontend
     lbdRuntime
+    lbdType
     replxx
     CLI11::CLI11
 )

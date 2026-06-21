@@ -10,13 +10,17 @@ namespace lbd::frontend::token
     IDENTIFIER,
     STRING,
     NUMBER,
-    COLON,
+    COLON, // :
+    COMMA, // ,
+    LESS_THAN, // <
+    GREATER_THAN, // >
     ASSIGNMENT, // =
-    ARROW,
+    FAT_ARROW, // =>
+    ARROW, // ->
     BACKWARD_SLASH,
-    DOT,
-    OPEN_PARENTHESIS,
-    CLOSE_PARENTHESIS,
+    DOT, // .
+    OPEN_PARENTHESIS, // (
+    CLOSE_PARENTHESIS, // )
     END_OF_FILE,
     UNKNOWN, // Used as a default TokenKind inside Lexer.
   };
@@ -30,6 +34,7 @@ namespace lbd::frontend::token
       case TokenKind::NUMBER: return "NUMBER";
       case TokenKind::COLON: return "COLON";
       case TokenKind::ASSIGNMENT: return "ASSIGNMENT";
+      case TokenKind::FAT_ARROW: return "FAT_ARROW";
       case TokenKind::ARROW: return "ARROW";
       case TokenKind::BACKWARD_SLASH: return "BACKWARD_SLASH";
       case TokenKind::DOT: return "DOT";

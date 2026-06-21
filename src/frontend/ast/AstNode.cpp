@@ -4,6 +4,8 @@ namespace lbd::frontend::ast
 {
   AstNode::AstNode(const AstNodeKind kind, const source::Range range) : kind(kind), range(range) {}
 
+  source::Range AstNode::getRange() const { return range; }
+
   std::ostream &operator<<(std::ostream &outputStream, const AstNode &node)
   {
     node.print(outputStream, 0);

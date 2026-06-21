@@ -2,14 +2,15 @@
 
 namespace lbd::frontend
 {
-  Program::Program(std::vector<std::unique_ptr<ast::AstNode>> nodes) : astNodes(std::move(nodes)) {}
+  Program::Program(std::vector<ast::AstNodePtr> astNodePtrs) : astNodePtrs(std::move(astNodePtrs)) {}
 
   std::ostream &operator<<(std::ostream &outputStream, const Program &program)
   {
-    for (const auto &node: program.astNodes)
-    {
-      outputStream << *node;
-    }
+    for (const auto &node: program.astNodePtrs) outputStream << *node;
     return outputStream;
   }
+
+  std::vector<ast::AstNodePtr> &Program::getAstNodePtrs() noexcept { return astNodePtrs; }
+
+  const std::vector<ast::AstNodePtr> &Program::getAstNodePtrs() const noexcept { return astNodePtrs; }
 }

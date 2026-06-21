@@ -10,4 +10,7 @@ namespace lbd::frontend::ast::expression
     printIndent(outputStream, indent);
     outputStream << '\"' << value << '\"';
   }
+
+
+  const std::string &StringExpression::getValue() const noexcept { return value; }
 }

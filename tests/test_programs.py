@@ -8,6 +8,7 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 TESTS = ROOT / "tests"
 
+
 def discover_tests():
     return sorted(TESTS.rglob("*.test.toml"))
 

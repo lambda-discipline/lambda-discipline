@@ -1,19 +1,22 @@
 #pragma once
 
-#include <iostream>
 #include <vector>
-#include <lbd/frontend/ast/Ast.hpp>
+#include <lbd/frontend/ast/AstNode.hpp>
 
 namespace lbd::frontend
 {
-  // TODO: Remove this later.
   class Program
   {
   public:
-    explicit Program(std::vector<std::unique_ptr<ast::AstNode>> nodes);
+    explicit Program(std::vector<ast::AstNodePtr> astNodePtrs);
 
     friend std::ostream &operator<<(std::ostream &outputStream, const Program &program);
 
-    std::vector<std::unique_ptr<ast::AstNode>> astNodes;
+    [[nodiscard]] std::vector<ast::AstNodePtr> &getAstNodePtrs() noexcept;
+
+    [[nodiscard]] const std::vector<ast::AstNodePtr> &getAstNodePtrs() const noexcept;
+
+  private:
+    std::vector<ast::AstNodePtr> astNodePtrs;
   };
 }

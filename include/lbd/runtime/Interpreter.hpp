@@ -6,8 +6,8 @@
 #include <variant>
 #include <lbd/Context.hpp>
 #include <lbd/frontend/Program.hpp>
-#include <lbd/frontend/ast/Ast.hpp>
-#include <lbd/frontend/parser/Parser.hpp>
+#include <lbd/frontend/ast/AstNode.hpp>
+#include <lbd/frontend/ast/expression/Expression.hpp>
 
 namespace lbd::runtime::type
 {
@@ -26,7 +26,7 @@ namespace lbd::runtime
   struct Closure
   {
     std::string parameter;
-    const frontend::ast::Expression *body; /// Non-owning, read-only AST pointer.
+    const frontend::ast::expression::Expression *body; /// Non-owning, read-only AST pointer.
     std::shared_ptr<Environment> environment; /// Environment at the time of Lambda-Expression creation.
 
     [[nodiscard]] std::string toString() const;
@@ -70,11 +70,8 @@ namespace lbd::runtime
 
   struct NativeFunction
   {
-    using Implementation = std::function<std::pair<Value, ResultOptions>(
-                                         const std::vector<std::shared_ptr<Thunk>> &, const std::shared_ptr<Environment>
-                                         &
-    )
-    >;
+    using Implementation = std::function<std::pair<Value, ResultOptions>
+      (const std::vector<std::shared_ptr<Thunk>> &, const std::shared_ptr<Environment> &)>;
 
     NativeFunction(std::string name, std::shared_ptr<type::FunctionType> signature, Implementation implementation);
 
@@ -100,28 +97,28 @@ namespace lbd::runtime
   struct Thunk : std::enable_shared_from_this<Thunk>
   {
     mutable std::optional<Value> cached;
-    const frontend::ast::Expression *expression = nullptr; /// Non-owning, read-only AST pointer.
-    std::unique_ptr<frontend::ast::Expression> owned; /// Owning storage (when needed) (primarily in REPL).
+    const frontend::ast::expression::Expression *expression = nullptr; /// Non-owning, read-only AST pointer.
+    frontend::ast::expression::ExpressionPtr owned; /// Owning storage (when needed) (primarily in REPL).
     std::shared_ptr<Environment> environment; /// Environment for evaluating Expression.
-    std::optional<source::Location> origin = std::nullopt;
+    std::optional<source::Range> origin = std::nullopt;
 
     Thunk() = default;
 
-    Thunk(const frontend::ast::Expression *expression, std::shared_ptr<Environment> environment,
-          const std::optional<source::Location> &origin = std::nullopt);
+    Thunk(const frontend::ast::expression::Expression *expression, std::shared_ptr<Environment> environment,
+          const std::optional<source::Range> &origin = std::nullopt);
 
     /// Force computation on Thunk and return a const reference to Value.
     const Value &force(Context &context) const; /// Marked const as cached is mutable.
 
     /// Sets Thunk's fields after construction.
     /// Allows for recursive reference.
-    void set(const frontend::ast::Expression *expression_, std::shared_ptr<Environment> environment_,
-             std::optional<source::Location> origin_ = std::nullopt);
+    void set(const frontend::ast::expression::Expression *expression_, std::shared_ptr<Environment> environment_,
+             std::optional<source::Range> origin_ = std::nullopt);
 
-    void setOwned(frontend::ast::Expression expression_, std::shared_ptr<Environment> environment_,
-                  std::optional<source::Location> origin_ = std::nullopt);
+    void setOwned(frontend::ast::expression::ExpressionPtr expression_, std::shared_ptr<Environment> environment_,
+                  std::optional<source::Range> origin_ = std::nullopt);
 
-    [[nodiscard]] source::Range getRange() noexcept;
+    [[nodiscard]] source::Range getRange() const noexcept;
   };
 
   struct Environment : std::enable_shared_from_this<Environment>
@@ -138,15 +135,16 @@ namespace lbd::runtime
     std::vector<std::vector<std::string>> toVector(Context &context, bool force) const;
   };
 
-  Value evalExpression(const frontend::ast::Expression &expression, std::shared_ptr<Environment> environment,
-                       Context &context);
+  Value evaluateExpression(const frontend::ast::expression::Expression &expression,
+                           const std::shared_ptr<Environment> &environment,
+                           Context &context);
 
   std::vector<Value> forceArguments(const std::vector<std::shared_ptr<Thunk>> &arguments);
 
   Value applyFunctionApplication(Context &context, const Value &functionName,
                                  const std::vector<std::shared_ptr<Thunk>> &arguments,
                                  const std::shared_ptr<Environment> &callSiteEnvironment,
-                                 const std::optional<source::Location> &callLocation = std::nullopt);
+                                 const std::optional<source::Range> &callRange = std::nullopt);
 
   /// Program Driver.
   struct Result
@@ -156,7 +154,7 @@ namespace lbd::runtime
     ResultOptions options = {};
   };
 
-  Result interpret(const frontend::Program &program, Context &context,
+  Result interpret(frontend::Program &program, Context &context,
                    std::optional<std::shared_ptr<Environment>> globalEnvironment = std::nullopt) noexcept;
 
   /// Add builtins Native Functions into Environment.

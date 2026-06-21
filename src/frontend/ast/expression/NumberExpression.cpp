@@ -10,4 +10,6 @@ namespace lbd::frontend::ast::expression
     printIndent(outputStream, indent);
     outputStream << value;
   }
+
+  double NumberExpression::getValue() const noexcept { return value; }
 }

@@ -6,9 +6,20 @@
 
 namespace lbd::frontend::lexer
 {
-  static bool isIdentifierStart(const char c) noexcept { return std::isalpha(c) || c == '_'; }
-  static bool isIdentifier(const char c) noexcept { return std::isalnum(c) || c == '_'; }
-  static bool isNumberStart(const char c) noexcept { return std::isdigit(c) || c == '-'; }
+  static bool isIdentifierStart(const char c) noexcept
+  {
+    return std::isalpha(static_cast<unsigned char>(c)) || c == '_';
+  }
+
+  static bool isIdentifier(const char c) noexcept
+  {
+    return std::isalnum(static_cast<unsigned char>(c)) || c == '_';
+  }
+
+  static bool isNumberStart(const char c) noexcept
+  {
+    return std::isdigit(static_cast<unsigned char>(c)) || c == '-';
+  }
 
   Lexer::Lexer(Context &context, const source::Buffer &buffer) noexcept : context(context), buffer(buffer) {}
 
@@ -37,7 +48,7 @@ namespace lbd::frontend::lexer
 
   token::Token Lexer::lex() noexcept
   {
-    while (std::isspace(getCurrentCharacter())) advanceCursor();
+    while (std::isspace(static_cast<unsigned char>(getCurrentCharacter()))) advanceCursor();
 
     const source::Location beginLocation{buffer.id, cursor};
 
@@ -107,7 +118,9 @@ namespace lbd::frontend::lexer
     switch (const char symbol = getCurrentCharacter())
     {
       case ':':
-      case '=':
+      case ',':
+      case '<':
+      case '>':
       case '\\':
       case '.':
       case '(':
@@ -116,6 +129,17 @@ namespace lbd::frontend::lexer
         advanceCursor();
         const auto lexeme = std::string(1, symbol);
         return {symbolToTokenKind(symbol), lexeme, {beginLocation, {buffer.id, cursor}}};
+      }
+      case '=':
+      {
+        advanceCursor(); // Consume '='
+        if (getCurrentCharacter() == '>')
+        {
+          // FAT_ARROW
+          advanceCursor(); // Consume '>'
+          return {token::TokenKind::FAT_ARROW, "=>", {beginLocation, {buffer.id, cursor}}};
+        }
+        return {token::TokenKind::ASSIGNMENT, "=", {beginLocation, {buffer.id, cursor}}};
       }
       case '-':
       {
@@ -167,12 +191,15 @@ namespace lbd::frontend::lexer
     cursor++;
   }
 
+  // TODO: Remove this function, can put the logic inside the switch-case.
   token::TokenKind Lexer::symbolToTokenKind(const char symbol) const noexcept
   {
     switch (symbol)
     {
       case ':': return token::TokenKind::COLON;
-      case '=': return token::TokenKind::ASSIGNMENT;
+      case ',': return token::TokenKind::COMMA;
+      case '<': return token::TokenKind::LESS_THAN;
+      case '>': return token::TokenKind::GREATER_THAN;
       case '\\': return token::TokenKind::BACKWARD_SLASH;
       case '.': return token::TokenKind::DOT;
       case '(': return token::TokenKind::OPEN_PARENTHESIS;

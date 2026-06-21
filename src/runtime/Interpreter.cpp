@@ -2,6 +2,13 @@
 #include <utility>
 #include <lbd/Error.hpp>
 #include <lbd/Options.hpp>
+#include <lbd/frontend/ast/expression/FunctionApplicationExpression.hpp>
+#include <lbd/frontend/ast/expression/IdentifierExpression.hpp>
+#include <lbd/frontend/ast/expression/LambdaExpression.hpp>
+#include <lbd/frontend/ast/expression/NumberExpression.hpp>
+#include <lbd/frontend/ast/expression/StringExpression.hpp>
+#include <lbd/frontend/ast/statement/ExpressionStatement.hpp>
+#include <lbd/frontend/ast/statement/SymbolDefinitionStatement.hpp>
 #include <lbd/runtime/Builtins.hpp>
 #include <lbd/runtime/Interpreter.hpp>
 #include <lbd/runtime/Type.hpp>
@@ -129,10 +136,9 @@ namespace lbd::runtime
     return outputStream << nativeFunction.toString();
   }
 
-  Thunk::Thunk(const frontend::ast::Expression *expression, std::shared_ptr<Environment> environment,
-               const std::optional<source::Location> &origin) : expression(expression),
-                                                                environment(std::move(environment)),
-                                                                origin(origin) {}
+  Thunk::Thunk(const frontend::ast::expression::Expression *expression, std::shared_ptr<Environment> environment,
+               const std::optional<source::Range> &origin)
+    : expression(expression), environment(std::move(environment)), origin(origin) {}
 
   const Value &Thunk::force(Context &context) const
   {
@@ -144,16 +150,16 @@ namespace lbd::runtime
     if (!expression)
     {
       context.getDiagnosticEmitter().error(
-        {origin.value(), origin.value()},
+        *origin,
         diagnostics::DiagnosticId::RUNTIME_FORCE_EMPTY_THUNK
       );
     }
-    cached = evalExpression(*expression, environment, context);
+    cached = evaluateExpression(*expression, environment, context);
     return cached.value();
   }
 
-  void Thunk::set(const frontend::ast::Expression *expression_, std::shared_ptr<Environment> environment_,
-                  std::optional<source::Location> origin_)
+  void Thunk::set(const frontend::ast::expression::Expression *expression_, std::shared_ptr<Environment> environment_,
+                  std::optional<source::Range> origin_)
   {
     expression = expression_;
     owned.reset();
@@ -165,10 +171,10 @@ namespace lbd::runtime
     cached.reset();
   }
 
-  void Thunk::setOwned(frontend::ast::Expression expression_, std::shared_ptr<Environment> environment_,
-                       std::optional<source::Location> origin_)
+  void Thunk::setOwned(frontend::ast::expression::ExpressionPtr expression_, std::shared_ptr<Environment> environment_,
+                       std::optional<source::Range> origin_)
   {
-    owned = std::make_unique<frontend::ast::Expression>(std::move(expression_));
+    owned = std::move(expression_);
     expression = owned.get();
     environment = std::move(environment_);
     if (origin_.has_value())
@@ -178,11 +184,7 @@ namespace lbd::runtime
     cached.reset();
   }
 
-  [[nodiscard]] source::Range Thunk::getRange() noexcept
-  {
-    // TODO: Return the range when we starts to store it instead of Location.
-    return {};
-  }
+  source::Range Thunk::getRange() const noexcept { return *origin; }
 
   Environment::Environment(std::shared_ptr<Environment> parent) : parent(std::move(parent)) {}
 
@@ -234,73 +236,91 @@ namespace lbd::runtime
     return result;
   }
 
-  static Value evaluateIdentifierAstNode(const frontend::ast::IdentifierAstNode &identifierAstNode,
-                                         const std::shared_ptr<Environment> &environment, Context &context)
+  static Value evaluateIdentifierExpression(const frontend::ast::expression::IdentifierExpression &identifierExpression,
+                                            const std::shared_ptr<Environment> &environment, Context &context)
   {
-    const auto thunk = environment->lookup(identifierAstNode.value);
+    const auto thunk = environment->lookup(identifierExpression.getName());
     if (!thunk)
     {
       context.getDiagnosticEmitter().error(
-        source::Range(identifierAstNode.location),
-        diagnostics::DiagnosticId::RUNTIME_UNDEFINED_IDENTIFIER, identifierAstNode.value
+        identifierExpression.getRange(),
+        diagnostics::DiagnosticId::RUNTIME_UNDEFINED_IDENTIFIER, identifierExpression.getName()
       );
     }
     return thunk->force(context);
   }
 
-  static Value evaluateLambdaExpression(const frontend::ast::LambdaExpression &lambdaExpression,
+  static Value evaluateLambdaExpression(const frontend::ast::expression::LambdaExpression &lambdaExpression,
                                         const std::shared_ptr<Environment> &environment)
   {
-    return Value(Closure{lambdaExpression.argument.value, lambdaExpression.expression.get(), environment});
+    return Value(Closure{
+      lambdaExpression.getArgumentIdentifierExpression().getName(),
+      &lambdaExpression.getExpression(),
+      environment
+    });
   }
 
-  static Value evaluateFunctionApplication(const frontend::ast::FunctionApplication &functionApplication,
-                                           const std::shared_ptr<Environment> &environment, Context &context)
+  static Value evaluateFunctionApplicationExpression(
+    const frontend::ast::expression::FunctionApplicationExpression &functionApplicationExpression,
+    const std::shared_ptr<Environment> &environment, Context &context)
   {
     // Lookup the callee lazily.
-    const auto calleeThunk = environment->lookup(functionApplication.functionName.value);
+    const std::string &functionName = functionApplicationExpression.getFunctionNameIdentifierExpression().getName();
+    const auto calleeThunk = environment->lookup(functionName);
     if (!calleeThunk)
     {
       context.getDiagnosticEmitter().error(
-        source::Range(functionApplication.location),
-        diagnostics::DiagnosticId::RUNTIME_UNDEFINED_FUNCTION, functionApplication.functionName.value
+        functionApplicationExpression.getRange(),
+        diagnostics::DiagnosticId::RUNTIME_UNDEFINED_FUNCTION, functionName
       );
     }
+
     const Value functionValue = calleeThunk->force(context);
     std::vector<std::shared_ptr<Thunk>> argumentThunks;
-    argumentThunks.reserve(functionApplication.arguments.size());
-    for (const auto &argument: functionApplication.arguments)
+    argumentThunks.reserve(functionApplicationExpression.getArguments().size());
+    for (const auto &argument: functionApplicationExpression.getArguments())
     {
-      argumentThunks.push_back(std::make_shared < Thunk > (argument.get(), environment));
+      argumentThunks.push_back(std::make_shared<Thunk>(argument.get(), environment));
     }
-    source::Location newLocation = functionApplication.location;
-    return applyFunctionApplication(context, functionValue, argumentThunks, environment, newLocation);
+    source::Range callRange = functionApplicationExpression.getRange();
+    return applyFunctionApplication(context, functionValue, argumentThunks, environment, callRange);
   }
 
-  Value evalExpression(const frontend::ast::Expression &expression, std::shared_ptr<Environment> environment,
-                       Context &context)
+  Value evaluateExpression(const frontend::ast::expression::Expression &expression,
+                           const std::shared_ptr<Environment> &environment, Context &context)
   {
-    return std::visit([&]<typename T0>(T0 &&arg)
+    if (const auto *identifierExpression = dynamic_cast<const frontend::ast::expression::IdentifierExpression *>
+        (&expression))
     {
-      using T = std::decay_t<T0>;
-      if constexpr (std::is_same_v<T, frontend::ast::IdentifierAstNode>)
-      {
-        return evaluateIdentifierAstNode(arg, environment, context);
-      } else if constexpr (std::is_same_v<T, frontend::ast::StringAstNode> || std::is_same_v<T,
-                             frontend::ast::FloatAstNode>)
-      {
-        return Value(arg.value);
-      } else if constexpr (std::is_same_v<T, frontend::ast::LambdaExpression>)
-      {
-        return evaluateLambdaExpression(arg, environment);
-      } else if constexpr (std::is_same_v<T, frontend::ast::FunctionApplication>)
-      {
-        return evaluateFunctionApplication(arg, environment, context);
-      } else
-      {
-        STATIC_ASSERT_UNREACHABLE_T(T, "unhandled expression");
-      }
-    }, expression.value);
+      return evaluateIdentifierExpression(*identifierExpression, environment, context);
+    }
+
+    if (const auto *stringExpression = dynamic_cast<const frontend::ast::expression::StringExpression *>
+        (&expression))
+    {
+      return Value{stringExpression->getValue()};
+    }
+
+    if (const auto *numberExpression = dynamic_cast<const frontend::ast::expression::NumberExpression *>
+        (&expression))
+    {
+      return Value{numberExpression->getValue()};
+    }
+
+    if (const auto *lambdaExpression = dynamic_cast<const frontend::ast::expression::LambdaExpression *>
+        (&expression))
+    {
+      return evaluateLambdaExpression(*lambdaExpression, environment);
+    }
+
+    if (const auto *functionApplicationExpression = dynamic_cast
+        <const frontend::ast::expression::FunctionApplicationExpression *>(&expression))
+    {
+      return evaluateFunctionApplicationExpression(*functionApplicationExpression, environment, context);
+    }
+
+    // TODO: Add an assertion unimplemented.
+    return Value{0.0};
   }
 
   static std::shared_ptr<Thunk> valueToThunk(const Value &value)
@@ -313,7 +333,7 @@ namespace lbd::runtime
   Value applyFunctionApplication(Context &context, const Value &functionName,
                                  const std::vector<std::shared_ptr<Thunk>> &arguments,
                                  const std::shared_ptr<Environment> &callSiteEnvironment,
-                                 const std::optional<source::Location> &callLocation)
+                                 const std::optional<source::Range> &callRange)
   {
     // Local mutable copy of the args, for inserting evaluated values as Thunks when needed.
     std::vector<std::shared_ptr<Thunk>> workArguments = arguments;
@@ -328,7 +348,7 @@ namespace lbd::runtime
       if (frames.empty())
       {
         context.getDiagnosticEmitter().error(
-          source::Range(callLocation.value()),
+          source::Range(callRange.value()),
           diagnostics::DiagnosticId::RUNTIME_EMPTY_CALL_STACK
         );
       }
@@ -367,9 +387,9 @@ namespace lbd::runtime
       {
         const auto [param, body, env] = std::get<Closure>(currentFunction);
         const auto &argumentThunk = workArguments[index++];
-        const auto childEnvironment = std::make_shared < Environment > (env);
+        const auto childEnvironment = std::make_shared<Environment>(env);
         childEnvironment->bind(param, argumentThunk);
-        resultantValue = evalExpression(*body, childEnvironment, context);
+        resultantValue = evaluateExpression(*body, childEnvironment, context);
       }
       // Native Function case: Consumes its arity-many Argument Thunks
       else if (std::holds_alternative<std::shared_ptr<NativeFunction>>(currentFunction))
@@ -382,7 +402,7 @@ namespace lbd::runtime
           if (workArguments.size() - index < arity)
           {
             context.getDiagnosticEmitter().error(
-              source::Range(callLocation.value()),
+              source::Range(callRange.value()),
               diagnostics::DiagnosticId::RUNTIME_NATIVE_FUNCTION_SIGNATURE_MISMATCH,
               nativeFunction.getName(), arity, workArguments.size() - index,
               nativeFunction.getName(), signature.toString()
@@ -398,7 +418,7 @@ namespace lbd::runtime
           if (!signature.matchesArgumentTypes(context, slice))
           {
             context.getDiagnosticEmitter().error(
-              source::Range(callLocation.value()),
+              *callRange,
               diagnostics::DiagnosticId::RUNTIME_INVALID_INPUTS_TO_NATIVE_FUNCTION,
               nativeFunction.getName(),
               nativeFunction.getName(), signature.toString()
@@ -411,7 +431,7 @@ namespace lbd::runtime
           if (!signature.matchesReturnType(resultantValue_))
           {
             context.getDiagnosticEmitter().error(
-              source::Range(callLocation.value()),
+              *callRange,
               diagnostics::DiagnosticId::INTERNAL_RETURN_TYPE_MISMATCH,
               nativeFunction.getName(), signature.getReturnType().toString(),
               type::typeFromValue(resultantValue_)->toString()
@@ -439,14 +459,14 @@ namespace lbd::runtime
       {
         // Top frame is not a Function (Closure, NativeFunction) Value but there are still Arguments left
         context.getDiagnosticEmitter().error(
-          source::Range(callLocation.value()),
+          source::Range(callRange.value()),
           diagnostics::DiagnosticId::RUNTIME_APPLY_NON_FUNCTION_VALUE, frames.back().toString()
         );
       }
       if (!resultantValue)
       {
         context.getDiagnosticEmitter().error(
-          source::Range(callLocation.value()),
+          source::Range(callRange.value()),
           diagnostics::DiagnosticId::INTERNAL_NO_RESULT
         );
       }
@@ -469,7 +489,7 @@ namespace lbd::runtime
         if (index < workArguments.size())
         {
           context.getDiagnosticEmitter().error(
-            source::Range(callLocation.value()),
+            source::Range(callRange.value()),
             diagnostics::DiagnosticId::RUNTIME_TOO_MANY_ARGUMENTS_TO_FUNCTION, concrete.toString()
           );
         }
@@ -487,23 +507,23 @@ namespace lbd::runtime
   }
 
   // Creates placeholder Thunk then set body so recursion can refer to it during lazy evaluation
-  static void bindDefinitionAstNodeLazy(frontend::ast::DefinitionAstNode &definitionAstNode,
-                                        const std::shared_ptr<Environment> &environment,
-                                        Context &context)
+  static void bindSymbolDefinitionStatementLazy(
+    frontend::ast::statement::SymbolDefinitionStatement &symbolDefinitionStatement,
+    const std::shared_ptr<Environment> &environment, Context &context)
   {
     const auto thunk = std::make_shared<Thunk>();
-    environment->bind(definitionAstNode.definitionName.value, thunk);
+    environment->bind(symbolDefinitionStatement.getSymbolNameIdentifierExpression().getName(), thunk);
+    const auto expressionRange = symbolDefinitionStatement.getExpression().getRange();
     if (context.getOptions().ownExpression)
     {
-      thunk->setOwned(std::move(definitionAstNode.expression), environment,
-                      definitionAstNode.expression.getLocation());
+      thunk->setOwned(symbolDefinitionStatement.releaseExpressionPtr(), environment, expressionRange);
     } else
     {
-      thunk->set(&definitionAstNode.expression, environment, definitionAstNode.expression.getLocation());
+      thunk->set(&symbolDefinitionStatement.getExpression(), environment, expressionRange);
     }
   }
 
-  Result interpret(const frontend::Program &program, Context &context,
+  Result interpret(frontend::Program &program, Context &context,
                    std::optional<std::shared_ptr<Environment>> globalEnvironment) noexcept
   {
     if (!globalEnvironment)
@@ -511,25 +531,29 @@ namespace lbd::runtime
       globalEnvironment = std::make_shared<Environment>();
       installBuiltins(context, *globalEnvironment);
     }
+
     Value resultantValue;
-    for (const auto &node: program.astNodes)
+
+    for (const auto &astNodePtrs = program.getAstNodePtrs(); auto &astNodePtr: astNodePtrs)
     {
-      std::visit([&]<typename T0>(T0 &&argument)
+      auto &astNode = *astNodePtr;
+
+      if (const auto *expressionStatement = dynamic_cast<const frontend::ast::statement::ExpressionStatement *>
+          (&astNode))
       {
-        using T = std::decay_t<T0>;
-        if constexpr (std::is_same_v<T, frontend::ast::Expression>)
-        {
-          resultantValue = evalExpression(argument, *globalEnvironment, context);
-        } else if constexpr (std::is_same_v<T, frontend::ast::DefinitionAstNode>)
-        {
-          bindDefinitionAstNodeLazy(argument, *globalEnvironment, context);
-          const frontend::ast::DefinitionAstNode &definitionAstNode = argument;
-          resultantValue = definitionAstNode.definitionName.value;
-        } else
-        {
-          STATIC_ASSERT_UNREACHABLE_T(T, "unhandled program node");
-        }
-      }, node->value);
+        resultantValue = evaluateExpression(expressionStatement->getExpression(), *globalEnvironment, context);
+        continue;
+      }
+
+      if (auto *symbolDefinitionStatement = dynamic_cast<frontend::ast::statement::SymbolDefinitionStatement *>
+          (&astNode))
+      {
+        bindSymbolDefinitionStatementLazy(*symbolDefinitionStatement, *globalEnvironment, context);
+        resultantValue = symbolDefinitionStatement->getSymbolNameIdentifierExpression().getName();
+        continue;
+      }
+
+      // TODO: Add assertion for unimplemented type.
     }
     return {*globalEnvironment, resultantValue, globalResultOptions};
   }
@@ -539,7 +563,7 @@ namespace lbd::runtime
     for (auto &nativeFunction: builtins::getBuiltins(context))
     {
       const auto thunk = std::make_shared<Thunk>();
-      thunk->cached = Value{std::make_shared < NativeFunction > (nativeFunction)};
+      thunk->cached = Value{std::make_shared<NativeFunction>(nativeFunction)};
       environment->bind(nativeFunction.getName(), thunk);
     }
   }
