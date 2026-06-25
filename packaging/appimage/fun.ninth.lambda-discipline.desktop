@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Lambda Discipline
+Comment=Functional programming language based on Lambda Calculus
+Exec=lbd
+Icon=fun.ninth.lambda-discipline
+Terminal=true
+Categories=Development;
+StartupNotify=true

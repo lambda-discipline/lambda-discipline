@@ -117,6 +117,19 @@ SUBCOMMANDS:
 
 1. [GNU Emacs](./editor-plugins/emacs)
 
+## Linux Releases
+
+Prebuilt Linux releases are distributed as **AppImages**, allowing the interpreter to run on most modern Linux distributions without installation.
+
+After downloading an AppImage, make it executable and run it:
+
+```shell
+chmod +x Lambda_Discipline-*.AppImage
+./Lambda_Discipline-*.AppImage --help
+```
+
+> You can also integrate the AppImage with your desktop environment using tools such as `AppImageLauncher`, or simply keep it as a portable executable.
+
 ## Dependencies
 
 1. [fmt](https://github.com/fmtlib/fmt.git): String formatting.
