@@ -1,8 +1,0 @@
-- [EXAMPLES] Add better examples (e.g., Advent of Code snippets).
-- [DOCS] Fix tests output in README.
-- [DEV TOOLING] Make a pre-commit-hook which does not allow to push to master, if the tests are failing. Additionally, test whether the `docs/SIGNATURE.txt` is up-to-date or not.
-
-# REPL
-- Add support for step-debugging while loading a file (load single expression at a time).
-  Provide user feedback and actions to perform (gdb kind of).
-- Support auto-completion using readline.
