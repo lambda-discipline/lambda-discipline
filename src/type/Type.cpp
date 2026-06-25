@@ -1,4 +1,5 @@
 #include <functional>
+#include <ostream>
 #include <lbd/type/Type.hpp>
 
 namespace lbd::type
@@ -188,33 +189,33 @@ namespace lbd::type
     return hash;
   }
 
-  std::ostream &operator<<(std::ostream &os, const Type &type) noexcept
+  std::ostream &operator<<(std::ostream &outputStream, const Type &type) noexcept
   {
     switch (type.kind)
     {
       case TypeKind::ANY:
-        os << "Any";
+        outputStream << "Any";
         break;
 
       case TypeKind::NAMED:
       case TypeKind::VARIABLE:
-        os << type.name;
+        outputStream << type.name;
         break;
 
       case TypeKind::APPLIED:
       {
-        os << *type.base << "<";
+        outputStream << *type.base << "<";
         for (size_t i = 0; i < type.arguments.size(); ++i)
         {
-          if (i) os << ", ";
+          if (i) outputStream << ", ";
 
           // Parenthesize if the argument is a function.
           if (type.arguments[i]->getKind() == TypeKind::FUNCTION)
-            os << "(" << *type.arguments[i] << ")";
+            outputStream << "(" << *type.arguments[i] << ")";
           else
-            os << *type.arguments[i];
+            outputStream << *type.arguments[i];
         }
-        os << ">";
+        outputStream << ">";
         break;
       }
 
@@ -222,12 +223,12 @@ namespace lbd::type
       {
         // Parenthesize left side if it's also a function.
         if (type.from->getKind() == TypeKind::FUNCTION)
-          os << "(" << *type.from << ")";
+          outputStream << "(" << *type.from << ")";
         else
-          os << *type.from;
+          outputStream << *type.from;
 
-        os << " -> ";
-        os << *type.to;
+        outputStream << " -> ";
+        outputStream << *type.to;
         break;
       }
 
@@ -235,14 +236,14 @@ namespace lbd::type
       {
         for (size_t i = 0; i < type.constraints.size(); ++i)
         {
-          if (i) os << ", ";
-          os << type.constraints[i].className << " " << *type.constraints[i].type;
+          if (i) outputStream << ", ";
+          outputStream << type.constraints[i].className << " " << *type.constraints[i].type;
         }
-        os << " => " << *type.qualifiedType;
+        outputStream << " => " << *type.qualifiedType;
         break;
       }
     }
 
-    return os;
+    return outputStream;
   }
 }
