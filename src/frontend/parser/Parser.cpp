@@ -1,4 +1,5 @@
 #include <filesystem>
+// ReSharper disable once CppUnusedIncludeDirective
 #include <fmt/core.h>
 #include <lbd/diagnostics/ContextGuard.hpp>
 #include <lbd/frontend/ast/expression/FunctionApplicationExpression.hpp>
@@ -23,7 +24,7 @@ namespace lbd::frontend::parser
     diagnostics::ContextGuard contextGuard(
       context.getDiagnosticEmitter(),
       lexer.peek().range,
-      fmt::format("While parsing `{}`.", lexer.getBuffer().name));
+      fmt::format("While parsing `{}`.", lexer.getBuffer().getName()));
 
     while (lexer.hasNext())
     {

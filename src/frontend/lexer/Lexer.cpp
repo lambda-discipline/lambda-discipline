@@ -1,5 +1,3 @@
-#include <cctype>
-#include <fstream>
 #include <lbd/diagnostics/ContextGuard.hpp>
 #include <lbd/frontend/lexer/Lexer.hpp>
 #include <lbd/source/Range.hpp>
@@ -50,13 +48,13 @@ namespace lbd::frontend::lexer
   {
     while (std::isspace(static_cast<unsigned char>(getCurrentCharacter()))) advanceCursor();
 
-    const source::Location beginLocation{buffer.id, cursor};
+    const source::Location beginLocation{buffer.getId(), cursor};
 
     // Adding Context Guard for diagnostics.
     diagnostics::ContextGuard contextGuard(
       context.getDiagnosticEmitter(),
-      source::Range(beginLocation, {buffer.id, static_cast<source::Offset>(buffer.getSize())}),
-      fmt::format("While lexing `{}`.", buffer.name));
+      source::Range(beginLocation, {buffer.getId(), static_cast<source::Offset>(buffer.getSize())}),
+      fmt::format("While lexing `{}`.", buffer.getName()));
 
     if (isEof()) return {token::TokenKind::END_OF_FILE, "", {beginLocation, beginLocation}};
 
@@ -65,8 +63,9 @@ namespace lbd::frontend::lexer
     {
       const source::Offset beginOffset = cursor;
       while (!isEof() && isIdentifier(getCurrentCharacter())) advanceCursor();
-      const auto lexeme = buffer.contents.substr(beginOffset, cursor - beginOffset);
-      return {token::TokenKind::IDENTIFIER, lexeme, {beginLocation, {buffer.id, cursor}}};
+      // TODO: Relook whether Lexer should create a copy of lexeme or refer to buffer.
+      const auto lexeme = std::string(buffer.getContents().substr(beginOffset, cursor - beginOffset));
+      return {token::TokenKind::IDENTIFIER, lexeme, {beginLocation, {buffer.getId(), cursor}}};
     }
 
     // Number.
@@ -79,7 +78,7 @@ namespace lbd::frontend::lexer
       if (getCurrentCharacter() == '-' && !std::isdigit(peekNextCurrentCharacter()))
       {
         context.getDiagnosticEmitter().error(
-          {beginLocation, {buffer.id, cursor}},
+          {beginLocation, {buffer.getId(), cursor}},
           diagnostics::DiagnosticId::LEXER_UNEXPECTED_CHARACTER, '-'
         );
       }
@@ -91,8 +90,8 @@ namespace lbd::frontend::lexer
         advanceCursor(); // Consume '.'
         while (!isEof() && std::isdigit(getCurrentCharacter())) advanceCursor();
       }
-      const auto lexeme = buffer.contents.substr(beginOffset, cursor - beginOffset);
-      return {token::TokenKind::NUMBER, lexeme, {beginLocation, {buffer.id, cursor}}};
+      const auto lexeme = std::string(buffer.getContents().substr(beginOffset, cursor - beginOffset));
+      return {token::TokenKind::NUMBER, lexeme, {beginLocation, {buffer.getId(), cursor}}};
     }
 
     // String literal.
@@ -104,14 +103,14 @@ namespace lbd::frontend::lexer
       if (getCurrentCharacter() != '"')
       {
         context.getDiagnosticEmitter().error(
-          {beginLocation, {buffer.id, cursor}},
+          {beginLocation, {buffer.getId(), cursor}},
           diagnostics::DiagnosticId::LEXER_UNBALANCED_QUOTE
         );
       }
-      advanceCursor(); // Consume '"'
+      advanceCursor(); // Consume double-quote.
       // +1 and -1 for excluding the quotes.
-      const auto lexeme = buffer.contents.substr(beginOffset + 1, cursor - beginOffset - 2);
-      return {token::TokenKind::STRING, lexeme, {beginLocation, {buffer.id, cursor}}};
+      const auto lexeme = std::string(buffer.getContents().substr(beginOffset + 1, cursor - beginOffset - 2));
+      return {token::TokenKind::STRING, lexeme, {beginLocation, {buffer.getId(), cursor}}};
     }
 
   LexSymbol:
@@ -128,7 +127,7 @@ namespace lbd::frontend::lexer
       {
         advanceCursor();
         const auto lexeme = std::string(1, symbol);
-        return {symbolToTokenKind(symbol), lexeme, {beginLocation, {buffer.id, cursor}}};
+        return {symbolToTokenKind(symbol), lexeme, {beginLocation, {buffer.getId(), cursor}}};
       }
       case '=':
       {
@@ -137,9 +136,9 @@ namespace lbd::frontend::lexer
         {
           // FAT_ARROW
           advanceCursor(); // Consume '>'
-          return {token::TokenKind::FAT_ARROW, "=>", {beginLocation, {buffer.id, cursor}}};
+          return {token::TokenKind::FAT_ARROW, "=>", {beginLocation, {buffer.getId(), cursor}}};
         }
-        return {token::TokenKind::ASSIGNMENT, "=", {beginLocation, {buffer.id, cursor}}};
+        return {token::TokenKind::ASSIGNMENT, "=", {beginLocation, {buffer.getId(), cursor}}};
       }
       case '-':
       {
@@ -154,7 +153,7 @@ namespace lbd::frontend::lexer
           {
             // Arrow.
             advanceCursor(); // Consume '>'.
-            return {token::TokenKind::ARROW, "->", {beginLocation, {buffer.id, cursor}}};
+            return {token::TokenKind::ARROW, "->", {beginLocation, {buffer.getId(), cursor}}};
           }
           default:
             break;
@@ -164,7 +163,7 @@ namespace lbd::frontend::lexer
         break;
     }
     context.getDiagnosticEmitter().error(
-      {beginLocation, {buffer.id, cursor}},
+      {beginLocation, {buffer.getId(), cursor}},
       diagnostics::DiagnosticId::LEXER_UNEXPECTED_CHARACTER, getCurrentCharacter()
     );
   }
@@ -205,7 +204,7 @@ namespace lbd::frontend::lexer
       case '(': return token::TokenKind::OPEN_PARENTHESIS;
       case ')': return token::TokenKind::CLOSE_PARENTHESIS;
       default:
-        const source::Location location{buffer.id, cursor};
+        const source::Location location{buffer.getId(), cursor};
         context.getDiagnosticEmitter().error(
           {location, location},
           diagnostics::DiagnosticId::LEXER_UNEXPECTED_CHARACTER, symbol

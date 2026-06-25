@@ -16,15 +16,18 @@ namespace lbd::source
     [[nodiscard]] BufferId createBuffer(std::string name, std::string contents) noexcept;
 
     // Access Buffers.
-    [[nodiscard]] const Buffer &getBuffer(BufferId id) const noexcept;
+    [[nodiscard]] const Buffer &getBuffer(const BufferId id) const noexcept { return m_buffers[id]; }
 
-    [[nodiscard]] std::string_view getBufferName(BufferId id) const noexcept;
+    [[nodiscard]] std::string_view getBufferName(const BufferId id) const noexcept { return m_buffers[id].getName(); }
 
-    [[nodiscard]] std::string_view getBufferContents(BufferId id) const noexcept;
+    [[nodiscard]] size_t getBufferSize(const BufferId id) const noexcept { return m_buffers[id].getSize(); }
 
-    [[nodiscard]] size_t getBufferSize(BufferId id) const noexcept;
+    [[nodiscard]] char atOffset(const BufferId id, const Offset offset) const noexcept { return m_buffers[id][offset]; }
 
-    [[nodiscard]] char atOffset(BufferId id, Offset offset) const noexcept;
+    [[nodiscard]] std::string_view getBufferContents(const BufferId id) const noexcept
+    {
+      return m_buffers[id].getContents();
+    }
 
     // Location utilities.
     [[nodiscard]] RowNumber getRow(BufferId id, Offset offset) const noexcept;
@@ -39,9 +42,9 @@ namespace lbd::source
   private:
     [[nodiscard]] BufferId addBuffer(std::string name, std::string contents) noexcept;
 
-    std::deque<Buffer> buffers;
-    std::unordered_map<std::string, BufferId> nameToBufferIdMap;
+    std::deque<Buffer> m_buffers;
+    std::unordered_map<std::string, BufferId> m_bufferToIdMap;
   };
 
-  std::string getAbsolutePath(const std::string &path) noexcept;
+  [[nodiscard]] std::string getAbsolutePath(const std::string &path) noexcept;
 }

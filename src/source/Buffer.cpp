@@ -2,16 +2,19 @@
 
 namespace lbd::source
 {
-  size_t Buffer::getSize() const { return contents.size(); }
-  char Buffer::operator[](const size_t index) const { return contents[index]; }
+  Buffer::Buffer(const BufferId id, std::string name, std::string contents)
+    : m_id(id), m_name(std::move(name)), m_contents(std::move(contents))
+  {
+    computeLineOffsets();
+  }
 
   void Buffer::computeLineOffsets() noexcept
   {
-    lineOffsets.clear();
-    lineOffsets.push_back(0);
-    for (uint32_t i = 0; i < contents.size(); ++i)
+    m_lineOffsets.clear();
+    m_lineOffsets.push_back(0);
+    for (uint32_t i = 0; i < m_contents.size(); ++i)
     {
-      if (contents[i] == '\n') lineOffsets.push_back(i + 1);
+      if (m_contents[i] == '\n') m_lineOffsets.push_back(i + 1);
     }
   }
 }

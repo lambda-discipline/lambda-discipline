@@ -1,8 +1,8 @@
 #include <iostream>
 #include <lbd/Driver.hpp>
+#include <lbd/frontend/Program.hpp>
 #include <lbd/frontend/lexer/Lexer.hpp>
 #include <lbd/frontend/parser/Parser.hpp>
-#include <lbd/frontend/Program.hpp>
 #include <lbd/runtime/Interpreter.hpp>
 
 namespace lbd
