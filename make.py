@@ -46,8 +46,10 @@ def subcommand_setup():
 
 
 def subcommand_build():
-    build_dir = Path(BUILD_DIR)
-    subprocess.run(["cmake", "--build", str(build_dir)], check=True)
+    command = ["cmake", "--build", BUILD_DIR]
+    if FORCE_BUILD:
+        command.append("--clean-first")
+    subprocess.run(command, check=True)
 
 
 def subcommand_test():
@@ -68,6 +70,16 @@ if __name__ == "__main__":
         help="CMake build directory (default: %(default)s)",
     )
     parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Clean before building",
+    )
+    parser.add_argument(
+        "--warnings-as-errors",
+        action="store_true",
+        help="Treat compiler warnings as errors",
+    )
+    parser.add_argument(
         "--venv-dir",
         default="venv",
         help="Python virtual environment directory (default: %(default)s)",
@@ -83,6 +95,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     BUILD_DIR = args.build_dir
     VENV_DIR = args.venv_dir
+    FORCE_BUILD = args.force
 
     match args.command:
         case "setup":
