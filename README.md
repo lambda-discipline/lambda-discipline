@@ -31,11 +31,11 @@ Booleans and If-Then construct built entirely using Lambda Expressions.
 true: Bool = \x: Any. \y: Any. x
 false: Bool = \x: Any. \y: Any. y
 
-if: Any = \condition: Any.
+if: Any = \condition: Bool.
     \thenClause: Any. \elseClause: Any.
         (condition thenClause elseClause)
 
-boolToString: Bool = \bool: Bool. (if bool "true" "false")
+boolToString: String = \bool: Bool. (if bool "true" "false")
 
 (print (boolToString true) "\n")
 (print (boolToString false) "\n")
@@ -51,18 +51,18 @@ Shapes Demo
 
 ```haskell
 -- Define Pi as constant
-pi: Float = 3.14
+pi: Number = 3.14
 
 -- Define function to calculate square
-square: Float -> Float = \x: Float. (mul x x)
+square: Number -> Number = \x: Number. (mul x x)
 
 -- Define function to calculate area of circle
-areaOfCircle: Float -> Float = \r: Float.
+areaOfCircle: Number -> Number = \r: Number.
     (mul pi (square r))
 
 -- Define function to calculate volume of cylinder
-volumeOfCylinder: Float -> Float -> Float = \r: Float.
-	  \h: Float. (mul (areaOfCircle r) h)
+volumeOfCylinder: Number -> Number -> Number = \r: Number.
+	  \h: Number. (mul (areaOfCircle r) h)
 
 -- Calculate the volume of a cylinder
 (print "Volume of cylinder is: " (volumeOfCylinder 5.0 10.0) "\n")
@@ -76,12 +76,12 @@ Volume of cylinder is: 785.000000
 Fibonacci
 
 ```haskell
-fibonacci: Any = \num: Float.
+fibonacci: Number = \num: Number.
     (null (cmp 0 num) 0
         (null (cmp 1 num) 1
             (add (fibonacci (sub num 1.0)) (fibonacci (sub num 2.0)))))
 
-(print (fibonacci 10))
+(print (fibonacci 10) "\n")
 ```
 
 ```console
