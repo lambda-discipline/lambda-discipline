@@ -18,7 +18,7 @@ namespace lbd
     [[nodiscard]] Options &getOptions();
 
     /// Emits error upon unable to load the file.
-    [[nodiscard]] source::BufferId loadFile(const std::string &path, const source::Range &range);
+    [[nodiscard]] source::BufferId loadFile(const std::string &path, const std::optional<source::Range> &range);
 
   private:
     Options options;

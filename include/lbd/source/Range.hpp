@@ -10,10 +10,6 @@ namespace lbd::source
   public:
     [[nodiscard]] Range(Location begin, Location end) noexcept;
 
-    // TODO: Refactor diagnostics to support an optional source range, allowing this constructor to be removed.
-    [[deprecated("Temporary constructor. Diagnostics will be refactored to support an optional source range.")]]
-    [[nodiscard]] Range() noexcept;
-
     [[nodiscard]] Location getBegin() const noexcept { return m_begin; }
 
     [[nodiscard]] Location getEnd() const noexcept { return m_end; }

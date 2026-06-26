@@ -14,7 +14,7 @@ namespace lbd
 
   Options &Context::getOptions() { return options; }
 
-  source::BufferId Context::loadFile(const std::string &path, const source::Range &range)
+  source::BufferId Context::loadFile(const std::string &path, const std::optional<source::Range> &range)
   {
     if (!std::filesystem::exists(path))
     {
