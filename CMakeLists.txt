@@ -64,6 +64,10 @@ target_include_directories(lbdSource PUBLIC
     ${PROJECT_SOURCE_DIR}/include
 )
 
+target_link_libraries(lbdSource PUBLIC
+    fmt::fmt
+)
+
 ###### DIAGNOSTICS ######
 
 file(GLOB_RECURSE DIAGNOSTICS_SOURCE_FILES CONFIGURE_DEPENDS
@@ -82,7 +86,6 @@ target_link_libraries(lbdDiagnostics PUBLIC
     lbdSource
     fmt::fmt
 )
-
 
 ###### TYPE ######
 
@@ -178,7 +181,3 @@ enable_warnings(lbd)
 ###### TESTS ######
 
 enable_testing()
-
-# add_executable(lexer_test tests/lexer_test.cc)
-# target_link_libraries(lexer_test PRIVATE lbdFrontend)
-# add_test(NAME lexer_test COMMAND lexer_test)

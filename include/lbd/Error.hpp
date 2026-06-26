@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cassert>
+#include <stdexcept>
 
 template<typename>
 inline constexpr bool alwaysFalseValue = false;
@@ -26,3 +27,24 @@ inline constexpr bool alwaysFalseValue = false;
 #endif
 
 #define UNREACHABLE(MSG) (assert(false && (MSG)), UNREACHABLE_OP)
+
+namespace lbd
+{
+  class RuntimeError : public std::runtime_error
+  {
+  public:
+    using std::runtime_error::runtime_error;
+  };
+
+  class FileSystemError final : public RuntimeError
+  {
+  public:
+    using RuntimeError::RuntimeError;
+  };
+
+  class IOError final : public RuntimeError
+  {
+  public:
+    using RuntimeError::RuntimeError;
+  };
+}

@@ -21,6 +21,9 @@ namespace lbd::diagnostics
 
     void popContext();
 
+    /// NOTE: Use this only to report errors caused by external systems (e.g. filesystem or I/O), not by language diagnostics.
+    [[noreturn]] void error(const source::Range &range, const std::string &message) const noexcept;
+
     template<typename... Args>
     [[noreturn]] void error(const source::Range &range, const DiagnosticId id, Args &&... args)
     {
@@ -40,6 +43,8 @@ namespace lbd::diagnostics
 
     void emit(Severity severity, DiagnosticId id, const source::Range &range,
               const fmt::dynamic_format_arg_store<fmt::format_context> &arguments) const;
+
+    void emit(Severity severity, const source::Range &range, const std::string &message) const noexcept;
 
   private:
     DiagnosticRenderer &diagnosticRenderer;

@@ -11,7 +11,7 @@ namespace lbd::source
   {
   public:
     // Create Buffers.
-    [[nodiscard]] BufferId loadFile(const std::string &path) noexcept;
+    [[nodiscard]] BufferId loadFile(const std::string &path);
 
     [[nodiscard]] BufferId createBuffer(std::string name, std::string contents) noexcept;
 
@@ -37,7 +37,7 @@ namespace lbd::source
     [[nodiscard]] std::string_view getLine(BufferId id, Offset offset) const noexcept;
 
     // Optional utilities.
-    [[nodiscard]] bool isBufferLoaded(const std::string &name) const noexcept;
+    [[nodiscard]] bool isBufferLoaded(const std::string &name) const;
 
   private:
     [[nodiscard]] BufferId addBuffer(std::string name, std::string contents) noexcept;
@@ -46,5 +46,5 @@ namespace lbd::source
     std::unordered_map<std::string, BufferId> m_bufferToIdMap;
   };
 
-  [[nodiscard]] std::string getAbsolutePath(const std::string &path) noexcept;
+  [[nodiscard]] std::string getAbsolutePath(const std::string &path);
 }

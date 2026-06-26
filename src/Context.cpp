@@ -1,5 +1,6 @@
 #include <filesystem>
 #include <lbd/Context.hpp>
+#include <lbd/Error.hpp>
 
 namespace lbd
 {
@@ -17,13 +18,20 @@ namespace lbd
 
   source::BufferId Context::loadFile(const std::string &path, const source::Range &range)
   {
-    if (!std::filesystem::exists(source::getAbsolutePath(path)))
+    if (!std::filesystem::exists(path))
     {
       diagnosticEmitter.error(
         range,
         diagnostics::DiagnosticId::IO_PATH_DOES_NOT_EXISTS, path
       );
     }
-    return bufferManager.loadFile(path);
+
+    try
+    {
+      return bufferManager.loadFile(path);
+    } catch (const RuntimeError &e)
+    {
+      diagnosticEmitter.error(range, e.what());
+    }
   }
 }

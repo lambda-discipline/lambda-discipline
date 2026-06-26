@@ -1,9 +1,11 @@
 #pragma once
 
+#include <iostream>
 #include <lbd/Exceptions.hpp>
-#include <lbd/source/Range.hpp>
 #include <lbd/utils/terminal/Colors.hpp>
 #include <lbd/utils/terminal/Terminal.hpp>
+
+// TODO: Remove logger.
 
 namespace lbd
 {

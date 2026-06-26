@@ -45,9 +45,9 @@ namespace lbd::diagnostics
         << colors.reset << ": " << diagnostic.getMessage() << '\n';
 
     // ReSharper disable once CppUseStructuredBinding
-    const source::Location beginLocation = diagnostic.getRange().begin;
+    const source::Location beginLocation = diagnostic.getRange().getBegin();
     // ReSharper disable once CppUseStructuredBinding
-    const source::Location endLocation = diagnostic.getRange().end;
+    const source::Location endLocation = diagnostic.getRange().getEnd();
     const source::BufferId bufferId = beginLocation.bufferId;
     outputStream << "    " << topLeft << horizontal << " " << sourceManager.getBufferName(bufferId)
         << ':' << diagnostic.getRange() << '\n';

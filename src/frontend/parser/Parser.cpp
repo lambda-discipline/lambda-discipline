@@ -1,6 +1,7 @@
 #include <filesystem>
 // ReSharper disable once CppUnusedIncludeDirective
 #include <fmt/core.h>
+#include <lbd/Error.hpp>
 #include <lbd/diagnostics/ContextGuard.hpp>
 #include <lbd/frontend/ast/expression/FunctionApplicationExpression.hpp>
 #include <lbd/frontend/ast/expression/IdentifierExpression.hpp>
@@ -87,7 +88,13 @@ namespace lbd::frontend::parser
   std::vector<ast::AstNodePtr> Parser::parseFile(const std::string &path, const source::Range &range) const noexcept
   {
     // Circular Dependency or Duplicate Load.
-    if (context.getBufferManager().isBufferLoaded(path)) { return {}; }
+    try
+    {
+      if (context.getBufferManager().isBufferLoaded(path)) return {};
+    } catch (const FileSystemError &e)
+    {
+      context.getDiagnosticEmitter().error(range, e.what());
+    }
 
     lexer::Lexer innerLexer(context, context.getBufferManager().getBuffer(context.loadFile(path, range)));
     const Parser parser(context, innerLexer);
@@ -96,13 +103,13 @@ namespace lbd::frontend::parser
 
   ast::statement::StatementPtr Parser::parseSymbolDefinitionStatement() const noexcept
   {
-    const source::Location begin = lexer.peek().range.begin;
+    const source::Location begin = lexer.peek().range.getBegin();
     ast::expression::IdentifierExpressionPtr symbolNameIdentifierExpressionPtr = parseIdentifierExpression();
     consume(token::TokenKind::COLON);
     type::TypePtr symbolTypePtr = parseType();
     consume(token::TokenKind::ASSIGNMENT);
     ast::expression::ExpressionPtr expressionPtr = parseExpression();
-    const auto range = source::Range(begin, expressionPtr->getRange().end);
+    const auto range = source::Range(begin, expressionPtr->getRange().getEnd());
     return std::make_unique<ast::statement::SymbolDefinitionStatement>(
       range,
       std::move(symbolNameIdentifierExpressionPtr),
@@ -155,14 +162,14 @@ namespace lbd::frontend::parser
 
   ast::expression::ExpressionPtr Parser::parseLambdaExpression() const noexcept
   {
-    const source::Location begin = lexer.peek().range.begin;
+    const source::Location begin = lexer.peek().range.getBegin();
     consume(token::TokenKind::BACKWARD_SLASH);
     ast::expression::IdentifierExpressionPtr argumentIdentifierExpressionPtr = parseIdentifierExpression();
     consume(token::TokenKind::COLON);
     type::TypePtr argumentTypePtr = parseType();
     consume(token::TokenKind::DOT);
     ast::expression::ExpressionPtr expressionPtr = parseExpression();
-    const auto range = source::Range(begin, expressionPtr->getRange().end);
+    const auto range = source::Range(begin, expressionPtr->getRange().getEnd());
     return std::make_unique<ast::expression::LambdaExpression>(
       range,
       std::move(argumentIdentifierExpressionPtr),
@@ -173,12 +180,12 @@ namespace lbd::frontend::parser
 
   ast::expression::ExpressionPtr Parser::parseFunctionApplicationExpression() const noexcept
   {
-    const source::Location begin = lexer.peek().range.begin;
+    const source::Location begin = lexer.peek().range.getBegin();
     consume(token::TokenKind::OPEN_PARENTHESIS);
     ast::expression::IdentifierExpressionPtr functionNameIdentifierExpressionPtr = parseIdentifierExpression();
     std::vector<ast::expression::ExpressionPtr> argumentPtrs;
     while (lexer.peek().kind != token::TokenKind::CLOSE_PARENTHESIS) argumentPtrs.push_back(parseExpression());
-    const auto range = source::Range(begin, lexer.peek().range.end);
+    const auto range = source::Range(begin, lexer.peek().range.getEnd());
     consume(token::TokenKind::CLOSE_PARENTHESIS);
     return std::make_unique<ast::expression::FunctionApplicationExpression>(
       range, std::move(functionNameIdentifierExpressionPtr),

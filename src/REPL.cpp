@@ -24,7 +24,7 @@ namespace lbd::repl
     const std::string &path = argument;
 
     // TODO: Should an already loaded file be loaded again. Current logic does not permit that.
-    const source::BufferId bufferId = context.loadFile(path, {});
+    const source::BufferId bufferId = context.loadFile(path, source::Range());
     const source::Buffer buffer = context.getBufferManager().getBuffer(bufferId);
     frontend::lexer::Lexer lexer(context, buffer);
 

@@ -1,19 +1,28 @@
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
+#include <fmt/core.h>
+#include <lbd/Error.hpp>
 #include <lbd/source/BufferManager.hpp>
 
 namespace lbd::source
 {
-  BufferId BufferManager::loadFile(const std::string &path) noexcept
+  BufferId BufferManager::loadFile(const std::string &path)
   {
     const std::string absolutePath = getAbsolutePath(path);
     if (const auto it = m_bufferToIdMap.find(absolutePath); it != m_bufferToIdMap.end()) return it->second;
 
-    // TODO: Read file in binary mode, as it may translate the line-endings to LF, making offset incorrect.
-    std::ifstream file(absolutePath);
-    // TODO: emit diagnostic / return invalid BufferId, upon failure to open a file.
-    std::string contents((std::istreambuf_iterator(file)), std::istreambuf_iterator<char>());
+    std::ifstream file(absolutePath, std::ios::binary);
+    if (!file) throw FileSystemError(fmt::format("Failed to open file `{}`.", absolutePath));
+
+    file.seekg(0, std::ios::end);
+    const auto size = file.tellg();
+    if (size == std::streampos(-1)) throw IOError(fmt::format("Failed to determine size of file '{}'.", absolutePath));
+    file.seekg(0);
+
+    std::string contents(size, '\0');
+    file.read(contents.data(), size);
+    if (!file) throw IOError(fmt::format("Failed to read file `{}`.", absolutePath));
 
     const BufferId id = addBuffer(absolutePath, std::move(contents));
     m_bufferToIdMap.emplace(absolutePath, id);
@@ -48,13 +57,15 @@ namespace lbd::source
     const auto it = std::ranges::upper_bound(lines, offset);
     const size_t row = static_cast<size_t>(it - lines.begin());
     const size_t lineStart = lines[row - 1];
-    // TODO: Relook whether this works for Windows CRLF (may need to subtract 2 in that case.)
-    const size_t lineEnd = row < lines.size() ? lines[row] - 1 : buffer.getSize();
 
-    return buffer.getContents().substr(lineStart, lineEnd - lineStart);
+    size_t lineEnd = row < lines.size() ? lines[row] - 1 : buffer.getSize();
+    const auto &contents = buffer.getContents();
+    if (lineEnd > lineStart && contents[lineEnd - 1] == '\r') --lineEnd; // CRLF
+
+    return contents.substr(lineStart, lineEnd - lineStart);
   }
 
-  bool BufferManager::isBufferLoaded(const std::string &name) const noexcept
+  bool BufferManager::isBufferLoaded(const std::string &name) const
   {
     const std::string absolutePath = getAbsolutePath(name);
     return m_bufferToIdMap.contains(absolutePath);
@@ -67,9 +78,14 @@ namespace lbd::source
     return id;
   }
 
-  std::string getAbsolutePath(const std::string &path) noexcept
+  std::string getAbsolutePath(const std::string &path)
   {
-    // TODO: Handle thrown exception.
-    return std::filesystem::weakly_canonical(path).string();
+    try
+    {
+      return std::filesystem::weakly_canonical(path).string();
+    } catch (const std::filesystem::filesystem_error &e)
+    {
+      std::throw_with_nested(FileSystemError(fmt::format("Failed to resolve path `{}`: {}", path, e.what())));
+    }
   }
 }
