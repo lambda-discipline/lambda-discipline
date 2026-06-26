@@ -4,6 +4,7 @@
 #include <string>
 #include <unordered_map>
 #include <lbd/source/Buffer.hpp>
+#include <lbd/source/Range.hpp>
 
 namespace lbd::source
 {
@@ -35,6 +36,10 @@ namespace lbd::source
     [[nodiscard]] ColumnNumber getColumn(BufferId id, Offset offset) const noexcept;
 
     [[nodiscard]] std::string_view getLine(BufferId id, Offset offset) const noexcept;
+
+    void printLocation(std::ostream &outputStream, BufferId id, Location location) const noexcept;
+
+    void printRange(std::ostream &outputStream, BufferId id, Range range) const noexcept;
 
     // Optional utilities.
     [[nodiscard]] bool isBufferLoaded(const std::string &name) const;

@@ -9,3 +9,4 @@ dump/
 
 .lbd_history
 .direnv.ps1
+examples/debug.lbd

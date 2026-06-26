@@ -12,9 +12,20 @@ namespace lbd::source
   {
     m_lineOffsets.clear();
     m_lineOffsets.push_back(0);
-    for (uint32_t i = 0; i < m_contents.size(); ++i)
+
+    for (Offset i = 0; i < m_contents.size(); ++i)
     {
-      if (m_contents[i] == '\n') m_lineOffsets.push_back(i + 1);
+      if (m_contents[i] == '\r')
+      {
+        // CRLF
+        if (i + 1 < m_contents.size() && m_contents[i + 1] == '\n') ++i;
+        // else CR
+        m_lineOffsets.push_back(i + 1);
+      } else if (m_contents[i] == '\n')
+      {
+        // LF
+        m_lineOffsets.push_back(i + 1);
+      }
     }
   }
 }

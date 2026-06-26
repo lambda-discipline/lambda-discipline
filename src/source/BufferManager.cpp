@@ -65,6 +65,19 @@ namespace lbd::source
     return contents.substr(lineStart, lineEnd - lineStart);
   }
 
+  void BufferManager::printLocation(std::ostream &outputStream, const BufferId id,
+                                    const Location location) const noexcept
+  {
+    outputStream << getRow(id, location.offset) << ':' << getColumn(id, location.offset);
+  }
+
+  void BufferManager::printRange(std::ostream &outputStream, const BufferId id, const Range range) const noexcept
+  {
+    printLocation(outputStream, id, range.getBegin());
+    outputStream << "..";
+    printLocation(outputStream, id, range.getEnd());
+  }
+
   bool BufferManager::isBufferLoaded(const std::string &name) const
   {
     const std::string absolutePath = getAbsolutePath(name);

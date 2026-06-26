@@ -49,8 +49,9 @@ namespace lbd::diagnostics
     // ReSharper disable once CppUseStructuredBinding
     const source::Location endLocation = diagnostic.getRange().getEnd();
     const source::BufferId bufferId = beginLocation.bufferId;
-    outputStream << "    " << topLeft << horizontal << " " << sourceManager.getBufferName(bufferId)
-        << ':' << diagnostic.getRange() << '\n';
+    outputStream << "    " << topLeft << horizontal << " " << sourceManager.getBufferName(bufferId) << ':';
+    sourceManager.printRange(outputStream, bufferId, diagnostic.getRange());
+    outputStream << '\n';
 
     // Source line.
     outputStream << "    " << vertical << '\n';
