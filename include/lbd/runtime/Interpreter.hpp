@@ -155,7 +155,7 @@ namespace lbd::runtime
   };
 
   Result interpret(frontend::Program &program, Context &context,
-                   std::optional<std::shared_ptr<Environment>> globalEnvironment = std::nullopt) noexcept;
+                   std::optional<std::shared_ptr<Environment>> globalEnvironment = std::nullopt);
 
   /// Add builtins Native Functions into Environment.
   void installBuiltins(Context &context, const std::shared_ptr<Environment> &environment);

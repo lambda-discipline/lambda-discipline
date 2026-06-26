@@ -15,9 +15,9 @@
 
 namespace lbd::frontend::parser
 {
-  Parser::Parser(Context &context, lexer::Lexer &lexer) noexcept : context(context), lexer(lexer) {}
+  Parser::Parser(Context &context, lexer::Lexer &lexer) : context(context), lexer(lexer) {}
 
-  std::vector<std::unique_ptr<ast::AstNode>> Parser::parse() const noexcept
+  std::vector<std::unique_ptr<ast::AstNode>> Parser::parse() const
   {
     std::vector<std::unique_ptr<ast::AstNode>> astNodes;
 
@@ -66,7 +66,7 @@ namespace lbd::frontend::parser
     return astNodes;
   }
 
-  void Parser::expect(const token::TokenKind kind) const noexcept
+  void Parser::expect(const token::TokenKind kind) const
   {
     if (lexer.peek().kind != kind)
     {
@@ -79,13 +79,13 @@ namespace lbd::frontend::parser
     }
   }
 
-  void Parser::consume(const token::TokenKind kind) const noexcept
+  void Parser::consume(const token::TokenKind kind) const
   {
     expect(kind);
     lexer.advance();
   }
 
-  std::vector<ast::AstNodePtr> Parser::parseFile(const std::string &path, const source::Range &range) const noexcept
+  std::vector<ast::AstNodePtr> Parser::parseFile(const std::string &path, const source::Range &range) const
   {
     // Circular Dependency or Duplicate Load.
     try
@@ -101,7 +101,7 @@ namespace lbd::frontend::parser
     return parser.parse();
   }
 
-  ast::statement::StatementPtr Parser::parseSymbolDefinitionStatement() const noexcept
+  ast::statement::StatementPtr Parser::parseSymbolDefinitionStatement() const
   {
     const source::Location begin = lexer.peek().range.getBegin();
     ast::expression::IdentifierExpressionPtr symbolNameIdentifierExpressionPtr = parseIdentifierExpression();
@@ -118,7 +118,7 @@ namespace lbd::frontend::parser
     );
   }
 
-  ast::expression::ExpressionPtr Parser::parseExpression() const noexcept
+  ast::expression::ExpressionPtr Parser::parseExpression() const
   {
     switch (lexer.peek().kind)
     {
@@ -135,7 +135,7 @@ namespace lbd::frontend::parser
     }
   }
 
-  ast::expression::IdentifierExpressionPtr Parser::parseIdentifierExpression() const noexcept
+  ast::expression::IdentifierExpressionPtr Parser::parseIdentifierExpression() const
   {
     expect(token::TokenKind::IDENTIFIER);
     const auto range = lexer.peek().range;
@@ -143,7 +143,7 @@ namespace lbd::frontend::parser
     return std::make_unique<ast::expression::IdentifierExpression>(range, std::string(name));
   }
 
-  ast::expression::ExpressionPtr Parser::parseStringExpression() const noexcept
+  ast::expression::ExpressionPtr Parser::parseStringExpression() const
   {
     expect(token::TokenKind::STRING);
     const auto range = lexer.peek().range;
@@ -152,7 +152,7 @@ namespace lbd::frontend::parser
     return std::make_unique<ast::expression::StringExpression>(range, std::string(value));
   }
 
-  ast::expression::ExpressionPtr Parser::parseNumberExpression() const noexcept
+  ast::expression::ExpressionPtr Parser::parseNumberExpression() const
   {
     expect(token::TokenKind::NUMBER);
     const auto range = lexer.peek().range;
@@ -160,7 +160,7 @@ namespace lbd::frontend::parser
     return std::make_unique<ast::expression::NumberExpression>(range, value);
   }
 
-  ast::expression::ExpressionPtr Parser::parseLambdaExpression() const noexcept
+  ast::expression::ExpressionPtr Parser::parseLambdaExpression() const
   {
     const source::Location begin = lexer.peek().range.getBegin();
     consume(token::TokenKind::BACKWARD_SLASH);
@@ -178,7 +178,7 @@ namespace lbd::frontend::parser
     );
   }
 
-  ast::expression::ExpressionPtr Parser::parseFunctionApplicationExpression() const noexcept
+  ast::expression::ExpressionPtr Parser::parseFunctionApplicationExpression() const
   {
     const source::Location begin = lexer.peek().range.getBegin();
     consume(token::TokenKind::OPEN_PARENTHESIS);
@@ -193,18 +193,18 @@ namespace lbd::frontend::parser
     );
   }
 
-  type::TypePtr Parser::parseType() const noexcept
+  type::TypePtr Parser::parseType() const
   {
     return parseQualifiedType();
   }
 
-  type::TypePtr Parser::parseQualifiedType() const noexcept
+  type::TypePtr Parser::parseQualifiedType() const
   {
     // TODO: Add support for parsing qualified types.
     return parseFunctionType();
   }
 
-  type::TypePtr Parser::parseFunctionType() const noexcept
+  type::TypePtr Parser::parseFunctionType() const
   {
     auto from = parseAppliedType();
     if (lexer.peek().kind != token::TokenKind::ARROW) return from;
@@ -213,7 +213,7 @@ namespace lbd::frontend::parser
     return type::Type::function(from, parseFunctionType());
   }
 
-  type::TypePtr Parser::parseAppliedType() const noexcept
+  type::TypePtr Parser::parseAppliedType() const
   {
     auto base = parsePrimaryType();
     if (lexer.peek().kind != token::TokenKind::LESS_THAN) return base;
@@ -231,7 +231,7 @@ namespace lbd::frontend::parser
     return type::Type::applied(base, std::move(arguments));
   }
 
-  type::TypePtr Parser::parsePrimaryType() const noexcept
+  type::TypePtr Parser::parsePrimaryType() const
   {
     if (lexer.peek().kind == token::TokenKind::OPEN_PARENTHESIS)
     {

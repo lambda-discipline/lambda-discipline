@@ -6,15 +6,13 @@ namespace lbd
 {
   Context::Context(std::ostream &outputStream, const Options options)
     : options(options), diagnosticRenderer(outputStream, bufferManager),
-      diagnosticEmitter(diagnosticRenderer) {}
+      diagnosticEmitter(diagnosticRenderer, true) {}
 
   source::BufferManager &Context::getBufferManager() { return bufferManager; }
 
   diagnostics::DiagnosticEmitter &Context::getDiagnosticEmitter() { return diagnosticEmitter; }
 
   Options &Context::getOptions() { return options; }
-
-  Logger &Context::getLogger() { return logger; }
 
   source::BufferId Context::loadFile(const std::string &path, const source::Range &range)
   {

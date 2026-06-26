@@ -1,5 +1,4 @@
 #include <filesystem>
-#include <fstream>
 #include <iostream>
 #include <replxx.hxx>
 #include <lbd/Exceptions.hpp>
@@ -67,7 +66,7 @@ namespace lbd::repl
       if (resultantOptions.sideEffects) std::cout << std::endl;
     }
 
-    context.getLogger().info("info: file loaded ", path);
+    context.getDiagnosticEmitter().info(fmt::format("File `{}` loaded.", path));
   }
 
   static int computeParenthesisDepth(const std::string &data)
@@ -102,11 +101,14 @@ namespace lbd::repl
     options.get().ownExpression = true;
     options.get().debug = debug;
 
+    context.getDiagnosticEmitter().setExitOnError(false);
+
     std::string line, buffer;
     size_t indentLevel = 0;
     std::optional<std::shared_ptr<runtime::Environment>> sharedGlobalEnvironment = std::nullopt;
 
-    context.getLogger().info("Welcome to lambda-discipline REPL.\nType :quit to exit.");
+    context.getDiagnosticEmitter().info("Welcome to lambda-discipline REPL.");
+    context.getDiagnosticEmitter().info("Type :quit to exit.");
 
     while (true)
     {
@@ -125,7 +127,7 @@ namespace lbd::repl
         {
           if (line == ":q" || line == ":quit" || line == ":exit")
           {
-            context.getLogger().info("\nexiting REPL.");
+            context.getDiagnosticEmitter().info("Goodbye.");
             break;
           }
 
@@ -266,7 +268,6 @@ namespace lbd::repl
 
         // Interpret
         // TODO: Either remove ScopedOptionsOverride, or introduce subContext, or decouple options from context.
-        context.getOptions() = options.get();
         const auto [globalEnvironment, value, resultantOptions] = runtime::interpret(
           program, context, sharedGlobalEnvironment);
         if (resultantOptions.sideEffects)
@@ -275,10 +276,9 @@ namespace lbd::repl
         }
         std::cout << colors.green << "=> " << value << colors.reset << std::endl;
         sharedGlobalEnvironment = globalEnvironment;
-      } catch (const ControlledExit &) {} catch (const std::exception &ex)
+      } catch (const ControlledExit &) {} catch (const std::exception &e)
       {
-        // TODO: This exits on error.
-        context.getLogger().error("error: ", ex.what());
+        context.getDiagnosticEmitter().error(e.what());
       }
     }
 

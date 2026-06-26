@@ -27,30 +27,34 @@ namespace lbd::diagnostics
   {
     /**
      *
-     *        ERROR: Unexpected character `;`.
-     *    ┌─ /home/nosferatu/Projects/lambda-discipline/dump/test.lbd:1..1
-     *    │
-     *  1 │ a; Number = 1
-     *    │  ^
-     *    │
-     *    ├─ NOTE: While parsing `/home/nosferatu/Projects/lambda-discipline/dump/test.lbd`.
-     *    └─ NOTE: While lexing `/home/nosferatu/Projects/lambda-discipline/dump/test.lbd`.
+     *    ERROR: Unexpected character `;`.
+     *        ┌─ /home/nosferatu/Projects/lambda-discipline/dump/test.lbd:1..1
+     *        │
+     *      1 │ a; Number = 1
+     *        │  ^
+     *        │
+     *        ├─ NOTE: While parsing `/home/nosferatu/Projects/lambda-discipline/dump/test.lbd`.
+     *        └─ NOTE: While lexing `/home/nosferatu/Projects/lambda-discipline/dump/test.lbd`.
      *
      */
 
-    const auto [topLeft, bottomLeft, horizontal, vertical, tee] = getBoxChars();
     const utils::terminal::Colors colors;
 
     outputStream << getSeverityColor(diagnostic.getSeverity(), colors) << severityToString(diagnostic.getSeverity())
         << colors.reset << ": " << diagnostic.getMessage() << '\n';
 
+    if (!diagnostic.getRange().has_value()) return;
+    const source::Range range = *diagnostic.getRange();
+
+    const auto [topLeft, bottomLeft, horizontal, vertical, tee] = getBoxChars();
+
     // ReSharper disable once CppUseStructuredBinding
-    const source::Location beginLocation = diagnostic.getRange().getBegin();
+    const source::Location beginLocation = range.getBegin();
     // ReSharper disable once CppUseStructuredBinding
-    const source::Location endLocation = diagnostic.getRange().getEnd();
+    const source::Location endLocation = range.getEnd();
     const source::BufferId bufferId = beginLocation.bufferId;
     outputStream << "    " << topLeft << horizontal << " " << sourceManager.getBufferName(bufferId) << ':';
-    sourceManager.printRange(outputStream, bufferId, diagnostic.getRange());
+    sourceManager.printRange(outputStream, bufferId, range);
     outputStream << '\n';
 
     // Source line.

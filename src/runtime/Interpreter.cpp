@@ -524,7 +524,7 @@ namespace lbd::runtime
   }
 
   Result interpret(frontend::Program &program, Context &context,
-                   std::optional<std::shared_ptr<Environment>> globalEnvironment) noexcept
+                   std::optional<std::shared_ptr<Environment>> globalEnvironment)
   {
     if (!globalEnvironment)
     {

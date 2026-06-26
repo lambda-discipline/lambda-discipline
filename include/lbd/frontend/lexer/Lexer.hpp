@@ -12,9 +12,9 @@ namespace lbd::frontend::lexer
   public:
     [[nodiscard]] explicit Lexer(Context &context, const source::Buffer &buffer) noexcept;
 
-    [[nodiscard]] token::Token peek() noexcept;
+    [[nodiscard]] token::Token peek();
 
-    [[nodiscard]] token::Token next() noexcept;
+    [[nodiscard]] token::Token next();
 
     void advance() noexcept;
 
@@ -23,7 +23,7 @@ namespace lbd::frontend::lexer
     [[nodiscard]] const source::Buffer &getBuffer() const noexcept;
 
   private:
-    [[nodiscard]] token::Token lex() noexcept;
+    [[nodiscard]] token::Token lex();
 
     [[nodiscard]] char getCurrentCharacter() const noexcept;
 
@@ -33,7 +33,7 @@ namespace lbd::frontend::lexer
 
     void advanceCursor() noexcept;
 
-    [[nodiscard]] token::TokenKind symbolToTokenKind(char symbol) const noexcept;
+    [[nodiscard]] token::TokenKind symbolToTokenKind(char symbol) const;
 
     Context &context;
     const source::Buffer &buffer;

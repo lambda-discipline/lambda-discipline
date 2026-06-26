@@ -21,13 +21,13 @@ namespace lbd::frontend::lexer
 
   Lexer::Lexer(Context &context, const source::Buffer &buffer) noexcept : context(context), buffer(buffer) {}
 
-  token::Token Lexer::peek() noexcept
+  token::Token Lexer::peek()
   {
     if (!currentToken.has_value()) currentToken = lex();
     return currentToken.value();
   }
 
-  token::Token Lexer::next() noexcept
+  token::Token Lexer::next()
   {
     if (currentToken.has_value())
     {
@@ -44,7 +44,7 @@ namespace lbd::frontend::lexer
 
   const source::Buffer &Lexer::getBuffer() const noexcept { return buffer; }
 
-  token::Token Lexer::lex() noexcept
+  token::Token Lexer::lex()
   {
     while (std::isspace(static_cast<unsigned char>(getCurrentCharacter()))) advanceCursor();
 
@@ -78,7 +78,7 @@ namespace lbd::frontend::lexer
       if (getCurrentCharacter() == '-' && !std::isdigit(peekNextCurrentCharacter()))
       {
         context.getDiagnosticEmitter().error(
-          {beginLocation, {buffer.getId(), cursor}},
+          std::make_optional(source::Range(beginLocation, source::Location(buffer.getId(), cursor))),
           diagnostics::DiagnosticId::LEXER_UNEXPECTED_CHARACTER, '-'
         );
       }
@@ -103,7 +103,7 @@ namespace lbd::frontend::lexer
       if (getCurrentCharacter() != '"')
       {
         context.getDiagnosticEmitter().error(
-          {beginLocation, {buffer.getId(), cursor}},
+          std::make_optional(source::Range(beginLocation, source::Location(buffer.getId(), cursor))),
           diagnostics::DiagnosticId::LEXER_UNBALANCED_QUOTE
         );
       }
@@ -163,7 +163,7 @@ namespace lbd::frontend::lexer
         break;
     }
     context.getDiagnosticEmitter().error(
-      {beginLocation, {buffer.getId(), cursor}},
+          std::make_optional(source::Range(beginLocation, source::Location(buffer.getId(), cursor))),
       diagnostics::DiagnosticId::LEXER_UNEXPECTED_CHARACTER, getCurrentCharacter()
     );
   }
@@ -191,7 +191,7 @@ namespace lbd::frontend::lexer
   }
 
   // TODO: Remove this function, can put the logic inside the switch-case.
-  token::TokenKind Lexer::symbolToTokenKind(const char symbol) const noexcept
+  token::TokenKind Lexer::symbolToTokenKind(const char symbol) const
   {
     switch (symbol)
     {
@@ -206,7 +206,7 @@ namespace lbd::frontend::lexer
       default:
         const source::Location location{buffer.getId(), cursor};
         context.getDiagnosticEmitter().error(
-          {location, location},
+          std::make_optional(source::Range(location, location)),
           diagnostics::DiagnosticId::LEXER_UNEXPECTED_CHARACTER, symbol
         );
     }

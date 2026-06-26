@@ -4,15 +4,7 @@
 
 namespace lbd::diagnostics
 {
-  Diagnostic::Diagnostic(const Severity severity, const source::Range &range, std::string message,
+  Diagnostic::Diagnostic(const Severity severity, const std::optional<source::Range> &range, std::string message,
                          const std::vector<ContextFrame> &contextStack)
-    : severity(severity), range(range), message(std::move(message)), contextStack(contextStack) {}
-
-  Severity Diagnostic::getSeverity() const { return severity; }
-
-  source::Range Diagnostic::getRange() const { return range; }
-
-  std::string_view Diagnostic::getMessage() const { return message; }
-
-  const std::vector<ContextFrame> &Diagnostic::getContextStack() const { return contextStack; }
+    : m_severity(severity), m_range(range), m_message(std::move(message)), m_contextStack(contextStack) {}
 }
