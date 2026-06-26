@@ -9,7 +9,7 @@
 ### Prerequisites
 
 - **CMake** (version 3.20+ recommended)
-- A C++20 capable compiler (e.g. `g++`, `clang++`, or MSVC on Windows)
+- A C++20 capable compiler (e.g. `g++`, `clang++`, or `MSVC` on Windows)
 
 ### Setup
 
@@ -93,7 +93,7 @@ $ ./cmake-build-debug/lbd run ./examples/math_demos.lbd
 
 After building, you can run the interpreter with:
 
-```bash
+```
 lbd [subcommands] <options>
 ```
 
@@ -120,6 +120,8 @@ SUBCOMMANDS:
 ## Linux Releases
 
 Prebuilt Linux releases are distributed as **AppImages**, allowing the interpreter to run on most modern Linux distributions without installation.
+
+You can download the latest release from the [GitHub Releases](https://github.com/nos1dot618/lambda-discipline/releases) page.
 
 After downloading an AppImage, make it executable and run it:
 
