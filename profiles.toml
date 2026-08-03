@@ -1,0 +1,39 @@
+# Default selections
+[defaults]
+profile = "debug"
+
+################################################################################
+# Build Profiles
+################################################################################
+
+[profiles.debug]
+build_type = "Debug"
+
+[profiles.release]
+build_type = "Release"
+
+[profiles.relwithdebinfo]
+build_type = "RelWithDebInfo"
+
+################################################################################
+# Toolchains
+################################################################################
+
+# Windows
+
+[toolchains.mingw]
+generator = "MinGW Makefiles"
+
+[toolchains.visual-studio]
+generator = "Visual Studio 17 2022"
+
+# Linux
+
+[toolchains.gcc]
+
+[toolchains.clang]
+
+# Cross-platform (requires Ninja installed)
+
+[toolchains.ninja]
+generator = "Ninja"

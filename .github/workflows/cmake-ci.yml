@@ -1,31 +1,107 @@
 name: CI/CD Test Pipeline
 
 on:
+  workflow_dispatch:
   push:
   pull_request:
 
 jobs:
   test:
     strategy:
+      fail-fast: false
       matrix:
-        os: [ ubuntu-latest, windows-latest ]
+        include:
+          - os: ubuntu-latest
+            toolchain: gcc
+
+          - os: windows-latest
+            toolchain: mingw
+
+          - os: windows-latest
+            toolchain: visual-studio
 
     runs-on: ${{ matrix.os }}
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.14"
 
-      - name: Build CMake project
-        run: |
-          python make.py setup
-          python make.py build
+      ##########################################################################
+      # Linux
+      ##########################################################################
 
-      - name: Run Golden Tests
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
         run: |
-          python make.py test
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake ninja-build
+
+      ##########################################################################
+      # MinGW
+      ##########################################################################
+
+      - name: Setup MSYS2
+        if: matrix.toolchain == 'mingw'
+        uses: msys2/setup-msys2@v2
+        with:
+          update: true
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-ninja
+
+      - name: Add MinGW to PATH
+        if: matrix.toolchain == 'mingw'
+        shell: pwsh
+        run: |
+          echo "C:\msys64\mingw64\bin" >> $env:GITHUB_PATH
+
+      ##########################################################################
+      # MSVC
+      ##########################################################################
+
+      - name: Configure MSVC
+        if: matrix.toolchain == 'visual-studio'
+        uses: ilammy/msvc-dev-cmd@v1
+
+      ##########################################################################
+      # Diagnostics
+      ##########################################################################
+
+      - name: Diagnostics
+        shell: bash
+        run: |
+          cmake --version
+          python --version
+
+      - name: Verify GCC
+        if: matrix.toolchain == 'gcc' || matrix.toolchain == 'mingw'
+        shell: bash
+        run: |
+          gcc --version
+          g++ --version
+
+      - name: Verify MSVC
+        if: matrix.toolchain == 'visual-studio'
+        shell: cmd
+        run: |
+          cl
+
+      ##########################################################################
+      # Build
+      ##########################################################################
+
+      - name: Setup
+        run: |
+          python make.py --toolchain ${{ matrix.toolchain }} setup
+
+      - name: Build
+        run: |
+          python make.py --toolchain ${{ matrix.toolchain }} build
+
+      - name: Test
+        run: |
+          python make.py --toolchain ${{ matrix.toolchain }} test
