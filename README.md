@@ -115,7 +115,8 @@ SUBCOMMANDS:
 
 ## Editor Plugins
 
-1. [GNU Emacs](./editor-plugins/emacs)
+1. [GNU emacs major mode](https://github.com/lambda-discipline/lbd-emacs-major-mode)
+2. [GNU emacs inferior REPL mode](https://github.com/lambda-discipline/lbd-emacs-inf-repl-mode)
 
 ## Linux Releases
 
