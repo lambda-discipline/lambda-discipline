@@ -17,21 +17,30 @@ jobs:
           - os: windows-latest
             toolchain: mingw
 
-          - os: windows-latest
+          - os: windows-2022
             toolchain: visual-studio
 
     runs-on: ${{ matrix.os }}
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.14"
 
-      ##########################################################################
-      # Linux
-      ##########################################################################
+      - name: Show environment
+        shell: bash
+        run: |
+          echo "OS: $RUNNER_OS"
+          echo "Architecture: $RUNNER_ARCH"
+          echo "Toolchain: ${{ matrix.toolchain }}"
+          echo "CMake:"
+          cmake --version
+          echo "Python:"
+          python --version
 
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
@@ -39,11 +48,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y build-essential cmake ninja-build
 
-      ##########################################################################
-      # MinGW
-      ##########################################################################
-
-      - name: Setup MSYS2
+      - name: Set up MSYS2
         if: matrix.toolchain == 'mingw'
         uses: msys2/setup-msys2@v2
         with:
@@ -59,23 +64,11 @@ jobs:
         run: |
           echo "C:\msys64\mingw64\bin" >> $env:GITHUB_PATH
 
-      ##########################################################################
-      # MSVC
-      ##########################################################################
-
-      - name: Configure MSVC
+      - name: Set up MSVC
         if: matrix.toolchain == 'visual-studio'
         uses: ilammy/msvc-dev-cmd@v1
-
-      ##########################################################################
-      # Diagnostics
-      ##########################################################################
-
-      - name: Diagnostics
-        shell: bash
-        run: |
-          cmake --version
-          python --version
+        with:
+          arch: amd64
 
       - name: Verify GCC
         if: matrix.toolchain == 'gcc' || matrix.toolchain == 'mingw'
@@ -90,11 +83,7 @@ jobs:
         run: |
           cl
 
-      ##########################################################################
-      # Build
-      ##########################################################################
-
-      - name: Setup
+      - name: Configure
         run: |
           python make.py --toolchain ${{ matrix.toolchain }} setup
 
