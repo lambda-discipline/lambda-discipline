@@ -117,6 +117,8 @@ SUBCOMMANDS:
 
 1. [GNU emacs major mode](https://github.com/lambda-discipline/lbd-emacs-major-mode)
 2. [GNU emacs inferior REPL mode](https://github.com/lambda-discipline/lbd-emacs-inf-repl-mode)
+3. [VS Code extension](https://github.com/lambda-discipline/lbd-vscode)
+4. [Jupyter kernel](https://github.com/lambda-discipline/lbd-jupyter-kernel)
 
 ## Linux Releases
 
