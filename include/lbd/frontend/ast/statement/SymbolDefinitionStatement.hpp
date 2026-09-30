@@ -3,7 +3,7 @@
 #include <lbd/frontend/ast/expression/Expression.hpp>
 #include <lbd/frontend/ast/expression/IdentifierExpression.hpp>
 #include <lbd/frontend/ast/statement/Statement.hpp>
-#include <lbd/type/Type.hpp>
+#include <lbd/types/Core.hpp>
 
 namespace lbd::frontend::ast::statement
 {
@@ -12,7 +12,7 @@ namespace lbd::frontend::ast::statement
   public:
     SymbolDefinitionStatement(const source::Range &range,
                               expression::IdentifierExpressionPtr symbolNameIdentifierExpressionPtr,
-                              type::TypePtr symbolTypePtr, expression::ExpressionPtr expressionPtr) noexcept;
+                              types::TypePtr symbolTypePtr, expression::ExpressionPtr expressionPtr) noexcept;
 
     void print(std::ostream &outputStream, size_t indent) const noexcept override;
 
@@ -24,7 +24,7 @@ namespace lbd::frontend::ast::statement
 
   private:
     expression::IdentifierExpressionPtr symbolNameIdentifierExpressionPtr;
-    type::TypePtr symbolTypePtr;
+    types::TypePtr symbolTypePtr;
     expression::ExpressionPtr expressionPtr;
   };
 }

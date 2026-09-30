@@ -5,7 +5,7 @@ namespace lbd::frontend::ast::statement
   SymbolDefinitionStatement::SymbolDefinitionStatement(const source::Range &range,
                                                        expression::IdentifierExpressionPtr
                                                        symbolNameIdentifierExpressionPtr,
-                                                       type::TypePtr symbolTypePtr,
+                                                       types::TypePtr symbolTypePtr,
                                                        expression::ExpressionPtr expressionPtr) noexcept
     : Statement(AstNodeKind::SYMBOL_DEFINITION_STATEMENT, range),
       symbolNameIdentifierExpressionPtr(std::move(symbolNameIdentifierExpressionPtr)),

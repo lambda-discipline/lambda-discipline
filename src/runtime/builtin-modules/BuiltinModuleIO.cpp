@@ -9,7 +9,7 @@ namespace lbd::runtime::builtins
   {
     const std::string name = "print";
     const auto signature = functionType(
-      {simpleType(type::TypeTag::Any)},
+      {simpleType(types::TypeTag::Any)},
       nullptr,
       true
     );
@@ -31,8 +31,8 @@ namespace lbd::runtime::builtins
   {
     const std::string name = "slurpFile";
     const auto signature = functionType(
-      {simpleType(type::TypeTag::String)},
-      simpleType(type::TypeTag::String)
+      {simpleType(types::TypeTag::String)},
+      simpleType(types::TypeTag::String)
     );
     return {
       name, signature, [&context](const std::vector<std::shared_ptr<Thunk>> &arguments,
@@ -59,7 +59,7 @@ namespace lbd::runtime::builtins
   {
     const std::string name = "lines";
     const auto signature = functionType(
-      {simpleType(type::TypeTag::String)},
+      {simpleType(types::TypeTag::String)},
       listType()
     );
     return {
@@ -106,7 +106,7 @@ namespace lbd::runtime::builtins
   {
     const std::string name = "split";
     const auto signature = functionType(
-      {simpleType(type::TypeTag::String), simpleType(type::TypeTag::String)},
+      {simpleType(types::TypeTag::String), simpleType(types::TypeTag::String)},
       listType()
     );
     return {

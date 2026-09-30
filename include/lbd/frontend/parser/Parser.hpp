@@ -7,7 +7,7 @@
 #include <lbd/frontend/ast/expression/IdentifierExpression.hpp>
 #include <lbd/frontend/ast/statement/Statement.hpp>
 #include <lbd/frontend/lexer/Lexer.hpp>
-#include <lbd/type/Type.hpp>
+#include <lbd/types/Core.hpp>
 
 namespace lbd::frontend::parser
 {
@@ -40,16 +40,16 @@ namespace lbd::frontend::parser
 
     [[nodiscard]] ast::expression::ExpressionPtr parseNumberExpression() const;
 
-    [[nodiscard]] type::TypePtr parseType() const;
+    [[nodiscard]] types::TypePtr parseType() const;
 
     /// Tries to parse a qualified type, if failed fallbacks to parsing function type.
-    [[nodiscard]] type::TypePtr parseQualifiedType() const;
+    [[nodiscard]] types::TypePtr parseQualifiedType() const;
 
-    [[nodiscard]] type::TypePtr parseFunctionType() const;
+    [[nodiscard]] types::TypePtr parseFunctionType() const;
 
-    [[nodiscard]] type::TypePtr parseAppliedType() const;
+    [[nodiscard]] types::TypePtr parseAppliedType() const;
 
-    [[nodiscard]] type::TypePtr parsePrimaryType() const;
+    [[nodiscard]] types::TypePtr parsePrimaryType() const;
 
     Context &context;
     lexer::Lexer &lexer;

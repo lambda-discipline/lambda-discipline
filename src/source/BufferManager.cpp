@@ -46,6 +46,7 @@ namespace lbd::source
     const auto &lines = m_buffers[id].getLineOffsets();
     const auto it = std::ranges::upper_bound(lines, offset);
     const RowNumber row = static_cast<RowNumber>(it - lines.begin());
+    if (row == 0 || row > lines.size()) return 1;
     return offset - lines[row - 1] + 1;
   }
 

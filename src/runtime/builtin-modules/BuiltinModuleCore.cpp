@@ -7,8 +7,8 @@ namespace lbd::runtime::builtins
   {
     const std::string name = "add";
     const auto signature = functionType(
-      {simpleType(type::TypeTag::Float), simpleType(type::TypeTag::Float)},
-      simpleType(type::TypeTag::Float)
+      {simpleType(types::TypeTag::Float), simpleType(types::TypeTag::Float)},
+      simpleType(types::TypeTag::Float)
     );
     return {
       name, signature, [&context](const std::vector<std::shared_ptr<Thunk>> &arguments,
@@ -26,8 +26,8 @@ namespace lbd::runtime::builtins
   {
     const std::string name = "sub";
     const auto signature = functionType(
-      {simpleType(type::TypeTag::Float), simpleType(type::TypeTag::Float)},
-      simpleType(type::TypeTag::Float)
+      {simpleType(types::TypeTag::Float), simpleType(types::TypeTag::Float)},
+      simpleType(types::TypeTag::Float)
     );
     return {
       name, signature, [&context](const std::vector<std::shared_ptr<Thunk>> &arguments,
@@ -45,8 +45,8 @@ namespace lbd::runtime::builtins
   {
     const std::string name = "mul";
     const auto signature = functionType(
-      {simpleType(type::TypeTag::Float), simpleType(type::TypeTag::Float)},
-      simpleType(type::TypeTag::Float)
+      {simpleType(types::TypeTag::Float), simpleType(types::TypeTag::Float)},
+      simpleType(types::TypeTag::Float)
     );
     return {
       name, signature, [&context](const std::vector<std::shared_ptr<Thunk>> &arguments,
@@ -64,8 +64,8 @@ namespace lbd::runtime::builtins
   {
     const std::string name = "cmp";
     const auto signature = functionType(
-      {simpleType(type::TypeTag::Float), simpleType(type::TypeTag::Float)},
-      simpleType(type::TypeTag::Float)
+      {simpleType(types::TypeTag::Float), simpleType(types::TypeTag::Float)},
+      simpleType(types::TypeTag::Float)
     );
     return {
       name, signature, [&context](const std::vector<std::shared_ptr<Thunk>> &arguments,
@@ -87,11 +87,11 @@ namespace lbd::runtime::builtins
     // TODO: The return-type should be either argument-1 or argument-2.
     const auto signature = functionType(
       {
-        simpleType(type::TypeTag::Float),
-        simpleType(type::TypeTag::Any, false),
-        simpleType(type::TypeTag::Any, false)
+        simpleType(types::TypeTag::Float),
+        simpleType(types::TypeTag::Any, false),
+        simpleType(types::TypeTag::Any, false)
       },
-      simpleType(type::TypeTag::Any)
+      simpleType(types::TypeTag::Any)
     );
     return {
       name, signature, [&context](const std::vector<std::shared_ptr<Thunk>> &arguments,
@@ -112,8 +112,8 @@ namespace lbd::runtime::builtins
   {
     const std::string name = "parseFloat";
     const auto signature = functionType(
-      {simpleType(type::TypeTag::String)},
-      simpleType(type::TypeTag::Float)
+      {simpleType(types::TypeTag::String)},
+      simpleType(types::TypeTag::Float)
     );
     return {
       name, signature, [&context](const std::vector<std::shared_ptr<Thunk>> &arguments,

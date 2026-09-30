@@ -1,3 +1,4 @@
+#include <sstream>
 #include <lbd/Docs.hpp>
 #include <lbd/runtime/Builtins.hpp>
 #include <lbd/runtime/Interpreter.hpp>
@@ -13,7 +14,9 @@ namespace lbd
     //       Maybe add a flag to rather generate an html-document.
     for (const runtime::NativeFunction &nativeFunction: runtime::builtins::getBuiltins(context))
     {
-      std::string signature = nativeFunction.getSignature()->toString();
+      std::ostringstream signatureStream;
+      signatureStream << *nativeFunction.getSignature();
+      std::string signature = signatureStream.str();
       outputStream << nativeFunction.getName() << ": " << signature << std::endl;
     }
   }
