@@ -1,0 +1,10 @@
+applyTwice: (Number -> Number) -> Number -> Number = \f: (Number -> Number). \x: Number. (f (f x))
+
+addOne: Number -> Number = \n: Number. (add n 1.0)
+timesFour: Number -> Number = \n: Number. (mul n 4.0)
+
+result1: Number = (applyTwice addOne 5.0)
+result2: Number = (applyTwice timesFour 2.0)
+
+(print result1 "\n")
+(print result2 "\n")

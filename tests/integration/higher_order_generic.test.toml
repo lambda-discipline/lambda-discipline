@@ -1,0 +1,8 @@
+file = "higher_order_generic.lbd"
+
+[expect]
+exit_code = 0
+stdout = """
+7.000000
+32.000000
+"""

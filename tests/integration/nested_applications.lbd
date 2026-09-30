@@ -1,0 +1,7 @@
+triple: Number -> Number = \x: Number. (mul x 3.0)
+increment: Number -> Number = \x: Number. (add x 1.0)
+decrement: Number -> Number = \x: Number. (add x -1.0)
+
+complex: Number = (increment (triple (decrement (increment 5.0))))
+
+(print complex "\n")

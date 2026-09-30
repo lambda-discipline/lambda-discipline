@@ -1,0 +1,7 @@
+file = "curried_functions.lbd"
+
+[expect]
+exit_code = 0
+stdout = """
+18.000000
+"""

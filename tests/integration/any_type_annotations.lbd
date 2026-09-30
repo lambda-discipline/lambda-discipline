@@ -1,0 +1,13 @@
+identity: Any = \x: Any. x
+
+passthrough: Any -> Any = \value: Any. value
+
+selectFirst: Any -> Any -> Any = \a: Any. \b: Any. a
+
+result1: Number = (identity 42.0)
+result2: String = (passthrough "test")
+result3: Number = (selectFirst 100.0 200.0)
+
+(print result1 "\n")
+(print result2 "\n")
+(print result3 "\n")

@@ -1,0 +1,10 @@
+safeDivide: Number -> Number -> Number = \dividend: Number. \divisor: Number.
+    (null (cmp 0 divisor) 0 (div dividend divisor))
+
+div: Number -> Number -> Number = \a: Number. \b: Number. (mul a (mul b 1.0))
+
+result1: Number = (safeDivide 10.0 0.0)
+result2: Number = (safeDivide 10.0 2.0)
+
+(print result1 "\n")
+(print result2 "\n")

@@ -1,0 +1,10 @@
+isEven: Number -> Number = \n: Number.
+    (null (cmp 0 n) 1 (isOdd (sub n 1.0)))
+
+isOdd: Number -> Number = \n: Number.
+    (null (cmp 0 n) 0 (isEven (sub n 1.0)))
+
+(print (isEven 4) "\n")
+(print (isEven 5) "\n")
+(print (isOdd 4) "\n")
+(print (isOdd 5) "\n")

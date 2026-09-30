@@ -1,0 +1,7 @@
+file = "deep_recursion.lbd"
+
+[expect]
+exit_code = 0
+stdout = """
+55.000000
+"""

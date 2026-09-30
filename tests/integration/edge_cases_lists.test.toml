@@ -1,0 +1,9 @@
+file = "edge_cases_lists.lbd"
+
+[expect]
+exit_code = 0
+stdout = """
+1.000000
+2.000000
+[42.000000]
+"""

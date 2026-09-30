@@ -1,0 +1,7 @@
+file = "polymorphic_functions.lbd"
+
+[expect]
+exit_code = 0
+stdout = """
+11.000000
+"""
