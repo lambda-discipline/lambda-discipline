@@ -10,19 +10,19 @@ include(FetchContent)
 
 FetchContent_Declare(
     fmt
-    GIT_REPOSITORY https://github.com/fmtlib/fmt.git
+    GIT_REPOSITORY https://github.com/lambda-discipline/fmtlib-fmt.git
     GIT_TAG 11.2.0
 )
 
 FetchContent_Declare(
     replxx
-    GIT_REPOSITORY https://github.com/AmokHuginnsson/replxx.git
-    GIT_TAG master
+    GIT_REPOSITORY https://github.com/lambda-discipline/amokhuginnsson-replxx.git
+    GIT_TAG release-0.0.4
 )
 
 FetchContent_Declare(
     CLI11
-    GIT_REPOSITORY https://github.com/CLIUtils/CLI11.git
+    GIT_REPOSITORY https://github.com/lambda-discipline/cliutils-cli11.git
     GIT_TAG v2.5.0
 )
 
@@ -87,18 +87,22 @@ target_link_libraries(lbdDiagnostics PUBLIC
     fmt::fmt
 )
 
-###### TYPE ######
+###### TYPES (Unified Type System) ######
 
-file(GLOB_RECURSE TYPE_SOURCE_FILES CONFIGURE_DEPENDS
-    ${PROJECT_SOURCE_DIR}/src/type/*.cpp
+file(GLOB_RECURSE TYPES_SOURCE_FILES CONFIGURE_DEPENDS
+    ${PROJECT_SOURCE_DIR}/src/types/*.cpp
 )
 
-add_library(lbdType STATIC
-    ${TYPE_SOURCE_FILES}
+add_library(lbdTypes STATIC
+    ${TYPES_SOURCE_FILES}
 )
 
-target_include_directories(lbdType PUBLIC
+target_include_directories(lbdTypes PUBLIC
     ${PROJECT_SOURCE_DIR}/include
+)
+
+target_link_libraries(lbdTypes PUBLIC
+    lbdDiagnostics
 )
 
 ###### FRONTEND ######
@@ -117,6 +121,7 @@ target_include_directories(lbdFrontend PUBLIC
 
 target_link_libraries(lbdFrontend PUBLIC
     lbdDiagnostics
+    lbdTypes
 )
 
 ###### RUNTIME ######
@@ -135,6 +140,7 @@ target_include_directories(lbdRuntime PUBLIC
 
 target_link_libraries(lbdRuntime PUBLIC
     lbdDiagnostics
+    lbdTypes
 )
 
 ###### MAIN EXECUTABLE ######
@@ -158,7 +164,7 @@ target_link_libraries(lbd PRIVATE
     lbdDiagnostics
     lbdFrontend
     lbdRuntime
-    lbdType
+    lbdTypes
     replxx
     CLI11::CLI11
 )
@@ -174,6 +180,7 @@ endif ()
 
 enable_warnings(lbdSource)
 enable_warnings(lbdDiagnostics)
+enable_warnings(lbdTypes)
 enable_warnings(lbdFrontend)
 enable_warnings(lbdRuntime)
 enable_warnings(lbd)
