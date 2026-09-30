@@ -1,7 +1,7 @@
 #include <algorithm>
 #include <ranges>
 #include <lbd/runtime/Builtins.hpp>
-#include <lbd/runtime/Type.hpp>
+#include <lbd/types/Core.hpp>
 #include <lbd/runtime/builtin-modules/BuiltinModuleList.hpp>
 
 namespace lbd::runtime::builtins
@@ -10,7 +10,7 @@ namespace lbd::runtime::builtins
   {
     const std::string name = "list";
     const auto signature = functionType(
-      {simpleType(type::TypeTag::Any)},
+      {simpleType(types::TypeTag::Any)},
       listType(),
       true
     );
@@ -33,7 +33,7 @@ namespace lbd::runtime::builtins
     const std::string name = "listSize";
     const auto signature = functionType(
       {listType()},
-      simpleType(type::TypeTag::Float)
+      simpleType(types::TypeTag::Float)
     );
     return {
       name, signature, [&context](const std::vector<std::shared_ptr<Thunk>> &arguments,
@@ -50,8 +50,8 @@ namespace lbd::runtime::builtins
   {
     const std::string name = "listGet";
     const auto signature = functionType(
-      {listType(), simpleType(type::TypeTag::Float)},
-      simpleType(type::TypeTag::Any)
+      {listType(), simpleType(types::TypeTag::Float)},
+      simpleType(types::TypeTag::Any)
     );
     return {
       name, signature, [&context](const std::vector<std::shared_ptr<Thunk>> &arguments,
@@ -77,8 +77,8 @@ namespace lbd::runtime::builtins
   {
     const std::string name = "listRemove";
     const auto signature = functionType(
-      {listType(), simpleType(type::TypeTag::Float)},
-      simpleType(type::TypeTag::Any)
+      {listType(), simpleType(types::TypeTag::Float)},
+      simpleType(types::TypeTag::Any)
     );
     return {
       name, signature, [&context](const std::vector<std::shared_ptr<Thunk>> &arguments,
@@ -106,7 +106,7 @@ namespace lbd::runtime::builtins
   {
     const std::string name = "listAppend";
     const auto signature = functionType(
-      {listType(), simpleType(type::TypeTag::Any)},
+      {listType(), simpleType(types::TypeTag::Any)},
       nullptr
     );
     return {
@@ -136,7 +136,7 @@ namespace lbd::runtime::builtins
     //       instead of (Any1 -> Any2) -> [Any3] -> [Any4].
     const auto signature = functionType(
       {
-        functionType({simpleType(type::TypeTag::Any)}, simpleType(type::TypeTag::Any)),
+        functionType({simpleType(types::TypeTag::Any)}, simpleType(types::TypeTag::Any)),
         listType()
       },
       listType()
@@ -310,12 +310,12 @@ namespace lbd::runtime::builtins
     //       (Any1 -> Any2 -> Any2) -> Any2 -> [Any1] -> Any2
     const auto signature = functionType(
       {
-        functionType({simpleType(type::TypeTag::Any), simpleType(type::TypeTag::Any)},
-                     simpleType(type::TypeTag::Any)),
-        simpleType(type::TypeTag::Any),
+        functionType({simpleType(types::TypeTag::Any), simpleType(types::TypeTag::Any)},
+                     simpleType(types::TypeTag::Any)),
+        simpleType(types::TypeTag::Any),
         listType()
       },
-      simpleType(type::TypeTag::Any)
+      simpleType(types::TypeTag::Any)
     );
     return {
       name, signature, [&context](const std::vector<std::shared_ptr<Thunk>> &arguments,

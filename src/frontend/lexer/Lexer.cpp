@@ -71,6 +71,7 @@ namespace lbd::frontend::lexer
     // Number.
     if (isNumberStart(getCurrentCharacter()))
     {
+      // TODO(code-smell): Remove goto.
       // Comment or Arrow.
       if (getCurrentCharacter() == '-' && (peekNextCurrentCharacter() == '-'
                                            || peekNextCurrentCharacter() == '>'))
@@ -109,6 +110,9 @@ namespace lbd::frontend::lexer
       }
       advanceCursor(); // Consume double-quote.
       // +1 and -1 for excluding the quotes.
+      if (cursor <= beginOffset + 1) {
+        // FIXME: Add error for unterminated quote (EOF).
+      }
       const auto lexeme = std::string(buffer.getContents().substr(beginOffset + 1, cursor - beginOffset - 2));
       return {token::TokenKind::STRING, lexeme, {beginLocation, {buffer.getId(), cursor}}};
     }

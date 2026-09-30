@@ -11,7 +11,7 @@
 #include <lbd/frontend/ast/statement/SymbolDefinitionStatement.hpp>
 #include <lbd/runtime/Builtins.hpp>
 #include <lbd/runtime/Interpreter.hpp>
-#include <lbd/runtime/Type.hpp>
+#include <lbd/types/Core.hpp>
 #include <lbd/utils/StringEscaping.hpp>
 
 // TODO: Everywhere make context the first parameter for consistency.
@@ -90,7 +90,7 @@ namespace lbd::runtime
     sideEffects |= resultOptions.sideEffects;
   }
 
-  NativeFunction::NativeFunction(std::string name, std::shared_ptr<type::FunctionType> signature,
+  NativeFunction::NativeFunction(std::string name, types::TypePtr signature,
                                  Implementation implementation) : name(std::move(name)),
                                                                   signature(std::move(signature)),
                                                                   implementation(std::move(implementation)) {}
@@ -100,7 +100,7 @@ namespace lbd::runtime
     return name;
   }
 
-  std::shared_ptr<type::FunctionType> NativeFunction::getSignature() const
+  types::TypePtr NativeFunction::getSignature() const
   {
     return signature;
   }
@@ -112,7 +112,23 @@ namespace lbd::runtime
 
   int NativeFunction::getArity() const
   {
-    return signature->arity();
+    // For variadic functions, return -1
+    if (signature && signature->getIsVariadic())
+    {
+      return -1;
+    }
+
+    // Calculate arity from function type structure
+    // Function types are right-associative: a -> b -> c is represented as a -> (b -> c)
+    // So arity is the count of function arrows
+    int arity = 0;
+    auto current = signature;
+    while (current && current->getKind() == types::TypeKind::Function)
+    {
+      arity++;
+      current = current->getTo();
+    }
+    return arity;
   }
 
   std::string NativeFunction::toString() const
@@ -147,6 +163,7 @@ namespace lbd::runtime
       return cached.value();
     }
     // Expression is not initialized
+    // SEE: Should we also check for !owned
     if (!expression)
     {
       context.getDiagnosticEmitter().error(
@@ -347,6 +364,7 @@ namespace lbd::runtime
       // If there are no frames left, that's unexpected (shouldn't happen), bail.
       if (frames.empty())
       {
+        // FIXME: callRange can be std::nullopt
         context.getDiagnosticEmitter().error(
           source::Range(callRange.value()),
           diagnostics::DiagnosticId::RUNTIME_EMPTY_CALL_STACK
@@ -398,14 +416,22 @@ namespace lbd::runtime
           nativeFunction.getArity() != -1)
         {
           const int arity = nativeFunction.getArity();
-          const type::FunctionType &signature = *nativeFunction.getSignature();
+          const auto &signature = nativeFunction.getSignature();
+
+          auto typeToString = [](const types::TypePtr &type)
+          {
+            std::ostringstream oss;
+            oss << *type;
+            return oss.str();
+          };
+
           if (workArguments.size() - index < arity)
           {
             context.getDiagnosticEmitter().error(
               source::Range(callRange.value()),
               diagnostics::DiagnosticId::RUNTIME_NATIVE_FUNCTION_SIGNATURE_MISMATCH,
               nativeFunction.getName(), arity, workArguments.size() - index,
-              nativeFunction.getName(), signature.toString()
+              nativeFunction.getName(), typeToString(signature)
             );
           }
           std::vector<std::shared_ptr<Thunk>> slice;
@@ -414,27 +440,49 @@ namespace lbd::runtime
           {
             slice.push_back(workArguments[index + i]);
           }
-          // Type-Check the function-arguments.
-          if (!signature.matchesArgumentTypes(context, slice))
+          // Type-Check the function-arguments - extract argument types from signature
+          bool argsMatch = true;
+          auto currentType = signature;
+          for (size_t i = 0; i < slice.size() && currentType->getKind() == types::TypeKind::Function; ++i)
+          {
+            const auto &argType = currentType->getFrom();
+            if (!argType)
+            {
+              continue; // Skip type-checking for null types
+            }
+            // Only force if hard check is allowed (to avoid forcing lazy computations unnecessarily)
+            if (argType->allowsHardCheck())
+            {
+              if (!argType->matches(slice[i]->force(context)))
+              {
+                argsMatch = false;
+                break;
+              }
+            }
+            currentType = currentType->getTo();
+          }
+
+          if (!argsMatch)
           {
             context.getDiagnosticEmitter().error(
               *callRange,
               diagnostics::DiagnosticId::RUNTIME_INVALID_INPUTS_TO_NATIVE_FUNCTION,
               nativeFunction.getName(),
-              nativeFunction.getName(), signature.toString()
+              nativeFunction.getName(), typeToString(signature)
             );
             // TODO: Also print exactly which argument caused the error.
             //       Print the signature got, with the incorrect argument colored differently.
           }
           auto [resultantValue_, resultOptions] = nativeFunction.getImplementation()(
             slice, callSiteEnvironment);
-          if (!signature.matchesReturnType(resultantValue_))
+          // Check return type - it should match the final type in the function chain
+          if (!currentType->matches(resultantValue_))
           {
             context.getDiagnosticEmitter().error(
               *callRange,
               diagnostics::DiagnosticId::INTERNAL_RETURN_TYPE_MISMATCH,
-              nativeFunction.getName(), signature.getReturnType().toString(),
-              type::typeFromValue(resultantValue_)->toString()
+              nativeFunction.getName(), typeToString(currentType),
+              typeToString(types::Type::named(std::string(resultantValue_.toString())))
             );
             // TODO: possibly not create an additional type-object just for printing.
           }
@@ -443,17 +491,17 @@ namespace lbd::runtime
           index += arity;
         } else
         {
+          // Variadic case
           std::vector<std::shared_ptr<Thunk>> slice;
           slice.reserve(arguments.size() - index);
           for (size_t i = 0; i < arguments.size() - index; ++i)
           {
             slice.push_back(workArguments[index + i]);
           }
-          auto [resultantValue_, resultOptions] = nativeFunction.getImplementation()(
-            slice, callSiteEnvironment);
+          auto [resultantValue_, resultOptions] = nativeFunction.getImplementation()(slice, callSiteEnvironment);
           resultantValue = resultantValue_;
           globalResultOptions.interpolate(resultOptions);
-          index += arguments.size() - index;
+          index = arguments.size();
         }
       } else
       {

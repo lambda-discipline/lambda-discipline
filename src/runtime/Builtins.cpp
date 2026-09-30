@@ -8,17 +8,38 @@
 
 namespace lbd::runtime::builtins
 {
-  TypePointer simpleType(type::TypeTag tag, bool hardCheck)
+  TypePointer simpleType(const types::TypeTag tag, const bool hardCheck)
   {
-    return std::make_shared<type::SimpleType>(tag, hardCheck);
+    auto type = types::Type::named(types::typeTagToString(tag));
+    type->setAllowsHardCheck(hardCheck);
+    return type;
   }
 
-  TypePointer listType() { return std::make_shared<type::ListType>(); }
+  TypePointer listType() { return types::Type::named("List"); }
 
-  std::shared_ptr<type::FunctionType> functionType(const std::vector<TypePointer> &argumentTypes,
-                                                   const TypePointer &returnType, bool isVariadic)
+  TypePointer functionType(const std::vector<TypePointer> &argumentTypes,
+                           const TypePointer &returnType, const bool isVariadic)
   {
-    return std::make_shared<type::FunctionType>(argumentTypes, returnType, isVariadic);
+    TypePointer result;
+    if (argumentTypes.size() != 1)
+    {
+      // For multi-argument functions, nest them
+      result = returnType;
+      for (auto it = argumentTypes.rbegin(); it != argumentTypes.rend(); ++it)
+      {
+        result = types::Type::function(*it, result);
+      }
+    } else
+    {
+      result = types::Type::function(argumentTypes[0], returnType);
+    }
+
+    if (isVariadic)
+    {
+      result->setIsVariadic(true);
+    }
+
+    return result;
   }
 
   std::vector<NativeFunction> getBuiltins(Context &context)

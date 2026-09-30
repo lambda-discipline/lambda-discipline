@@ -4,7 +4,7 @@ namespace lbd::frontend::ast::expression
 {
   LambdaExpression::LambdaExpression(const source::Range &range,
                                      IdentifierExpressionPtr argumentIdentifierExpressionPtr,
-                                     type::TypePtr argumentTypePtr, ExpressionPtr expressionPtr) noexcept
+                                     types::TypePtr argumentTypePtr, ExpressionPtr expressionPtr) noexcept
     : Expression(AstNodeKind::LAMBDA_EXPRESSION, range),
       argumentIdentifierExpressionPtr(std::move(argumentIdentifierExpressionPtr)),
       argumentTypePtr(std::move(argumentTypePtr)),

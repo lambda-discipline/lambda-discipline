@@ -2,7 +2,7 @@
 
 #include <lbd/frontend/ast/expression/Expression.hpp>
 #include <lbd/frontend/ast/expression/IdentifierExpression.hpp>
-#include <lbd/type/Type.hpp>
+#include <lbd/types/Core.hpp>
 
 namespace lbd::frontend::ast::expression
 {
@@ -10,7 +10,7 @@ namespace lbd::frontend::ast::expression
   {
   public:
     LambdaExpression(const source::Range &range, IdentifierExpressionPtr argumentIdentifierExpressionPtr,
-                     type::TypePtr argumentTypePtr, ExpressionPtr expressionPtr) noexcept;
+                     types::TypePtr argumentTypePtr, ExpressionPtr expressionPtr) noexcept;
 
     void print(std::ostream &outputStream, size_t indent) const noexcept override;
 
@@ -20,7 +20,7 @@ namespace lbd::frontend::ast::expression
 
   private:
     IdentifierExpressionPtr argumentIdentifierExpressionPtr;
-    type::TypePtr argumentTypePtr;
+    types::TypePtr argumentTypePtr;
     ExpressionPtr expressionPtr;
   };
 }

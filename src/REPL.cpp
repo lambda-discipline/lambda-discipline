@@ -133,6 +133,7 @@ namespace lbd::repl
 
           if (line == ":c" || line == ":clear" || line == ":cls")
           {
+            // TODO: Consider using `std::cout << "\033[2J\033[H";`.
 #ifdef _WIN32
             std::system("cls");
 #else

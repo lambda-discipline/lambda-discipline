@@ -8,11 +8,7 @@
 #include <lbd/frontend/Program.hpp>
 #include <lbd/frontend/ast/AstNode.hpp>
 #include <lbd/frontend/ast/expression/Expression.hpp>
-
-namespace lbd::runtime::type
-{
-  struct FunctionType;
-}
+#include <lbd/types/Core.hpp>
 
 namespace lbd::runtime
 {
@@ -73,11 +69,11 @@ namespace lbd::runtime
     using Implementation = std::function<std::pair<Value, ResultOptions>
       (const std::vector<std::shared_ptr<Thunk>> &, const std::shared_ptr<Environment> &)>;
 
-    NativeFunction(std::string name, std::shared_ptr<type::FunctionType> signature, Implementation implementation);
+    NativeFunction(std::string name, types::TypePtr signature, Implementation implementation);
 
     [[nodiscard]] std::string getName() const;
 
-    [[nodiscard]] std::shared_ptr<type::FunctionType> getSignature() const;
+    [[nodiscard]] types::TypePtr getSignature() const;
 
     [[nodiscard]] Implementation getImplementation() const;
 
@@ -89,7 +85,7 @@ namespace lbd::runtime
 
   private:
     std::string name;
-    std::shared_ptr<type::FunctionType> signature;
+    types::TypePtr signature;
     Implementation implementation;
   };
 

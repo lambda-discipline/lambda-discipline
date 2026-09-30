@@ -106,7 +106,7 @@ namespace lbd::frontend::parser
     const source::Location begin = lexer.peek().range.getBegin();
     ast::expression::IdentifierExpressionPtr symbolNameIdentifierExpressionPtr = parseIdentifierExpression();
     consume(token::TokenKind::COLON);
-    type::TypePtr symbolTypePtr = parseType();
+    types::TypePtr symbolTypePtr = parseType();
     consume(token::TokenKind::ASSIGNMENT);
     ast::expression::ExpressionPtr expressionPtr = parseExpression();
     const auto range = source::Range(begin, expressionPtr->getRange().getEnd());
@@ -166,7 +166,7 @@ namespace lbd::frontend::parser
     consume(token::TokenKind::BACKWARD_SLASH);
     ast::expression::IdentifierExpressionPtr argumentIdentifierExpressionPtr = parseIdentifierExpression();
     consume(token::TokenKind::COLON);
-    type::TypePtr argumentTypePtr = parseType();
+    types::TypePtr argumentTypePtr = parseType();
     consume(token::TokenKind::DOT);
     ast::expression::ExpressionPtr expressionPtr = parseExpression();
     const auto range = source::Range(begin, expressionPtr->getRange().getEnd());
@@ -193,33 +193,33 @@ namespace lbd::frontend::parser
     );
   }
 
-  type::TypePtr Parser::parseType() const
+  types::TypePtr Parser::parseType() const
   {
     return parseQualifiedType();
   }
 
-  type::TypePtr Parser::parseQualifiedType() const
+  types::TypePtr Parser::parseQualifiedType() const
   {
     // TODO: Add support for parsing qualified types.
     return parseFunctionType();
   }
 
-  type::TypePtr Parser::parseFunctionType() const
+  types::TypePtr Parser::parseFunctionType() const
   {
     auto from = parseAppliedType();
     if (lexer.peek().kind != token::TokenKind::ARROW) return from;
 
     consume(token::TokenKind::ARROW);
-    return type::Type::function(from, parseFunctionType());
+    return types::Type::function(from, parseFunctionType());
   }
 
-  type::TypePtr Parser::parseAppliedType() const
+  types::TypePtr Parser::parseAppliedType() const
   {
     auto base = parsePrimaryType();
     if (lexer.peek().kind != token::TokenKind::LESS_THAN) return base;
 
     consume(token::TokenKind::LESS_THAN);
-    std::vector<type::TypePtr> arguments;
+    std::vector<types::TypePtr> arguments;
     arguments.push_back(parseType());
     while (lexer.peek().kind == token::TokenKind::COMMA)
     {
@@ -228,10 +228,10 @@ namespace lbd::frontend::parser
     }
     consume(token::TokenKind::GREATER_THAN);
 
-    return type::Type::applied(base, std::move(arguments));
+    return types::Type::applied(base, std::move(arguments));
   }
 
-  type::TypePtr Parser::parsePrimaryType() const
+  types::TypePtr Parser::parsePrimaryType() const
   {
     if (lexer.peek().kind == token::TokenKind::OPEN_PARENTHESIS)
     {
@@ -243,8 +243,8 @@ namespace lbd::frontend::parser
 
     const auto name = lexer.peek().lexeme;
     consume(token::TokenKind::IDENTIFIER);
-    if (name == "Any") return type::Type::any();
-    if (!name.empty() && std::islower(static_cast<unsigned char>(name[0]))) return type::Type::variable(name);
-    return type::Type::named(name);
+    if (name == "Any") return types::Type::any();
+    if (!name.empty() && std::islower(static_cast<unsigned char>(name[0]))) return types::Type::variable(name);
+    return types::Type::named(name);
   }
 }
