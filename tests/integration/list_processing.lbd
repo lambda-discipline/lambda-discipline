@@ -1,0 +1,8 @@
+square: Number -> Number = \x: Number. (mul x x)
+
+numbers: List = (list 1 2 3 4 5)
+squared: List = (map square numbers)
+size: Number = (listSize squared)
+
+(print size "\n")
+(print squared "\n")

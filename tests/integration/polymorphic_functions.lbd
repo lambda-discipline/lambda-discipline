@@ -1,0 +1,8 @@
+compose: (Number -> Number) -> (Number -> Number) -> Number -> Number = \f: (Number -> Number). \g: (Number -> Number). \x: Number. (f (g x))
+
+inc: Number -> Number = \x: Number. (add x 1.0)
+double: Number -> Number = \x: Number. (mul x 2.0)
+
+doubleThenInc: Number -> Number = (compose inc double)
+
+(print (doubleThenInc 5) "\n")

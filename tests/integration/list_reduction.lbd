@@ -1,0 +1,10 @@
+add2: Number -> Number -> Number = \x: Number. \y: Number. (add x y)
+mul2: Number -> Number -> Number = \x: Number. \y: Number. (mul x y)
+
+nums: List = (list 1 2 3 4)
+
+sum: Number = (foldRight add2 0 nums)
+product: Number = (foldRight mul2 1 nums)
+
+(print sum "\n")
+(print product "\n")

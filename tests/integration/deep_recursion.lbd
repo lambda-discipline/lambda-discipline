@@ -1,0 +1,6 @@
+sum: Number -> Number = \n: Number.
+    (null (cmp 0 n) 0 (add n (sum (sub n 1.0))))
+
+result: Number = (sum 10.0)
+
+(print result "\n")

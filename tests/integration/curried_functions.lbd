@@ -1,0 +1,9 @@
+add3: Number -> Number -> Number -> Number = \a: Number. \b: Number. \c: Number. (add (add a b) c)
+
+partialAdd: Number -> Number -> Number = (add3 10.0)
+
+partialAdd2: Number -> Number = (partialAdd 5.0)
+
+result: Number = (partialAdd2 3.0)
+
+(print result "\n")

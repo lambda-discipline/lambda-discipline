@@ -1,0 +1,9 @@
+file = "any_type_annotations.lbd"
+
+[expect]
+exit_code = 0
+stdout = """
+42.000000
+test
+100.000000
+"""

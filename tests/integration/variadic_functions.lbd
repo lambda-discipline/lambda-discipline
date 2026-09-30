@@ -1,0 +1,11 @@
+listOps: List = (list 10 20 30 40 50)
+listSize1: Number = (listSize listOps)
+
+doubleAll: List = (map \x: Number. (mul x 2.0) listOps)
+doubleSize: Number = (listSize doubleAll)
+
+foldSum: Number = (foldRight \x: Number. \y: Number. (add x y) 0 listOps)
+
+(print listSize1 "\n")
+(print doubleSize "\n")
+(print foldSum "\n")

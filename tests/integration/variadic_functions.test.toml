@@ -1,0 +1,9 @@
+file = "variadic_functions.lbd"
+
+[expect]
+exit_code = 0
+stdout = """
+5.000000
+5.000000
+150.000000
+"""

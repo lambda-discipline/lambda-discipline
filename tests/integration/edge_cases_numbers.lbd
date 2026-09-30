@@ -1,0 +1,14 @@
+abs: Number -> Number = \x: Number.
+    (null (cmp 0 x) x (mul x -1.0))
+
+zero: Number = 0.0
+negativeNumber: Number = -42.0
+largeNumber: Number = 999999.0
+
+result1: Number = (abs zero)
+result2: Number = (abs negativeNumber)
+result3: Number = (add (mul largeNumber 2.0) 1.0)
+
+(print result1 "\n")
+(print result2 "\n")
+(print result3 "\n")

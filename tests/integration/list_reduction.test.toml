@@ -1,0 +1,8 @@
+file = "list_reduction.lbd"
+
+[expect]
+exit_code = 0
+stdout = """
+10.000000
+24.000000
+"""

@@ -1,0 +1,17 @@
+pipe: (Number -> Number) -> (Number -> Number) -> Number -> Number =
+    \f: (Number -> Number). \g: (Number -> Number). \x: Number. (g (f x))
+
+twice: (Number -> Number) -> Number -> Number =
+    \f: (Number -> Number). \x: Number. (f (f x))
+
+addFive: Number -> Number = \x: Number. (add x 5.0)
+double: Number -> Number = \x: Number. (mul x 2.0)
+
+pipeline: Number -> Number = (pipe addFive double)
+quadruple: Number -> Number = (twice double)
+
+result1: Number = (pipeline 3.0)
+result2: Number = (quadruple 3.0)
+
+(print result1 "\n")
+(print result2 "\n")

@@ -1,0 +1,8 @@
+file = "regression_lazy_eval.lbd"
+
+[expect]
+exit_code = 0
+stdout = """
+0.000000
+20.000000
+"""

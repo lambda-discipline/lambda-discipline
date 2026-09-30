@@ -1,0 +1,13 @@
+identity: Number -> Number = \x: Number. x
+
+singleElement: List = (list 42.0)
+twoElements: List = (list 1.0 2.0)
+
+size1: Number = (listSize singleElement)
+size2: Number = (listSize twoElements)
+
+mapped1: List = (map identity singleElement)
+
+(print size1 "\n")
+(print size2 "\n")
+(print mapped1 "\n")
