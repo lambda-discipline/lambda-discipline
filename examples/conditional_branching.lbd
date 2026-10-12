@@ -1,0 +1,16 @@
+-- Booleans are built in, and `if` only evaluates the branch it picks.
+describe : Number -> String = \n.
+    (if (lt n 0) "negative"
+        (if (eq n 0) "zero" "positive"))
+
+(println (describe -5))
+(println (describe 0))
+(println (describe 7))
+
+-- Booleans can also be built from lambdas alone (Church encoding).
+churchTrue : a -> a -> a = \x. \y. x
+churchFalse : a -> a -> a = \x. \y. y
+churchToString : (String -> String -> String) -> String = \bool. (bool "true" "false")
+
+(println (churchToString churchTrue))
+(println (churchToString churchFalse))

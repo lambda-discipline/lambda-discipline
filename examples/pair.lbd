@@ -1,0 +1,7 @@
+use "std.lbd"
+
+p1 : (Number -> Number -> c) -> c = (pair 1 2)
+
+(println (first p1))
+(println (second p1))
+(println (p1 add))

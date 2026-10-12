@@ -1,0 +1,19 @@
+fibonacci : Number -> Number = \n.
+    (if (lt n 2) n (add (fibonacci (sub n 1)) (fibonacci (sub n 2))))
+
+factorial : Number -> Number = \n.
+    (if (eq n 0) 1 (mul n (factorial (sub n 1))))
+
+-- Greatest common divisor, tail recursive.
+gcd : Number -> Number -> Number = \a. \b.
+    (if (eq b 0) a (gcd b (mod a b)))
+
+isPrime : Number -> Bool = \n.
+    let divides = \d. (eq (mod n d) 0) in
+    let check = \d. (if (gt (mul d d) n) true (if (divides d) false (check (add d 1)))) in
+    (and (gt n 1) (check 2))
+
+(println "fibonacci 10 = " (fibonacci 10))
+(println "factorial 10 = " (factorial 10))
+(println "gcd 1071 462 = " (gcd 1071 462))
+(println "primes below 30: " (filter isPrime (range 0 30)))

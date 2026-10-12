@@ -1,0 +1,22 @@
+-- A small standard library written in Lambda Discipline itself.
+-- Include it with `use "std.lbd"` (paths are relative to the including file).
+
+-- Combinators
+id : a -> a = \x. x
+const : a -> b -> a = \x. \unused. x
+flip : (a -> b -> c) -> b -> a -> c = \f. \x. \y. (f y x)
+compose : (b -> c) -> (a -> b) -> a -> c = \f. \g. \x. (f (g x))
+pipe : (a -> b) -> (b -> c) -> a -> c = \f. \g. \x. (g (f x))
+
+-- Church-encoded pairs: a pair is a function that hands both parts to a consumer.
+pair : a -> b -> (a -> b -> c) -> c = \x. \y. \consumer. (consumer x y)
+first : ((a -> b -> a) -> a) -> a = \p. (p \x. \y. x)
+second : ((a -> b -> b) -> b) -> b = \p. (p \x. \y. y)
+
+-- Lists
+count : (a -> Bool) -> List<a> -> Number = \predicate. \xs. (length (filter predicate xs))
+all : (a -> Bool) -> List<a> -> Bool = \predicate. \xs. (foldr \x. \rest. (and (predicate x) rest) true xs)
+any : (a -> Bool) -> List<a> -> Bool = \predicate. \xs. (foldr \x. \rest. (or (predicate x) rest) false xs)
+product : List<Number> -> Number = (foldl mul 1)
+maximum : List<Number> -> Number = \xs. (foldl max (head xs) xs)
+minimum : List<Number> -> Number = \xs. (foldl min (head xs) xs)

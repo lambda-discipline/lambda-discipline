@@ -1,0 +1,16 @@
+-- Lists are immutable values: every operation returns a new list.
+a : List<String> = []
+(println "list: " a)
+
+b : List<String> = (push "Hello" a)
+(println "list: " b)
+(println "list size: " (length b))
+
+c : List<String> = (push "World" b)
+(println "list: " c)
+(println "list[1]: " (get 1 c))
+
+d : List<String> = (push "Foo" c)
+(println "list: " d)
+(println "without index 2: " (remove 2 d))
+(println "unchanged: " d)
