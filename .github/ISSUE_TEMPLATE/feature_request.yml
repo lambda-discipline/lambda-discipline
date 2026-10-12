@@ -1,0 +1,37 @@
+name: Feature or language proposal
+description: Suggest a builtin, syntax, type-system feature, tooling or backend.
+labels: [enhancement]
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Language (syntax or semantics)
+        - Type system
+        - Builtins
+        - REPL or CLI
+        - Diagnostics
+        - Backends and performance
+        - Tooling, docs or other
+    validations:
+      required: true
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation
+      description: What problem does this solve? Who needs it?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: How it would look and behave. Example programs help a lot.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives and prior art
+      description: Other designs you considered, and how other languages handle it.

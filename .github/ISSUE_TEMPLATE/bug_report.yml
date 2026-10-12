@@ -1,0 +1,56 @@
+name: Bug report
+description: Something does not work as documented, or the interpreter crashes.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! Please search existing issues first. For security
+        problems, follow SECURITY.md instead of opening a public issue.
+  - type: textarea
+    id: program
+    attributes:
+      label: Program
+      description: The smallest program that shows the problem.
+      render: haskell
+    validations:
+      required: true
+  - type: input
+    id: command
+    attributes:
+      label: Command
+      description: How you ran it.
+      placeholder: lbd run main.lbd
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Output, error messages or a panic backtrace (`RUST_BACKTRACE=1`).
+      render: text
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Output of `lbd --version`, or the commit hash.
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: Operating system and Rust version
+      placeholder: Windows 11, rustc 1.85.0
+  - type: textarea
+    id: notes
+    attributes:
+      label: Anything else
+      description: Workarounds, suspected causes, related issues.
