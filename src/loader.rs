@@ -1,0 +1,180 @@
+//! Reads source files and expands `use` items.
+//!
+//! `use "path"` splices the definitions and top-level expressions of another
+//! file in at that point. Paths are relative to the directory of the file that
+//! contains the `use` (the working directory for REPL input). Each file is
+//! included at most once per compilation, so diamonds and cycles are fine.
+
+use std::collections::HashSet;
+use std::fs;
+use std::path::{Path, PathBuf};
+
+use crate::diagnostics::Diagnostic;
+use crate::source::{FileId, FileOrigin, SourceMap, Span};
+use crate::syntax::ast::Item;
+use crate::syntax::parse_module;
+
+/// The items of a compilation unit, with every `use` already expanded.
+#[derive(Debug, Default)]
+pub struct Loaded {
+    pub items: Vec<Item>,
+    pub diagnostics: Vec<Diagnostic>,
+}
+
+/// Loads a file from disk as the root of a compilation unit.
+pub fn load_file(sources: &mut SourceMap, path: &Path) -> Loaded {
+    let mut loader = Loader::new(sources);
+    match loader.read(path, None) {
+        Ok(file) => loader.expand(file),
+        Err(diagnostic) => loader.loaded.diagnostics.push(*diagnostic),
+    }
+    loader.loaded
+}
+
+/// Loads in-memory text (REPL input, tests) as the root of a compilation unit.
+pub fn load_text(sources: &mut SourceMap, name: &str, text: &str) -> Loaded {
+    let file = sources.add_virtual(name, text);
+    let mut loader = Loader::new(sources);
+    loader.expand(file);
+    loader.loaded
+}
+
+struct Loader<'a> {
+    sources: &'a mut SourceMap,
+    included: HashSet<PathBuf>,
+    loaded: Loaded,
+}
+
+impl<'a> Loader<'a> {
+    fn new(sources: &'a mut SourceMap) -> Self {
+        Self {
+            sources,
+            included: HashSet::new(),
+            loaded: Loaded::default(),
+        }
+    }
+
+    /// Reads and registers a file. `used_at` is the `use` item that asked for it.
+    fn read(
+        &mut self,
+        path: &Path,
+        used_at: Option<(Span, &str)>,
+    ) -> Result<FileId, Box<Diagnostic>> {
+        // Name the file as the user wrote it, not as it was resolved.
+        let shown = used_at.map_or_else(
+            || path.display().to_string(),
+            |(_, written)| written.to_owned(),
+        );
+        let fail = |message: String| {
+            let diagnostic = Diagnostic::error(message);
+            Box::new(match used_at {
+                Some((span, _)) => diagnostic.at(span).with_label("imported here"),
+                None => diagnostic,
+            })
+        };
+        let canonical =
+            fs::canonicalize(path).map_err(|e| fail(format!("cannot find `{shown}`: {e}")))?;
+        let text = fs::read_to_string(&canonical)
+            .map_err(|e| fail(format!("cannot read `{shown}`: {e}")))?;
+        self.included.insert(canonical.clone());
+        Ok(self.sources.add(FileOrigin::Disk(canonical), text))
+    }
+
+    fn expand(&mut self, file: FileId) {
+        let source = self.sources.get(file);
+        let base = source.base_dir().map(Path::to_path_buf);
+        let (module, mut diagnostics) = parse_module(file, source.text());
+        self.loaded.diagnostics.append(&mut diagnostics);
+        for item in module.items {
+            let Item::Use { path, span } = item else {
+                self.loaded.items.push(item);
+                continue;
+            };
+            let target = match &base {
+                Some(dir) => dir.join(&path),
+                None => PathBuf::from(&path),
+            };
+            if fs::canonicalize(&target).is_ok_and(|c| self.included.contains(&c)) {
+                continue;
+            }
+            match self.read(&target, Some((span, &path))) {
+                Ok(used) => self.expand(used),
+                Err(diagnostic) => self.loaded.diagnostics.push(*diagnostic),
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::syntax::ast::Item;
+
+    fn def_names(loaded: &Loaded) -> Vec<String> {
+        loaded
+            .items
+            .iter()
+            .filter_map(|item| match item {
+                Item::Def(def) => Some(def.name.name.to_string()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn use_is_relative_to_the_including_file_and_included_once() {
+        let dir = tempfile::tempdir().unwrap();
+        let lib = dir.path().join("lib");
+        fs::create_dir(&lib).unwrap();
+        fs::write(lib.join("a.lbd"), "use \"b.lbd\"\na = 1").unwrap();
+        fs::write(lib.join("b.lbd"), "use \"a.lbd\"\nb = 2").unwrap();
+        fs::write(
+            dir.path().join("main.lbd"),
+            "use \"lib/a.lbd\"\nuse \"lib/b.lbd\"\nmain = 3",
+        )
+        .unwrap();
+
+        let mut sources = SourceMap::new();
+        let loaded = load_file(&mut sources, &dir.path().join("main.lbd"));
+        assert!(loaded.diagnostics.is_empty(), "{:?}", loaded.diagnostics);
+        assert_eq!(def_names(&loaded), ["b", "a", "main"]);
+    }
+
+    #[test]
+    fn missing_use_target_is_reported_at_the_use() {
+        let mut sources = SourceMap::new();
+        let loaded = load_text(
+            &mut sources,
+            "<test>",
+            "use \"definitely/missing.lbd\"\nx = 1",
+        );
+        assert_eq!(loaded.diagnostics.len(), 1);
+        let diagnostic = &loaded.diagnostics[0];
+        assert!(
+            diagnostic
+                .message
+                .starts_with("cannot find `definitely/missing.lbd`")
+        );
+        assert_eq!(diagnostic.span.unwrap().range(), 0..28);
+        assert_eq!(def_names(&loaded), ["x"]);
+    }
+
+    #[test]
+    fn missing_root_file_has_no_span() {
+        let mut sources = SourceMap::new();
+        let loaded = load_file(&mut sources, Path::new("no/such/file.lbd"));
+        assert_eq!(loaded.diagnostics.len(), 1);
+        assert!(loaded.diagnostics[0].span.is_none());
+    }
+
+    #[test]
+    fn parse_errors_from_used_files_are_collected() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join("bad.lbd"), "x = (").unwrap();
+        fs::write(dir.path().join("main.lbd"), "use \"bad.lbd\"\ny = 1").unwrap();
+        let mut sources = SourceMap::new();
+        let loaded = load_file(&mut sources, &dir.path().join("main.lbd"));
+        assert_eq!(loaded.diagnostics.len(), 1);
+        assert_eq!(def_names(&loaded), ["y"]);
+    }
+}
