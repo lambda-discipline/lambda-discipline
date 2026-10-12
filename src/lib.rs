@@ -2,6 +2,7 @@
 //! the lambda calculus.
 
 pub mod builtins;
+pub mod core;
 pub mod diagnostics;
 pub mod hir;
 pub mod loader;
