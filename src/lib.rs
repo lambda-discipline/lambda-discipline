@@ -8,3 +8,4 @@ pub mod loader;
 pub mod resolve;
 pub mod source;
 pub mod syntax;
+pub mod types;
