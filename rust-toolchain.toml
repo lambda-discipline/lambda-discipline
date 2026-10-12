@@ -1,0 +1,6 @@
+# The toolchain used for development. The crate itself supports Rust 1.85+
+# (`rust-version` in Cargo.toml); CI checks that with `cargo +1.85 test`.
+[toolchain]
+channel = "stable"
+components = ["rustfmt", "clippy"]
+profile = "minimal"

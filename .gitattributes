@@ -1,0 +1,3 @@
+# Golden tests compare output byte for byte; keep LF everywhere.
+* text=auto eol=lf
+*.txt -text

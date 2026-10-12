@@ -1,0 +1,38 @@
+# Install with `pre-commit install`; run on everything with `pre-commit run --all-files`.
+# Golden test files and AoC inputs are compared byte for byte, so whitespace
+# fixers leave them alone.
+exclude: ^(tests/golden/|examples/aoc-24/.*\.txt$)
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      - id: check-merge-conflict
+      - id: check-toml
+      - id: check-yaml
+      - id: check-added-large-files
+
+  - repo: local
+    hooks:
+      - id: cargo-fmt
+        name: cargo fmt
+        entry: cargo fmt --all --
+        language: system
+        types: [rust]
+      - id: cargo-clippy
+        name: cargo clippy
+        entry: cargo clippy --all-targets --locked -- -D warnings
+        language: system
+        types: [rust]
+        pass_filenames: false
+      - id: cargo-test
+        name: cargo test
+        entry: cargo test --locked
+        language: system
+        files: \.(rs|lbd|toml)$
+        pass_filenames: false
+        stages: [pre-push]
