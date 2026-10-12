@@ -1,0 +1,16 @@
+identity : Number -> Number = \x. x
+
+apply : (a -> b) -> a -> b = \f: (a -> b). \x: a. (f x)
+
+factorial : Number -> Number = \n.
+    (if (eq n 0) 1 (mul n (factorial (sub n 1))))
+
+double : Number -> Number = \x. (mul x 2)
+
+-- Unannotated definitions get their most general type.
+swap = \f. \x. \y. (f y x)
+
+(println (identity 42))
+(println (apply double 21))
+(println (factorial 5))
+(println (swap sub 1 10))

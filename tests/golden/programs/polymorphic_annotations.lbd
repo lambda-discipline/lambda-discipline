@@ -1,0 +1,12 @@
+-- Type variables make definitions generic.
+identity : a -> a = \x. x
+passthrough : a -> a = \value: a. value
+selectFirst : a -> b -> a = \first. \second. first
+
+result1 : Number = (identity 42)
+result2 : String = (passthrough "test")
+result3 : Number = (selectFirst 100 "ignored")
+
+(println result1)
+(println result2)
+(println result3)

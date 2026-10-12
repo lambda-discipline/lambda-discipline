@@ -1,0 +1,7 @@
+file = "hello_world.lbd"
+
+[expect]
+exit_code = 0
+stdout = """
+Hello, World
+"""

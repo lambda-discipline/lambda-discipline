@@ -1,0 +1,12 @@
+file = "immutable_lists.lbd"
+
+[expect]
+exit_code = 0
+stdout = """
+empty: []
+one: ["Hello"]
+two: ["Hello", "World"], size 2
+second: World
+without first: ["World"]
+two is unchanged: ["Hello", "World"]
+"""

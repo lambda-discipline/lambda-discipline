@@ -1,0 +1,10 @@
+file = "duplicate_definition.lbd"
+
+[expect]
+exit_code = 1
+stdout = ""
+stderr_contains = [
+    "Error: `double` is defined more than once",
+    "redefined here",
+    "first defined here",
+]

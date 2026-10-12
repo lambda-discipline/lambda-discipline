@@ -1,0 +1,9 @@
+file = "infinite_type.lbd"
+
+[expect]
+exit_code = 1
+stdout = ""
+stderr_contains = [
+    "Error: cannot construct an infinite type",
+    "infinite_type.lbd:1:20",
+]

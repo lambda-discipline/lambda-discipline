@@ -1,0 +1,10 @@
+file = "user_error.lbd"
+
+[expect]
+exit_code = 1
+stdout = "a\n"
+stderr_contains = [
+    "Error: custom failure",
+    "user_error.lbd:2:10",
+    "raised here",
+]

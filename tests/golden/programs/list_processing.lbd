@@ -1,0 +1,9 @@
+square : Number -> Number = \x. (mul x x)
+
+numbers : List<Number> = (range 1 6)
+squared : List<Number> = (map square numbers)
+
+(println (length squared))
+(println squared)
+(println (filter \x. (eq (mod x 2) 0) squared))
+(println (sum squared))

@@ -1,0 +1,9 @@
+file = "polymorphic_annotations.lbd"
+
+[expect]
+exit_code = 0
+stdout = """
+42
+test
+100
+"""

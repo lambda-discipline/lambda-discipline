@@ -1,0 +1,14 @@
+-- Define pi as a constant
+pi : Number = 3.14
+
+-- Square of a number
+square : Number -> Number = \x. (mul x x)
+
+-- Area of a circle
+areaOfCircle : Number -> Number = \r. (mul pi (square r))
+
+-- Volume of a cylinder
+volumeOfCylinder : Number -> Number -> Number = \r. \h. (mul (areaOfCircle r) h)
+
+(println "Volume of cylinder is: " (volumeOfCylinder 5 10))
+(println "Rounded: " (round (volumeOfCylinder 5 10)))

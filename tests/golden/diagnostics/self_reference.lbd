@@ -1,0 +1,2 @@
+counter : Number = (add counter 1)
+(println counter)

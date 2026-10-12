@@ -1,0 +1,15 @@
+-- Church-encoded booleans: a boolean chooses one of two values.
+churchTrue : a -> a -> a = \x. \y. x
+churchFalse : a -> a -> a = \x. \y. y
+
+churchIf : (a -> a -> a) -> a -> a -> a = \condition. \thenClause. \elseClause.
+    (condition thenClause elseClause)
+
+toString : (String -> String -> String) -> String = \bool. (churchIf bool "true" "false")
+
+(println (toString churchTrue))
+(println (toString churchFalse))
+
+-- The built-in `Bool` and the lazy `if`.
+(println (if (lt 1 2) "yes" "no"))
+(println (if false (error "never evaluated") "lazy"))

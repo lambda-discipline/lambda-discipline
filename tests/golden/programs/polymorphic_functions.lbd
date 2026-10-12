@@ -1,0 +1,10 @@
+compose : (b -> c) -> (a -> b) -> a -> c = \f. \g. \x. (f (g x))
+
+inc : Number -> Number = \x. (add x 1)
+double : Number -> Number = \x. (mul x 2)
+
+doubleThenInc : Number -> Number = (compose inc double)
+describe : Number -> String = (compose (concat "n = ") show)
+
+(println (doubleThenInc 5))
+(println (describe 5))

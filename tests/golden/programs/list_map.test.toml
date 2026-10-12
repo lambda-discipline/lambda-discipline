@@ -1,0 +1,8 @@
+file = "list_map.lbd"
+
+[expect]
+exit_code = 0
+stdout = """
+[1, 4, 9, 16]
+["1", "2", "3", "4"]
+"""

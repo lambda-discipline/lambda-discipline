@@ -1,0 +1,3 @@
+(println "a")
+(println (error "custom failure"))
+(println "never")

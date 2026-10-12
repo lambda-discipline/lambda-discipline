@@ -1,0 +1,10 @@
+file = "missing_use.lbd"
+
+[expect]
+exit_code = 1
+stdout = ""
+stderr_contains = [
+    "Error: cannot find `missing/module.lbd`",
+    "missing_use.lbd:1:1",
+    "imported here",
+]

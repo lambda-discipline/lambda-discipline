@@ -1,0 +1,2 @@
+fibonacci : Number -> Number = \n.
+    (if (lt n 2) n (add (fibonaci (sub n 1)) (fibonacci (sub n 2))))

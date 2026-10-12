@@ -1,0 +1,9 @@
+nums : List<Number> = [1, 2, 3, 4]
+
+total : Number = (foldr add 0 nums)
+product : Number = (foldr mul 1 nums)
+
+(println total)
+(println product)
+(println (foldl sub 0 nums))
+(println (foldr sub 0 nums))

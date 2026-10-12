@@ -1,0 +1,1 @@
+selfApply = \x. (x x)

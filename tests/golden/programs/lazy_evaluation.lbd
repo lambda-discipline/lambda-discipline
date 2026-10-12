@@ -1,0 +1,12 @@
+-- Arguments are only evaluated when needed.
+divide : Number -> Number -> Number = \a. \b.
+    (if (eq b 0) (error "division by zero") (div a b))
+
+safeDivide : Number -> Number -> Number = \dividend. \divisor.
+    (if (eq divisor 0) 0 (divide dividend divisor))
+
+const : a -> b -> a = \x. \unused. x
+
+(println (safeDivide 10 0))
+(println (safeDivide 10 2))
+(println (const 1 (divide 1 0)))

@@ -1,0 +1,9 @@
+file = "too_many_arguments.lbd"
+
+[expect]
+exit_code = 1
+stdout = ""
+stderr_contains = [
+    "Error: too many arguments: this function takes 2, but 3 were given",
+    "too_many_arguments.lbd:1:17",
+]

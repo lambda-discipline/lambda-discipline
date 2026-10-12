@@ -1,0 +1,9 @@
+file = "lazy_evaluation.lbd"
+
+[expect]
+exit_code = 0
+stdout = """
+0
+5
+1
+"""

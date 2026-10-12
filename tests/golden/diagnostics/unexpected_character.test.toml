@@ -1,0 +1,11 @@
+file = "unexpected_character.lbd"
+
+[expect]
+exit_code = 1
+stdout = ""
+stderr_contains = [
+    "Error: unexpected character `;`",
+    "unexpected_character.lbd:1:15",
+    "a : Number = 1;",
+    "statements are not terminated by `;`",
+]

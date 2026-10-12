@@ -1,0 +1,11 @@
+-- Lists are immutable: operations return new lists.
+empty : List<String> = []
+one : List<String> = (push "Hello" empty)
+two : List<String> = (push "World" one)
+
+(println "empty: " empty)
+(println "one: " one)
+(println "two: " two ", size " (length two))
+(println "second: " (get 1 two))
+(println "without first: " (remove 0 two))
+(println "two is unchanged: " two)

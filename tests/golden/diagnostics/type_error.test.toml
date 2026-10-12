@@ -1,0 +1,12 @@
+file = "type_error.lbd"
+
+[expect]
+exit_code = 1
+stdout = ""
+stderr_contains = [
+    "Error: mismatched types",
+    "type_error.lbd:1:13",
+    "(print (add \"hello\" 5))",
+    "expected `Number`, found `String`",
+    "in argument 1 of `add`",
+]

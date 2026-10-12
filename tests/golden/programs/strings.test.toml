@@ -1,0 +1,14 @@
+file = "strings.lbd"
+
+[expect]
+exit_code = 0
+stdout = """
+Hello, World
+12
+["Hello", "World"]
+a-b-c
+["first", "second", "third"]
+3.5
+"quoted\\tand escaped"
+unicode: λ
+"""

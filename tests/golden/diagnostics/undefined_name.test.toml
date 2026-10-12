@@ -1,0 +1,10 @@
+file = "undefined_name.lbd"
+
+[expect]
+exit_code = 1
+stdout = ""
+stderr_contains = [
+    "Error: cannot find `fibonaci` in this scope",
+    "undefined_name.lbd:2:26",
+    "a similar name exists: `fibonacci`",
+]

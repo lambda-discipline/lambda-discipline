@@ -1,0 +1,9 @@
+file = "zip_list.lbd"
+
+[expect]
+exit_code = 0
+stdout = """
+[[1, 4], [2, 5], [3, 6]]
+[5, 7, 9]
+[[1, 7], [2, 8]]
+"""

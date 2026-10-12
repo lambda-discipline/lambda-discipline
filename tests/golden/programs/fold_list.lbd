@@ -1,0 +1,4 @@
+nums : List<Number> = [1, 2, 3, 4]
+(println (foldr add 0 nums))
+(println (foldl \acc. \x. (push x acc) [] nums))
+(println (foldr cons [] nums))

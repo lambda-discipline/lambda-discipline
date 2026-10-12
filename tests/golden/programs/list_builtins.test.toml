@@ -1,0 +1,14 @@
+file = "list_builtins.lbd"
+
+[expect]
+exit_code = 0
+stdout = """
+5
+5
+150
+10 [20, 30, 40, 50]
+[50, 40, 30, 20, 10]
+[1, 2, 3] ["apple", "pear"]
+[10, 20] [40, 50]
+[1, 2, 3] [0, 1] true
+"""

@@ -1,0 +1,10 @@
+numbers : List<Number> = [10, 20, 30, 40, 50]
+
+(println (length numbers))
+(println (length (map \x. (mul x 2) numbers)))
+(println (foldr \x. \y. (add x y) 0 numbers))
+(println (head numbers) " " (tail numbers))
+(println (reverse numbers))
+(println (sort [3, 1, 2]) " " (sort ["pear", "apple"]))
+(println (take 2 numbers) " " (drop 3 numbers))
+(println (append [1] [2, 3]) " " (cons 0 [1]) " " (isEmpty []))

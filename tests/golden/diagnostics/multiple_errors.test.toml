@@ -1,0 +1,11 @@
+file = "multiple_errors.lbd"
+
+[expect]
+exit_code = 1
+stdout = ""
+stderr_contains = [
+    "list elements must all have the same type: expected `Number`, found `String`",
+    "Error: unknown type `Float`",
+    "numbers have type `Number`",
+    "expected `Bool`, found `Number`",
+]

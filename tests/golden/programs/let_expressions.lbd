@@ -1,0 +1,19 @@
+-- `let` is recursive and generalized.
+result : Number =
+    let square = \x. (mul x x) in
+    let total = (add (square 3) (square 4)) in
+    (sqrt total)
+
+pairs : List<String> =
+    let id = \x. x in
+    [(id "polymorphic"), (show (id 1))]
+
+collatz : Number -> Number = \start.
+    let go = \n. \steps.
+        (if (eq n 1) steps
+            (go (if (eq (mod n 2) 0) (div n 2) (add (mul 3 n) 1)) (add steps 1)))
+    in (go start 0)
+
+(println result)
+(println pairs)
+(println (collatz 27))
