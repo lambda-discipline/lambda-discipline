@@ -18,7 +18,7 @@ All notable changes to this project are documented here. The format follows
   constant space, deep recursion bounded by memory.
 - Builtin library for numbers, comparison, booleans, strings, immutable lists
   and I/O, documented by `lbd docs`.
-- `lbd run`, `lbd check [--emit tokens|ast|types|core]`, `lbd repl`, `lbd docs`.
+- `lbd run`, `lbd check [--emit tokens|ast|types|core]`, `lbd repl`, `lbd docs [--json]`.
 - REPL with GHCi-style commands (`:type`, `:info`, `:load`, `:reload`, `:env`,
   `:docs`, `:reset`), multi-line input and tab completion.
 - Diagnostics rendered with `ariadne`.

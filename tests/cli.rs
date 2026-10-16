@@ -144,6 +144,21 @@ fn docs_lists_builtins() {
 }
 
 #[test]
+fn docs_json_is_machine_readable() {
+    lbd().args(["docs", "--json"]).assert().success().stdout(
+        predicate::str::starts_with("{\n  \"version\": ")
+            .and(predicate::str::contains("\"title\": \"Strings\"")),
+    );
+    lbd()
+        .args(["docs", "--json", "foldr"])
+        .assert()
+        .success()
+        .stdout(predicate::str::starts_with(
+            r#"{"name": "foldr", "signature": "(a -> b -> b) -> b -> List<a> -> b", "arity": 3"#,
+        ));
+}
+
+#[test]
 fn repl_reads_piped_input_without_prompts() {
     lbd()
         .arg("repl")
