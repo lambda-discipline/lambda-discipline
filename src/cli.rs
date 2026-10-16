@@ -6,7 +6,7 @@ use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
 
-use crate::builtins::{Builtin, reference};
+use crate::builtins::{Builtin, reference, reference_json};
 use crate::diagnostics::stderr_supports_color;
 use crate::session::{Session, Stage};
 
@@ -46,6 +46,9 @@ pub enum Command {
     Docs {
         /// Only show this builtin
         name: Option<String>,
+        /// Print JSON for tools instead of text
+        #[arg(long)]
+        json: bool,
     },
 }
 
@@ -101,11 +104,18 @@ pub fn run(cli: Cli) -> ExitCode {
                 ExitCode::FAILURE
             }
         },
-        Command::Docs { name: None } => {
-            print!("{}", reference());
+        Command::Docs { name: None, json } => {
+            print!("{}", if json { reference_json() } else { reference() });
             ExitCode::SUCCESS
         }
-        Command::Docs { name: Some(name) } => match Builtin::lookup(&name) {
+        Command::Docs {
+            name: Some(name),
+            json,
+        } => match Builtin::lookup(&name) {
+            Some(builtin) if json => {
+                println!("{}", builtin.to_json());
+                ExitCode::SUCCESS
+            }
             Some(builtin) => {
                 println!(
                     "{} : {}\n    {}",

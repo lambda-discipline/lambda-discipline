@@ -43,7 +43,7 @@ cargo build --release
 | `lbd check <file>` | Type-check only. |
 | `lbd check <file> --emit tokens\|ast\|types\|core` | Print an intermediate representation. |
 | `lbd repl` (or just `lbd`) | Interactive session. Without a terminal (pipes, Jupyter, editor modes) it reads stdin without prompts. `--repl` is accepted for the Emacs mode. |
-| `lbd docs [name]` | Reference for the builtins. |
+| `lbd docs [name] [--json]` | Reference for the builtins (`--json` for tools). |
 
 ### REPL
 

@@ -221,6 +221,65 @@ pub fn reference() -> String {
     out
 }
 
+/// Renders the reference as JSON for tools such as the website generator:
+/// `{"version", "modules": [{"name", "title", "builtins": [...]}]}`, where
+/// each builtin has `name`, `signature`, `arity`, `variadic` and `doc`.
+pub fn reference_json() -> String {
+    let modules: Vec<String> = Module::ALL
+        .iter()
+        .map(|&module| {
+            let builtins: Vec<String> = Builtin::ALL
+                .iter()
+                .filter(|b| b.module() == module)
+                .map(|b| format!("        {}", b.to_json()))
+                .collect();
+            format!(
+                "    {{\n      \"name\": {},\n      \"title\": {},\n      \"builtins\": [\n{}\n      ]\n    }}",
+                json_string(&format!("{module:?}")),
+                json_string(module.title()),
+                builtins.join(",\n")
+            )
+        })
+        .collect();
+    format!(
+        "{{\n  \"version\": {},\n  \"modules\": [\n{}\n  ]\n}}\n",
+        json_string(env!("CARGO_PKG_VERSION")),
+        modules.join(",\n")
+    )
+}
+
+impl Builtin {
+    /// This builtin as a one-line JSON object.
+    pub fn to_json(self) -> String {
+        format!(
+            "{{\"name\": {}, \"signature\": {}, \"arity\": {}, \"variadic\": {}, \"doc\": {}}}",
+            json_string(self.name()),
+            json_string(&self.display_signature()),
+            self.arity(),
+            self.is_variadic(),
+            json_string(self.doc())
+        )
+    }
+}
+
+fn json_string(text: &str) -> String {
+    let mut out = String::with_capacity(text.len() + 2);
+    out.push('"');
+    for c in text.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if (c as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", c as u32)),
+            c => out.push(c),
+        }
+    }
+    out.push('"');
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -274,5 +333,16 @@ mod tests {
         }
         assert!(text.contains("-- Lists\n"));
         assert!(text.contains("print : a... -> Unit"));
+    }
+
+    #[test]
+    fn json_reference_escapes_and_lists_every_builtin() {
+        assert_eq!(json_string("a\"b\\c\nd\u{1}"), r#""a\"b\\c\nd\u0001""#);
+        let json = reference_json();
+        for builtin in Builtin::ALL {
+            assert!(json.contains(&builtin.to_json()), "{builtin}");
+        }
+        assert!(json.contains(r#""title": "Lists""#));
+        assert!(json.contains(r#""signature": "a... -> Unit", "arity": 1, "variadic": true"#));
     }
 }
