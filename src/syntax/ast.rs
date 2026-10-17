@@ -7,6 +7,7 @@ use std::fmt;
 use std::rc::Rc;
 
 use crate::source::Span;
+use crate::syntax::number::format_number;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Ident {
@@ -131,7 +132,7 @@ impl fmt::Display for TypeExpr {
 impl fmt::Display for Expr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.kind {
-            ExprKind::Number(n) => write!(f, "{n}"),
+            ExprKind::Number(n) => f.write_str(&format_number(*n)),
             ExprKind::String(s) => write!(f, "{s:?}"),
             ExprKind::Unit => f.write_str("()"),
             ExprKind::Var(id) => f.write_str(&id.name),

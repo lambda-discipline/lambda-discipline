@@ -1,6 +1,7 @@
 //! Front end: tokens, surface AST and parser.
 
 pub mod ast;
+pub mod number;
 pub mod parser;
 pub mod token;
 

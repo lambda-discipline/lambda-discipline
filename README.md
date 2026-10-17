@@ -112,6 +112,9 @@ Full Hindley-Milner inference with let-polymorphism:
 * Mutually recursive definitions are inferred together, then generalized.
 * `print` and `println` take any number of arguments of any types and must be
   called directly. They return `IO<Unit>`.
+* Numbers print as JavaScript prints them: `42`, `0.000001`, and with an
+  exponent below `1e-6` or from `1e21` up (`1e-7`, `1e+300`). `-0` prints
+  as `0`.
 
 ### Evaluation
 

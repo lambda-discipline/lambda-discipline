@@ -9,8 +9,8 @@ use imbl::Vector;
 use crate::backend::RuntimeError;
 use crate::builtins::Builtin;
 use crate::source::Span;
+use crate::syntax::number::format_number;
 
-use super::value::format_number;
 use super::{Thunk, Value};
 
 type Result<T> = std::result::Result<T, RuntimeError>;

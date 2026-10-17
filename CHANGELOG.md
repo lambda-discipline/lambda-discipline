@@ -38,6 +38,11 @@ All notable changes to this project are documented here. The format follows
   an annotation's: checking `f : a -> Number = \x. (length x)` now reports
   that the definition has type `List<b> -> Number`, not `List<a> -> Number`
   (#16).
+- Very large and very small numbers print with an exponent, as in
+  JavaScript: `1e300` prints as `1e+300` instead of 301 digits, and `1e-7`
+  as `1e-7` instead of `0.0000001`. Numbers from `1e-6` up to just below
+  `1e21` still print positionally, `-0` prints as `0`, and `show`, `print`
+  and `lbd check --emit ast|core` all use the same rules (#23).
 - The infinite-type error always names the variable first: building
   `(cons acc [])` from `acc` now says "`a` would have to contain itself:
   `List<a>`" instead of the reversed "`List<a>` would have to contain
