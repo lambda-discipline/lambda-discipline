@@ -1,0 +1,15 @@
+file = "data_types.lbd"
+
+[expect]
+exit_code = 0
+stdout = """
+5
+(Add (Num 2) (Num 3))
+(Some 3) None
+5
+["apple", "fig", "pear"]
+["zero", "one", "many"]
+[(Some 1), (Some 2)]
+[None, (Some 1), (Some 3)] True
+yes
+"""

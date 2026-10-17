@@ -1,0 +1,10 @@
+file = "pattern_type.lbd"
+
+[expect]
+exit_code = 1
+stdout = ""
+stderr_contains = [
+    "Error: mismatched types",
+    "pattern_type.lbd:6:7",
+    "this pattern has type `Shape`, but the value matched has type `Option<a>`",
+]

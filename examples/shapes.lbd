@@ -1,14 +1,16 @@
--- Define pi as a constant
+-- A shape is one of several kinds, each with its own measurements.
+type Shape =
+    | Circle Number
+    | Rect Number Number
+
 pi : Number = 3.14
 
--- Define a function to calculate a square
-square : Number -> Number = \x. (mul x x)
+area : Shape -> Number = \shape. match shape
+    | Circle r -> (mul pi (mul r r))
+    | Rect w h -> (mul w h)
 
--- Define a function to calculate the area of a circle
-areaOfCircle : Number -> Number = \r. (mul pi (square r))
+-- A cylinder is a circle raised to a height.
+volumeOfCylinder : Number -> Number -> Number = \r. \h. (mul (area (Circle r)) h)
 
--- Define a function to calculate the volume of a cylinder
-volumeOfCylinder : Number -> Number -> Number = \r. \h. (mul (areaOfCircle r) h)
-
--- Calculate the volume of a cylinder
+(println "Areas: " (map area [(Circle 1), (Rect 2 3)]))
 (println "Volume of cylinder is: " (volumeOfCylinder 5 10))

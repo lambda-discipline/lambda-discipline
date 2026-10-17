@@ -4,25 +4,50 @@
 //! (order-independent, so definitions may be mutually recursive), globals
 //! from earlier units (REPL inputs), then builtins. A definition may shadow a
 //! builtin of the same name.
+//!
+//! The case of a name's first letter decides what it can be: lowercase
+//! names (and names starting with `_`) are values, uppercase names are
+//! constructors. Constructors live in their own namespace: those of the
+//! current unit, then those of earlier units, then the built-in ones.
 
 use std::collections::HashMap;
 use std::rc::Rc;
 
 use crate::builtins::Builtin;
 use crate::diagnostics::Diagnostic;
-use crate::hir::{self, Body, GlobalDef, GlobalId, LocalId, LocalInfo, Unit};
+use crate::hir::{
+    self, Body, ConId, CtorDef, GlobalDef, GlobalId, LocalId, LocalInfo, TyConId, TypeDef, Unit,
+};
 use crate::source::Span;
 use crate::syntax::ast::{self, Item};
+use crate::syntax::parser::is_lower;
+use crate::types::env::{BUILTIN_TYPES, builtin_constructors};
 
-/// Globals visible from earlier compilation units.
+/// Globals, types and constructors visible from earlier compilation units.
 pub trait GlobalScope {
     fn lookup(&self, name: &str) -> Option<GlobalId>;
     fn names(&self) -> Vec<Rc<str>>;
     /// The id the next new global will receive.
     fn next_id(&self) -> u32;
+
+    /// The current constructor with this name, including built-in ones.
+    fn lookup_constructor(&self, name: &str) -> Option<ConId> {
+        builtin_constructors().find_map(|(id, n)| (n == name).then_some(id))
+    }
+    fn constructor_names(&self) -> Vec<Rc<str>> {
+        builtin_constructors().map(|(_, n)| Rc::from(n)).collect()
+    }
+    /// The id the next new type will receive.
+    fn next_type_id(&self) -> u32 {
+        BUILTIN_TYPES.len() as u32
+    }
+    /// The id the next new constructor will receive.
+    fn next_constructor_id(&self) -> u32 {
+        builtin_constructors().count() as u32
+    }
 }
 
-/// No earlier units.
+/// No earlier units: only builtins.
 pub struct EmptyScope;
 
 impl GlobalScope for EmptyScope {
@@ -42,9 +67,16 @@ pub struct Resolved {
     pub diagnostics: Vec<Diagnostic>,
 }
 
+/// Names a unit declares, with the ids allocated for them.
+#[derive(Default)]
+struct UnitNames {
+    globals: HashMap<Rc<str>, (GlobalId, Span)>,
+    constructors: HashMap<Rc<str>, (ConId, Span)>,
+}
+
 pub fn resolve(items: Vec<Item>, scope: &dyn GlobalScope) -> Resolved {
     let mut diagnostics = Vec::new();
-    let mut unit_names: HashMap<Rc<str>, (GlobalId, Span)> = HashMap::new();
+    let mut names = UnitNames::default();
     let mut next = scope.next_id();
     let mut defs = Vec::new();
     let mut entries = Vec::new();
@@ -52,28 +84,32 @@ pub fn resolve(items: Vec<Item>, scope: &dyn GlobalScope) -> Resolved {
     // First pass: allocate ids so definitions can refer to each other in any order.
     for item in &items {
         if let Item::Def(def) = item {
-            if let Some(&(_, first)) = unit_names.get(&def.name.name) {
-                diagnostics.push(
-                    Diagnostic::error(format!("`{}` is defined more than once", def.name.name))
-                        .at(def.name.span)
-                        .with_label("redefined here")
-                        .with_secondary(first, "first defined here"),
-                );
+            if !is_lower(&def.name.name) {
+                diagnostics.push(uppercase_binder(&def.name));
                 continue;
             }
-            unit_names.insert(def.name.name.clone(), (GlobalId(next), def.name.span));
+            if let Some(&(_, first)) = names.globals.get(&def.name.name) {
+                diagnostics.push(defined_twice(&def.name, first));
+                continue;
+            }
+            names
+                .globals
+                .insert(def.name.name.clone(), (GlobalId(next), def.name.span));
             next += 1;
         }
     }
+    let types = declare_types(&items, scope, &mut names, &mut diagnostics);
 
     for item in items {
         match item {
             Item::Def(def) => {
-                let (id, span) = unit_names[&def.name.name];
+                let Some(&(id, span)) = names.globals.get(&def.name.name) else {
+                    continue; // an uppercase name, already reported
+                };
                 if span != def.name.span {
                     continue; // a duplicate, already reported
                 }
-                let mut resolver = BodyResolver::new(scope, &unit_names, &mut diagnostics);
+                let mut resolver = BodyResolver::new(scope, &names, &mut diagnostics);
                 let expr = resolver.expr(def.value);
                 let locals = resolver.locals;
                 defs.push(GlobalDef {
@@ -85,24 +121,133 @@ pub fn resolve(items: Vec<Item>, scope: &dyn GlobalScope) -> Resolved {
                 });
             }
             Item::Expr(expr) => {
-                let mut resolver = BodyResolver::new(scope, &unit_names, &mut diagnostics);
+                let mut resolver = BodyResolver::new(scope, &names, &mut diagnostics);
                 let expr = resolver.expr(expr);
                 let locals = resolver.locals;
                 entries.push(Body { expr, locals });
             }
+            Item::Type(_) => {}
             Item::Use { .. } => unreachable!("`use` items are expanded by the loader"),
         }
     }
 
     Resolved {
-        unit: Unit { defs, entries },
+        unit: Unit {
+            types,
+            defs,
+            entries,
+        },
         diagnostics,
     }
 }
 
+/// Allocates ids for the unit's types and constructors, in source order.
+fn declare_types(
+    items: &[Item],
+    scope: &dyn GlobalScope,
+    names: &mut UnitNames,
+    diagnostics: &mut Vec<Diagnostic>,
+) -> Vec<TypeDef> {
+    let mut type_names: HashMap<Rc<str>, Span> = HashMap::new();
+    let mut next_type = scope.next_type_id();
+    let mut next_con = scope.next_constructor_id();
+    let mut types = Vec::new();
+    for item in items {
+        let Item::Type(decl) = item else { continue };
+        if let Some(builtin) = BUILTIN_TYPES.iter().find(|b| *b.name == *decl.name.name) {
+            diagnostics.push(
+                Diagnostic::error(format!("`{}` is a built-in type", builtin.name))
+                    .at(decl.name.span)
+                    .with_label("cannot be redefined"),
+            );
+            continue;
+        }
+        if let Some(&first) = type_names.get(&decl.name.name) {
+            diagnostics.push(
+                Diagnostic::error(format!(
+                    "the type `{}` is defined more than once",
+                    decl.name.name
+                ))
+                .at(decl.name.span)
+                .with_label("redefined here")
+                .with_secondary(first, "first defined here"),
+            );
+            continue;
+        }
+        type_names.insert(decl.name.name.clone(), decl.name.span);
+        let mut constructors = Vec::new();
+        for ctor in &decl.constructors {
+            let name = &ctor.name;
+            if let Some(&(_, first)) = names.constructors.get(&name.name) {
+                diagnostics.push(
+                    Diagnostic::error(format!(
+                        "the constructor `{}` is defined more than once",
+                        name.name
+                    ))
+                    .at(name.span)
+                    .with_label("redefined here")
+                    .with_secondary(first, "first defined here"),
+                );
+                continue;
+            }
+            if let Some((_, builtin)) = builtin_constructors().find(|(_, n)| **n == *name.name) {
+                diagnostics.push(
+                    Diagnostic::error(format!("`{builtin}` is a built-in constructor"))
+                        .at(name.span)
+                        .with_label("cannot be redefined"),
+                );
+                continue;
+            }
+            let id = ConId(next_con);
+            next_con += 1;
+            names
+                .constructors
+                .insert(name.name.clone(), (id, name.span));
+            constructors.push(CtorDef {
+                id,
+                name: name.clone(),
+                fields: ctor.fields.clone(),
+            });
+        }
+        types.push(TypeDef {
+            id: TyConId(next_type),
+            name: decl.name.clone(),
+            params: decl.params.clone(),
+            constructors,
+        });
+        next_type += 1;
+    }
+    types
+}
+
+fn defined_twice(name: &ast::Ident, first: Span) -> Diagnostic {
+    Diagnostic::error(format!("`{}` is defined more than once", name.name))
+        .at(name.span)
+        .with_label("redefined here")
+        .with_secondary(first, "first defined here")
+}
+
+fn uppercase_binder(name: &ast::Ident) -> Diagnostic {
+    let lower: String = name
+        .name
+        .chars()
+        .enumerate()
+        .map(|(i, c)| if i == 0 { c.to_ascii_lowercase() } else { c })
+        .collect();
+    Diagnostic::error(format!(
+        "`{}` starts with an uppercase letter, but it names a value",
+        name.name
+    ))
+    .at(name.span)
+    .with_label("value names start with a lowercase letter")
+    .with_help(format!(
+        "uppercase names are for types and constructors; rename it to `{lower}`"
+    ))
+}
+
 struct BodyResolver<'a> {
     scope: &'a dyn GlobalScope,
-    unit_names: &'a HashMap<Rc<str>, (GlobalId, Span)>,
+    names: &'a UnitNames,
     diagnostics: &'a mut Vec<Diagnostic>,
     locals: Vec<LocalInfo>,
     /// Binders currently in scope, innermost last.
@@ -112,12 +257,12 @@ struct BodyResolver<'a> {
 impl<'a> BodyResolver<'a> {
     fn new(
         scope: &'a dyn GlobalScope,
-        unit_names: &'a HashMap<Rc<str>, (GlobalId, Span)>,
+        names: &'a UnitNames,
         diagnostics: &'a mut Vec<Diagnostic>,
     ) -> Self {
         Self {
             scope,
-            unit_names,
+            names,
             diagnostics,
             locals: Vec::new(),
             stack: Vec::new(),
@@ -125,6 +270,9 @@ impl<'a> BodyResolver<'a> {
     }
 
     fn bind(&mut self, ident: &ast::Ident) -> LocalId {
+        if !is_lower(&ident.name) {
+            self.diagnostics.push(uppercase_binder(ident));
+        }
         let id = LocalId(self.locals.len() as u32);
         self.locals.push(LocalInfo {
             name: ident.name.clone(),
@@ -135,6 +283,12 @@ impl<'a> BodyResolver<'a> {
     }
 
     fn lookup(&mut self, ident: &ast::Ident) -> hir::ExprKind {
+        if !is_lower(&ident.name) {
+            return match self.lookup_constructor(ident) {
+                Some(id) => hir::ExprKind::Con(id),
+                None => hir::ExprKind::Error,
+            };
+        }
         if let Some((_, id)) = self
             .stack
             .iter()
@@ -143,7 +297,7 @@ impl<'a> BodyResolver<'a> {
         {
             return hir::ExprKind::Local(*id);
         }
-        if let Some(&(id, _)) = self.unit_names.get(&ident.name) {
+        if let Some(&(id, _)) = self.names.globals.get(&ident.name) {
             return hir::ExprKind::Global(id);
         }
         if let Some(id) = self.scope.lookup(&ident.name) {
@@ -156,11 +310,38 @@ impl<'a> BodyResolver<'a> {
             Diagnostic::error(format!("cannot find `{}` in this scope", ident.name))
                 .at(ident.span)
                 .with_label("not defined");
-        if let Some(suggestion) = self.suggest(&ident.name) {
+        if matches!(ident.name.as_ref(), "true" | "false") {
+            diagnostic =
+                diagnostic.with_help("the booleans are the constructors `True` and `False`");
+        } else if let Some(suggestion) = self.suggest(&ident.name) {
             diagnostic = diagnostic.with_help(format!("a similar name exists: `{suggestion}`"));
         }
         self.diagnostics.push(diagnostic);
         hir::ExprKind::Error
+    }
+
+    /// Resolves a constructor name, reporting it if it is unknown.
+    fn lookup_constructor(&mut self, ident: &ast::Ident) -> Option<ConId> {
+        if let Some(&(id, _)) = self.names.constructors.get(&ident.name) {
+            return Some(id);
+        }
+        if let Some(id) = self.scope.lookup_constructor(&ident.name) {
+            return Some(id);
+        }
+        let mut diagnostic = Diagnostic::error(format!("cannot find constructor `{}`", ident.name))
+            .at(ident.span)
+            .with_label("not defined");
+        let candidates = self
+            .names
+            .constructors
+            .keys()
+            .cloned()
+            .chain(self.scope.constructor_names());
+        if let Some(suggestion) = closest(&ident.name, candidates) {
+            diagnostic = diagnostic.with_help(format!("a similar name exists: `{suggestion}`"));
+        }
+        self.diagnostics.push(diagnostic);
+        None
     }
 
     fn suggest(&self, name: &str) -> Option<Rc<str>> {
@@ -168,16 +349,10 @@ impl<'a> BodyResolver<'a> {
             .stack
             .iter()
             .map(|(n, _)| n.clone())
-            .chain(self.unit_names.keys().cloned())
+            .chain(self.names.globals.keys().cloned())
             .chain(self.scope.names())
             .chain(Builtin::ALL.iter().map(|b| Rc::from(b.name())));
-        candidates
-            .map(|candidate| (strsim::damerau_levenshtein(name, &candidate), candidate))
-            .filter(|(distance, candidate)| {
-                *distance <= (candidate.len().max(name.len()) / 3).max(1)
-            })
-            .min_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.cmp(&b.1)))
-            .map(|(_, candidate)| candidate)
+        closest(name, candidates)
     }
 
     fn expr(&mut self, expr: ast::Expr) -> hir::Expr {
@@ -250,10 +425,79 @@ impl<'a> BodyResolver<'a> {
                     args: vec![action, continuation],
                 }
             }
+            ast::ExprKind::Match { scrutinee, arms } => {
+                let scrutinee = self.expr(*scrutinee);
+                let arms = arms
+                    .into_iter()
+                    .map(|arm| {
+                        let depth = self.stack.len();
+                        let mut bound = Vec::new();
+                        let pattern = self.pattern(arm.pattern, &mut bound);
+                        let body = self.expr(arm.body);
+                        self.stack.truncate(depth);
+                        hir::Arm { pattern, body }
+                    })
+                    .collect();
+                hir::ExprKind::Match {
+                    scrutinee: Box::new(scrutinee),
+                    arms,
+                }
+            }
             ast::ExprKind::Error => hir::ExprKind::Error,
         };
         hir::Expr { kind, span }
     }
+
+    /// Resolves a pattern, binding its variables. `bound` collects the
+    /// variables of the whole pattern, which must be distinct.
+    fn pattern(&mut self, pattern: ast::Pattern, bound: &mut Vec<ast::Ident>) -> hir::Pattern {
+        let kind = match pattern.kind {
+            ast::PatternKind::Wild => hir::PatternKind::Wild,
+            ast::PatternKind::Var(name) => {
+                if let Some(first) = bound.iter().find(|b| b.name == name.name) {
+                    self.diagnostics.push(
+                        Diagnostic::error(format!(
+                            "`{}` is bound more than once in this pattern",
+                            name.name
+                        ))
+                        .at(name.span)
+                        .with_label("bound again here")
+                        .with_secondary(first.span, "first bound here")
+                        .with_help("use `_` for a field you do not need"),
+                    );
+                }
+                bound.push(name.clone());
+                hir::PatternKind::Bind(self.bind(&name))
+            }
+            ast::PatternKind::Con { name, args } => {
+                let con = self.lookup_constructor(&name);
+                let args = args
+                    .into_iter()
+                    .map(|arg| self.pattern(arg, bound))
+                    .collect();
+                match con {
+                    Some(con) => hir::PatternKind::Con { con, args },
+                    None => hir::PatternKind::Error,
+                }
+            }
+            ast::PatternKind::Number(n) => hir::PatternKind::Number(n),
+            ast::PatternKind::String(s) => hir::PatternKind::String(s),
+            ast::PatternKind::Unit => hir::PatternKind::Unit,
+        };
+        hir::Pattern {
+            kind,
+            span: pattern.span,
+        }
+    }
+}
+
+/// The candidate closest to `name`, if any is close enough to be a typo.
+fn closest(name: &str, candidates: impl Iterator<Item = Rc<str>>) -> Option<Rc<str>> {
+    candidates
+        .map(|candidate| (strsim::damerau_levenshtein(name, &candidate), candidate))
+        .filter(|(distance, candidate)| *distance <= (candidate.len().max(name.len()) / 3).max(1))
+        .min_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.cmp(&b.1)))
+        .map(|(_, candidate)| candidate)
 }
 
 #[cfg(test)]
@@ -381,5 +625,126 @@ mod tests {
         let def = &resolved.unit.defs[0];
         assert_eq!(def.id, GlobalId(1));
         assert_eq!(def.body.expr.kind, ExprKind::Global(GlobalId(0)));
+    }
+
+    #[test]
+    fn types_and_constructors_get_consecutive_ids() {
+        let resolved = resolve_text(
+            "type Shape = Circle Number | Rect Number Number
+type Unit2 = U
+c = (Circle 1)
+b = True",
+        );
+        assert!(
+            resolved.diagnostics.is_empty(),
+            "{:?}",
+            resolved.diagnostics
+        );
+        let types = &resolved.unit.types;
+        assert_eq!(types[0].id, TyConId(6));
+        assert_eq!(types[1].id, TyConId(7));
+        let ids: Vec<ConId> = types
+            .iter()
+            .flat_map(|t| t.constructors.iter().map(|c| c.id))
+            .collect();
+        assert_eq!(ids, [ConId(2), ConId(3), ConId(4)]);
+        let ExprKind::App { func, .. } = &resolved.unit.defs[0].body.expr.kind else {
+            panic!()
+        };
+        assert_eq!(func.kind, ExprKind::Con(ConId(2)));
+        assert_eq!(
+            resolved.unit.defs[1].body.expr.kind,
+            ExprKind::Con(ConId::TRUE)
+        );
+    }
+
+    #[test]
+    fn unknown_constructors_are_reported_with_suggestions() {
+        let resolved = resolve_text(
+            "type Shape = Circle Number
+c = (Circel 1)
+d = Square",
+        );
+        assert_eq!(resolved.diagnostics.len(), 2);
+        assert_eq!(
+            resolved.diagnostics[0].message,
+            "cannot find constructor `Circel`"
+        );
+        assert_eq!(
+            resolved.diagnostics[0].help.as_deref(),
+            Some("a similar name exists: `Circle`")
+        );
+        let resolved = resolve_text("x = true");
+        assert_eq!(
+            resolved.diagnostics[0].help.as_deref(),
+            Some("the booleans are the constructors `True` and `False`")
+        );
+    }
+
+    #[test]
+    fn values_must_have_lowercase_names() {
+        let resolved = resolve_text(
+            "Foo = 1
+f = \\X. X",
+        );
+        let messages: Vec<&str> = resolved
+            .diagnostics
+            .iter()
+            .map(|d| d.message.as_str())
+            .collect();
+        assert_eq!(
+            messages,
+            [
+                "`Foo` starts with an uppercase letter, but it names a value",
+                "`X` starts with an uppercase letter, but it names a value",
+                "cannot find constructor `X`",
+            ]
+        );
+    }
+
+    #[test]
+    fn duplicate_types_and_constructors_are_errors() {
+        let resolved = resolve_text(
+            "type A = X
+type A = Y
+type B = X | Z
+type C = True
+type List = L",
+        );
+        let messages: Vec<&str> = resolved
+            .diagnostics
+            .iter()
+            .map(|d| d.message.as_str())
+            .collect();
+        assert_eq!(
+            messages,
+            [
+                "the type `A` is defined more than once",
+                "the constructor `X` is defined more than once",
+                "`True` is a built-in constructor",
+                "`List` is a built-in type",
+            ]
+        );
+    }
+
+    #[test]
+    fn pattern_variables_are_scoped_to_their_arm() {
+        let resolved = resolve_text(
+            "type P = P Number Number
+f = \\p. match p | P x y -> (add x y) | q -> x",
+        );
+        assert_eq!(resolved.diagnostics.len(), 1);
+        assert_eq!(
+            resolved.diagnostics[0].message,
+            "cannot find `x` in this scope"
+        );
+        let resolved = resolve_text(
+            "type P = P Number Number
+f = \\p. match p | P x x -> x",
+        );
+        assert_eq!(
+            resolved.diagnostics[0].message,
+            "`x` is bound more than once in this pattern"
+        );
     }
 }

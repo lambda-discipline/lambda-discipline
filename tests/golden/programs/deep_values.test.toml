@@ -3,8 +3,8 @@ file = "deep_values.lbd"
 [expect]
 exit_code = 0
 stdout = """
-true
+True
 0
 400001
-true
+True
 """

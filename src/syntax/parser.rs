@@ -5,17 +5,27 @@
 //! ```text
 //! module  = item* ;
 //! item    = "use" STRING
+//!         | "type" UPPER ["<" LOWER ("," LOWER)* ">"] "=" ["|"] ctor ("|" ctor)*
 //!         | IDENT [":" type] "=" expr
 //!         | expr ;
+//! ctor    = UPPER btype* ;                (* fields end at a line's first column *)
 //! expr    = "\" IDENT [":" type] "." expr
 //!         | "let" IDENT [":" type] ("=" | "<-") expr "in" expr
+//!         | "match" expr ("|" pattern "->" expr)+
 //!         | NUMBER | STRING | IDENT
 //!         | "(" ")"                       (* unit *)
 //!         | "(" expr expr* ")"            (* grouping or application *)
 //!         | "[" [expr ("," expr)* [","]] "]" ;
 //! type    = btype ["->" type] ;
 //! btype   = UPPER ["<" type ("," type)* ">"] | LOWER | "(" ")" | "(" type ")" ;
+//! pattern = UPPER apat* | apat ;
+//! apat    = "_" | LOWER | UPPER | NUMBER | STRING | "(" ")" | "(" pattern ")" ;
 //! ```
+//!
+//! A `match` arm's body extends as far as it can, like a `let` body, so a
+//! `match` nested in the last arm of another takes the arms that follow it
+//! unless it is parenthesized. A type declaration ends at the first token in
+//! the first column of a line, which starts the next item.
 //!
 //! On a syntax error the parser records a diagnostic and skips to the next
 //! line that starts a top-level item, so one run reports several errors.
@@ -29,7 +39,10 @@ use std::rc::Rc;
 use crate::diagnostics::Diagnostic;
 use crate::source::{FileId, Span};
 
-use super::ast::{Def, Expr, ExprKind, Ident, Item, Module, TypeExpr, TypeExprKind};
+use super::ast::{
+    Arm, CtorDecl, Def, Expr, ExprKind, Ident, Item, Module, Pattern, PatternKind, TypeDecl,
+    TypeExpr, TypeExprKind,
+};
 use super::token::{Token, TokenKind, lex, unescape};
 
 /// Marker for "a diagnostic was already recorded; unwind to recovery".
@@ -169,6 +182,11 @@ impl Parser<'_> {
         Module { items }
     }
 
+    /// Whether `token` is in the first column of its line.
+    fn at_line_start(&self, token: Token) -> bool {
+        token.span.start == 0 || self.text.as_bytes()[token.span.start as usize - 1] == b'\n'
+    }
+
     /// Skips to the next token that begins a line and can start an item.
     fn recover(&mut self) {
         let start = self.pos;
@@ -177,13 +195,11 @@ impl Parser<'_> {
             if token.kind == TokenKind::Eof {
                 return;
             }
-            let at_line_start = token.span.start == 0
-                || self.text.as_bytes()[token.span.start as usize - 1] == b'\n';
             let starts_item = matches!(
                 token.kind,
-                TokenKind::Ident | TokenKind::Use | TokenKind::LParen
+                TokenKind::Ident | TokenKind::Use | TokenKind::Type | TokenKind::LParen
             );
-            if self.pos > start && at_line_start && starts_item {
+            if self.pos > start && self.at_line_start(token) && starts_item {
                 return;
             }
             self.bump();
@@ -201,6 +217,7 @@ impl Parser<'_> {
                     span: keyword.span.to(token.span),
                 })
             }
+            TokenKind::Type => self.type_decl().map(Item::Type),
             TokenKind::Ident
                 if matches!(self.nth_kind(1), TokenKind::Colon | TokenKind::Equals) =>
             {
@@ -263,6 +280,7 @@ impl Parser<'_> {
             }
             TokenKind::Lambda => self.lambda(),
             TokenKind::Let => self.let_expr(),
+            TokenKind::Match => self.match_expr(),
             TokenKind::LParen => self.paren(),
             TokenKind::LBracket => self.list(),
             _ => Err(self.error(
@@ -335,6 +353,198 @@ impl Parser<'_> {
             }
         };
         Ok(Expr { kind, span })
+    }
+
+    /// `type Name<a, b> = Con field ... | ...`
+    fn type_decl(&mut self) -> PResult<TypeDecl> {
+        let start = self.bump().span;
+        let name = self.upper_ident("a type name")?;
+        let mut params = Vec::new();
+        if let Some(open) = self.eat(TokenKind::LAngle) {
+            loop {
+                let param = self.ident()?;
+                if !is_lower(&param.name) {
+                    return Err(self.error(
+                        Diagnostic::error(format!(
+                            "type parameter `{}` must start with a lowercase letter",
+                            param.name
+                        ))
+                        .at(param.span)
+                        .with_label("not a type variable"),
+                    ));
+                }
+                params.push(param);
+                if self.eat(TokenKind::Comma).is_none() {
+                    break;
+                }
+            }
+            self.expect_closing(TokenKind::RAngle, open.span)?;
+        }
+        self.expect(TokenKind::Equals)?;
+        self.eat(TokenKind::Bar);
+        let mut constructors = vec![self.ctor_decl()?];
+        while self.eat(TokenKind::Bar).is_some() {
+            constructors.push(self.ctor_decl()?);
+        }
+        let span = start.to(constructors.last().expect("at least one").span);
+        Ok(TypeDecl {
+            name,
+            params,
+            constructors,
+            span,
+        })
+    }
+
+    /// A constructor and its field types. The fields end at a token in the
+    /// first column of a line, which starts the next item.
+    fn ctor_decl(&mut self) -> PResult<CtorDecl> {
+        let name = self.upper_ident("a constructor name")?;
+        let mut span = name.span;
+        let mut fields = Vec::new();
+        while matches!(self.peek_kind(), TokenKind::Ident | TokenKind::LParen)
+            && !self.at_line_start(self.peek())
+        {
+            let field = self.nested("type", Self::btype)?;
+            span = span.to(field.span);
+            fields.push(field);
+        }
+        Ok(CtorDecl { name, fields, span })
+    }
+
+    /// An identifier that must start with an uppercase letter.
+    fn upper_ident(&mut self, what: &str) -> PResult<Ident> {
+        let found = self.peek();
+        if found.kind == TokenKind::Ident && !is_lower(self.slice(found)) {
+            return self.ident();
+        }
+        let message = if found.kind == TokenKind::Ident {
+            format!("{what} must start with an uppercase letter")
+        } else {
+            format!("expected {what}, found {}", found.kind)
+        };
+        Err(self.error(
+            Diagnostic::error(message)
+                .at(found.span)
+                .with_label(format!("expected {what}")),
+        ))
+    }
+
+    /// `match scrutinee | pattern -> body | ...`
+    fn match_expr(&mut self) -> PResult<Expr> {
+        let start = self.bump().span;
+        let scrutinee = self.expr()?;
+        if self.peek_kind() != TokenKind::Bar {
+            let found = self.peek();
+            return Err(self.error(
+                Diagnostic::error(format!("expected `|`, found {}", found.kind))
+                    .at(found.span)
+                    .with_label("expected `|`")
+                    .with_help(
+                        "each arm of a `match` starts with `|`: `match x | pattern -> result`",
+                    ),
+            ));
+        }
+        let mut arms = Vec::new();
+        let mut end = start;
+        while self.eat(TokenKind::Bar).is_some() {
+            let pattern = self.pattern()?;
+            self.expect(TokenKind::Arrow)?;
+            let body = self.expr()?;
+            end = body.span;
+            arms.push(Arm { pattern, body });
+        }
+        Ok(Expr {
+            kind: ExprKind::Match {
+                scrutinee: Box::new(scrutinee),
+                arms,
+            },
+            span: start.to(end),
+        })
+    }
+
+    fn pattern(&mut self) -> PResult<Pattern> {
+        self.nested("pattern", Self::pattern_inner)
+    }
+
+    /// A constructor applied to field patterns, or an atomic pattern.
+    fn pattern_inner(&mut self) -> PResult<Pattern> {
+        let token = self.peek();
+        if token.kind != TokenKind::Ident || is_lower(self.slice(token)) {
+            return self.atomic_pattern();
+        }
+        let name = self.ident()?;
+        let mut span = name.span;
+        let mut args = Vec::new();
+        while matches!(
+            self.peek_kind(),
+            TokenKind::Ident | TokenKind::Number | TokenKind::String | TokenKind::LParen
+        ) {
+            let arg = self.nested("pattern", Self::atomic_pattern)?;
+            span = span.to(arg.span);
+            args.push(arg);
+        }
+        Ok(Pattern {
+            kind: PatternKind::Con { name, args },
+            span,
+        })
+    }
+
+    fn atomic_pattern(&mut self) -> PResult<Pattern> {
+        let token = self.peek();
+        let simple = |kind| {
+            Ok(Pattern {
+                kind,
+                span: token.span,
+            })
+        };
+        match token.kind {
+            TokenKind::Ident => {
+                let name = self.ident()?;
+                if name.name.as_ref() == "_" {
+                    simple(PatternKind::Wild)
+                } else if is_lower(&name.name) {
+                    simple(PatternKind::Var(name))
+                } else {
+                    simple(PatternKind::Con {
+                        name,
+                        args: Vec::new(),
+                    })
+                }
+            }
+            TokenKind::Number => {
+                self.bump();
+                let value: f64 = self
+                    .slice(token)
+                    .parse()
+                    .expect("the lexer only accepts valid numbers");
+                simple(PatternKind::Number(value))
+            }
+            TokenKind::String => {
+                self.bump();
+                let value = self.string_value(token)?;
+                simple(PatternKind::String(Rc::from(value)))
+            }
+            TokenKind::LParen => {
+                let open = self.bump().span;
+                if let Some(close) = self.eat(TokenKind::RParen) {
+                    return Ok(Pattern {
+                        kind: PatternKind::Unit,
+                        span: open.to(close.span),
+                    });
+                }
+                let inner = self.pattern()?;
+                let close = self.expect_closing(TokenKind::RParen, open)?;
+                Ok(Pattern {
+                    span: open.to(close.span),
+                    ..inner
+                })
+            }
+            _ => Err(self.error(
+                Diagnostic::error(format!("expected a pattern, found {}", token.kind))
+                    .at(token.span)
+                    .with_label("expected a pattern"),
+            )),
+        }
     }
 
     fn paren(&mut self) -> PResult<Expr> {
@@ -435,10 +645,7 @@ impl Parser<'_> {
             ));
         }
         let name = self.ident()?;
-        if name
-            .name
-            .starts_with(|c: char| c.is_lowercase() || c == '_')
-        {
+        if is_lower(&name.name) {
             let span = name.span;
             return Ok(TypeExpr {
                 kind: TypeExprKind::Var(name),
@@ -461,6 +668,12 @@ impl Parser<'_> {
             span,
         })
     }
+}
+
+/// Whether a name is a variable (lowercase or starting with `_`) rather than
+/// a constructor or type (uppercase).
+pub fn is_lower(name: &str) -> bool {
+    name.starts_with(|c: char| c.is_lowercase() || c == '_')
 }
 
 #[cfg(test)]
@@ -653,6 +866,87 @@ mod tests {
             let text = format!("{}1{}", "[".repeat(depth + 1), "]".repeat(depth + 1));
             assert_eq!(parse(&text).1.len(), 1);
         });
+    }
+
+    #[test]
+    fn type_declarations() {
+        assert_eq!(
+            roundtrip("type Shape = Circle Number | Rect Number Number"),
+            "type Shape = Circle Number | Rect Number Number\n"
+        );
+        assert_eq!(
+            roundtrip(
+                "type Tree<a> =\n    | Leaf\n    | Node Tree<a> a Tree<a>\n    | Fn (a -> a)\nx = 1"
+            ),
+            "type Tree<a> = Leaf | Node Tree<a> a Tree<a> | Fn (a -> a)\nx = 1\n"
+        );
+    }
+
+    #[test]
+    fn type_declarations_end_at_the_next_item() {
+        let module = parse_ok("type T = A Number\n(println 1)\ntype U = B\nb : U = B");
+        assert_eq!(module.items.len(), 4);
+        assert_eq!(
+            module.to_string(),
+            "type T = A Number\n(println 1)\ntype U = B\nb : U = B\n"
+        );
+    }
+
+    #[test]
+    fn type_declaration_errors() {
+        let (_, diagnostics) = parse("type shape = Circle");
+        assert_eq!(
+            diagnostics[0].message,
+            "a type name must start with an uppercase letter"
+        );
+        let (_, diagnostics) = parse("type Shape = circle");
+        assert_eq!(
+            diagnostics[0].message,
+            "a constructor name must start with an uppercase letter"
+        );
+        let (_, diagnostics) = parse("type Box<A> = Box A");
+        assert_eq!(
+            diagnostics[0].message,
+            "type parameter `A` must start with a lowercase letter"
+        );
+    }
+
+    #[test]
+    fn match_expressions() {
+        assert_eq!(
+            roundtrip("f = \\s. match s\n    | Circle r -> (mul r r)\n    | Rect w h -> (mul w h)"),
+            "f = (\\s. (match s | Circle r -> (mul r r) | Rect w h -> (mul w h)))\n"
+        );
+        assert_eq!(
+            roundtrip(r#"x = match y | Some (Pair _ 0) -> 1 | None -> "a" | () -> -2"#),
+            "x = (match y | Some (Pair _ 0) -> 1 | None -> \"a\" | () -> -2)\n"
+        );
+    }
+
+    #[test]
+    fn nested_match_takes_the_following_arms() {
+        let module = parse_ok("x = match a | A -> match b | C -> 1 | D -> 2");
+        let Item::Def(def) = &module.items[0] else {
+            panic!()
+        };
+        let ExprKind::Match { arms, .. } = &def.value.kind else {
+            panic!()
+        };
+        assert_eq!(arms.len(), 1);
+        let module = parse_ok("x = match a | A -> (match b | C -> 1) | D -> 2");
+        let Item::Def(def) = &module.items[0] else {
+            panic!()
+        };
+        let ExprKind::Match { arms, .. } = &def.value.kind else {
+            panic!()
+        };
+        assert_eq!(arms.len(), 2);
+    }
+
+    #[test]
+    fn match_without_arms_is_an_error() {
+        let (_, diagnostics) = parse("x = match y -> 1");
+        assert_eq!(diagnostics[0].message, "expected `|`, found `->`");
     }
 
     #[test]

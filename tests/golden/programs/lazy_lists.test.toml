@@ -7,6 +7,6 @@ stdout = """
 2
 2
 3
-true
+True
 abc
 """

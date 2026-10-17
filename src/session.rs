@@ -23,7 +23,7 @@ use crate::loader::{self, Loaded};
 use crate::resolve::{GlobalScope, resolve};
 use crate::source::{SourceMap, Span};
 use crate::syntax::{parse_module, token};
-use crate::types::{Scheme, TopLevel, check_expr, check_unit};
+use crate::types::{Scheme, TopLevel, TypeEnv, check_expr, check_unit};
 
 /// A global known to the session.
 #[derive(Debug, Clone)]
@@ -64,6 +64,7 @@ pub struct Session {
     pub sources: SourceMap,
     globals: Vec<GlobalInfo>,
     by_name: HashMap<Rc<str>, GlobalId>,
+    types: TypeEnv,
     interpreter: Interpreter,
 }
 
@@ -74,6 +75,7 @@ impl Session {
             sources: SourceMap::new(),
             globals: Vec::new(),
             by_name: HashMap::new(),
+            types: TypeEnv::new(),
             interpreter: Interpreter::new(out),
         }
     }
@@ -83,6 +85,7 @@ impl Session {
     pub fn reset(&mut self) {
         self.globals.clear();
         self.by_name.clear();
+        self.types = TypeEnv::new();
         self.interpreter = Interpreter::new(self.take_output());
     }
 
@@ -107,6 +110,11 @@ impl Session {
         self.by_name.get(name).map(|id| &self.globals[id.index()])
     }
 
+    /// The types and constructors defined so far, built-in ones included.
+    pub fn types(&self) -> &TypeEnv {
+        &self.types
+    }
+
     /// Runs the pipeline up to Core and records the unit's globals.
     pub fn compile(
         &mut self,
@@ -118,13 +126,14 @@ impl Session {
         }
         let resolved = resolve(loaded.items, self);
         let prior: Vec<Scheme> = self.globals.iter().map(|g| g.scheme.clone()).collect();
-        let typed = check_unit(&resolved.unit, &prior, top_level);
+        let typed = check_unit(&resolved.unit, &prior, &self.types, top_level);
         let mut diagnostics = resolved.diagnostics;
         diagnostics.extend(typed.diagnostics);
         if !diagnostics.is_empty() {
             return Err(diagnostics);
         }
-        let module = lower_unit(&resolved.unit, &self.sources);
+        let module = lower_unit(&resolved.unit, &self.sources, &typed.types);
+        self.types = typed.types;
         for (def, scheme) in resolved.unit.defs.iter().zip(&typed.def_schemes) {
             debug_assert_eq!(def.id.index(), self.globals.len());
             self.globals.push(GlobalInfo {
@@ -223,7 +232,7 @@ impl Session {
         match (unit.entries.as_slice(), unit.defs.as_slice()) {
             ([body], []) => {
                 let prior: Vec<Scheme> = self.globals.iter().map(|g| g.scheme.clone()).collect();
-                let (scheme, diagnostics) = check_expr(body, &prior);
+                let (scheme, diagnostics) = check_expr(body, &prior, &self.types);
                 if diagnostics.is_empty() {
                     Ok(scheme)
                 } else {
@@ -315,6 +324,22 @@ impl GlobalScope for Session {
 
     fn next_id(&self) -> u32 {
         self.globals.len() as u32
+    }
+
+    fn lookup_constructor(&self, name: &str) -> Option<crate::hir::ConId> {
+        self.types.lookup_constructor(name)
+    }
+
+    fn constructor_names(&self) -> Vec<Rc<str>> {
+        self.types.constructor_names().cloned().collect()
+    }
+
+    fn next_type_id(&self) -> u32 {
+        self.types.next_type_id()
+    }
+
+    fn next_constructor_id(&self) -> u32 {
+        self.types.next_constructor_id()
     }
 }
 

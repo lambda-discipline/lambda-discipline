@@ -1,17 +1,32 @@
-//! HIR to Core lowering: closure conversion, uncurrying and source locations.
+//! HIR to Core lowering: closure conversion, uncurrying, source locations,
+//! saturated constructors and match compilation.
+//!
+//! A `match` is compiled into a decision tree of flat [`Case`]s. Each `Case`
+//! evaluates one value, so the order in which the tree inspects values is
+//! the order in which a lazy program forces them. The tree follows the
+//! semantics of Haskell's pattern matching: arms are tried from top to
+//! bottom and the parts of a pattern from left to right, and a value is
+//! only evaluated when the first arm that is still possible needs it. So a
+//! `match` never evaluates a field that no arm needed to decide.
 
 use std::collections::HashMap;
 use std::rc::Rc;
 
 use crate::builtins::Builtin;
-use crate::hir::{self, ExprKind, LocalId};
-use crate::source::SourceMap;
+use crate::hir::{self, ConId, ExprKind, LocalId, PatternKind};
+use crate::source::{SourceMap, Span};
+use crate::types::TypeEnv;
 
-use super::{Body, Expr, GlobalBody, Lambda, Literal, Module};
+use super::{
+    Alt, AltPat, Body, Case, Constructor, Expr, GlobalBody, Lambda, Literal, Module,
+    bool_constructor,
+};
 
 /// Lowers a resolved, type-checked unit. `sources` holds the files its spans
-/// point into.
-pub fn lower_unit(unit: &hir::Unit, sources: &SourceMap) -> Module {
+/// point into, and `types` its constructors.
+pub fn lower_unit(unit: &hir::Unit, sources: &SourceMap, types: &TypeEnv) -> Module {
+    let mut constructors = HashMap::new();
+    let mut lower = |body| lower_body(body, sources, types, &mut constructors);
     Module {
         globals: unit
             .defs
@@ -19,20 +34,23 @@ pub fn lower_unit(unit: &hir::Unit, sources: &SourceMap) -> Module {
             .map(|def| GlobalBody {
                 id: def.id,
                 name: def.name.clone(),
-                body: lower_body(&def.body, sources),
+                body: lower(&def.body),
             })
             .collect(),
-        entries: unit
-            .entries
-            .iter()
-            .map(|body| lower_body(body, sources))
-            .collect(),
+        entries: unit.entries.iter().map(&mut lower).collect(),
     }
 }
 
-pub fn lower_body(body: &hir::Body, sources: &SourceMap) -> Body {
+fn lower_body(
+    body: &hir::Body,
+    sources: &SourceMap,
+    types: &TypeEnv,
+    constructors: &mut HashMap<ConId, Rc<Constructor>>,
+) -> Body {
     let mut lowerer = Lowerer {
         sources,
+        types,
+        constructors,
         frames: vec![Frame::default()],
     };
     let expr = lowerer.expr(&body.expr);
@@ -55,16 +73,51 @@ struct Frame {
 
 impl Frame {
     fn alloc(&mut self, local: LocalId) -> u32 {
+        let slot = self.fresh();
+        self.slots.insert(local, slot);
+        slot
+    }
+
+    /// A slot for a value that has no name, such as a constructor's field.
+    fn fresh(&mut self) -> u32 {
         let slot = self.size;
         self.size += 1;
-        self.slots.insert(local, slot);
         slot
     }
 }
 
 struct Lowerer<'a> {
     sources: &'a SourceMap,
+    types: &'a TypeEnv,
+    /// One shared [`Constructor`] per constructor used.
+    constructors: &'a mut HashMap<ConId, Rc<Constructor>>,
     frames: Vec<Frame>,
+}
+
+/// One arm of a `match` during compilation: the patterns still to test,
+/// one per value in the occurrence list (`None` matches anything), and the
+/// variables already bound to slots.
+#[derive(Clone)]
+struct Row<'h> {
+    patterns: Vec<Option<&'h hir::Pattern>>,
+    binds: Vec<(LocalId, u32)>,
+    body: &'h hir::Expr,
+}
+
+/// Whether matching a pattern needs to look at the value.
+fn refutable(pattern: &hir::Pattern) -> bool {
+    matches!(
+        pattern.kind,
+        PatternKind::Con { .. } | PatternKind::Number(_) | PatternKind::String(_)
+    )
+}
+
+fn literal_of(pattern: &hir::Pattern) -> Option<Literal> {
+    match &pattern.kind {
+        PatternKind::Number(n) => Some(Literal::Number(*n)),
+        PatternKind::String(s) => Some(Literal::String(s.clone())),
+        _ => None,
+    }
 }
 
 impl Lowerer<'_> {
@@ -110,11 +163,34 @@ impl Lowerer<'_> {
             }
             ExprKind::Builtin(builtin) => Expr::Builtin(*builtin),
             ExprKind::Lambda { .. } => Expr::Lambda(Rc::new(self.lambda(expr))),
-            ExprKind::App { func, args } => Expr::App {
-                func: self.expr(func),
-                args: args.iter().map(|arg| self.expr(arg)).collect(),
-                span: expr.span,
+            ExprKind::Con(con) => return self.constructor_value(*con, expr.span),
+            ExprKind::App { func, args } => match func.kind {
+                ExprKind::Con(con) if args.len() >= self.constructor(con).arity as usize => {
+                    let constructor = self.constructor(con);
+                    let (fields, rest) = args.split_at(constructor.arity as usize);
+                    let built = Rc::new(Expr::Con {
+                        con: constructor,
+                        args: fields.iter().map(|arg| self.expr(arg)).collect(),
+                        span: expr.span,
+                    });
+                    if rest.is_empty() {
+                        return built;
+                    }
+                    Expr::App {
+                        func: built,
+                        args: rest.iter().map(|arg| self.expr(arg)).collect(),
+                        span: expr.span,
+                    }
+                }
+                _ => Expr::App {
+                    func: self.expr(func),
+                    args: args.iter().map(|arg| self.expr(arg)).collect(),
+                    span: expr.span,
+                },
             },
+            ExprKind::Match { scrutinee, arms } => {
+                return self.lower_match(scrutinee, arms, expr.span);
+            }
             ExprKind::List(items) => Expr::List {
                 items: items.iter().map(|item| self.expr(item)).collect(),
                 span: expr.span,
@@ -131,6 +207,221 @@ impl Lowerer<'_> {
             }
             ExprKind::Error => unreachable!("bodies with errors are never lowered"),
         })
+    }
+
+    fn constructor(&mut self, id: ConId) -> Rc<Constructor> {
+        if id == ConId::FALSE || id == ConId::TRUE {
+            return bool_constructor(id == ConId::TRUE);
+        }
+        let types = self.types;
+        self.constructors
+            .entry(id)
+            .or_insert_with(|| {
+                let info = types.constructor(id);
+                Rc::new(Constructor {
+                    id,
+                    name: info.name.clone(),
+                    arity: info.arity as u32,
+                })
+            })
+            .clone()
+    }
+
+    /// A constructor used as a value: the value itself if it has no fields,
+    /// otherwise a function that builds it.
+    fn constructor_value(&mut self, id: ConId, span: Span) -> Rc<Expr> {
+        let con = self.constructor(id);
+        if con.arity == 0 {
+            return Rc::new(Expr::Con {
+                con,
+                args: Vec::new(),
+                span,
+            });
+        }
+        let arity = con.arity;
+        let body = Rc::new(Expr::Con {
+            con,
+            args: (0..arity).map(|slot| Rc::new(Expr::Local(slot))).collect(),
+            span,
+        });
+        Rc::new(Expr::Lambda(Rc::new(Lambda {
+            arity,
+            captures: Vec::new(),
+            frame_size: arity,
+            body,
+            span,
+        })))
+    }
+
+    fn current(&mut self) -> &mut Frame {
+        self.frames.last_mut().expect("a frame")
+    }
+
+    fn lower_match(&mut self, scrutinee: &hir::Expr, arms: &[hir::Arm], span: Span) -> Rc<Expr> {
+        let value = self.expr(scrutinee);
+        // The tree refers to the scrutinee by its slot; it gets one unless
+        // it already is one.
+        let (slot, value) = match value.as_ref() {
+            Expr::Local(slot) => (*slot, None),
+            _ => (self.current().fresh(), Some(value)),
+        };
+        let rows = arms
+            .iter()
+            .map(|arm| Row {
+                patterns: vec![Some(&arm.pattern)],
+                binds: Vec::new(),
+                body: &arm.body,
+            })
+            .collect();
+        let tree = self.compile(&[slot], rows, span);
+        match value {
+            Some(value) => Rc::new(Expr::Let {
+                slot,
+                value,
+                body: tree,
+            }),
+            None => tree,
+        }
+    }
+
+    /// Compiles rows whose patterns test the values in `occurrences` (frame
+    /// slots) into a decision tree.
+    fn compile(&mut self, occurrences: &[u32], rows: Vec<Row<'_>>, span: Span) -> Rc<Expr> {
+        let Some(first) = rows.first() else {
+            // Exhaustiveness checking rules this out.
+            return Rc::new(Expr::App {
+                func: Rc::new(Expr::Builtin(Builtin::Error)),
+                args: vec![Rc::new(Expr::Lit(Literal::String(
+                    "internal error: no arm of this `match` applies".into(),
+                )))],
+                span,
+            });
+        };
+        // The first arm still possible decides which value to look at next:
+        // the leftmost one its pattern needs.
+        let Some(column) = first.patterns.iter().position(|p| p.is_some_and(refutable)) else {
+            let row = first.clone();
+            for (pattern, &slot) in row.patterns.iter().zip(occurrences) {
+                if let Some(PatternKind::Bind(local)) = pattern.map(|p| &p.kind) {
+                    self.current().slots.insert(*local, slot);
+                }
+            }
+            for &(local, slot) in &row.binds {
+                self.current().slots.insert(local, slot);
+            }
+            return self.expr(row.body);
+        };
+        let slot = occurrences[column];
+        let head = first.patterns[column].expect("a refutable pattern");
+        let mut alts = Vec::new();
+        let complete = if let PatternKind::Con { con, .. } = &head.kind {
+            let mut heads: Vec<ConId> = Vec::new();
+            for row in &rows {
+                if let Some(PatternKind::Con { con, .. }) = row.patterns[column].map(|p| &p.kind) {
+                    if !heads.contains(con) {
+                        heads.push(*con);
+                    }
+                }
+            }
+            for &head in &heads {
+                let constructor = self.constructor(head);
+                let fields: Vec<u32> = (0..constructor.arity)
+                    .map(|_| self.current().fresh())
+                    .collect();
+                let mut inner = occurrences[..column].to_vec();
+                inner.extend(&fields);
+                inner.extend(&occurrences[column + 1..]);
+                let specialized = rows
+                    .iter()
+                    .filter_map(|row| {
+                        let mut row = row.clone();
+                        let replacement = match row.patterns[column].map(|p| &p.kind) {
+                            Some(PatternKind::Con { con, args }) if *con == head => {
+                                args.iter().map(Some).collect()
+                            }
+                            Some(PatternKind::Con { .. }) => return None,
+                            other => {
+                                if let Some(PatternKind::Bind(local)) = other {
+                                    row.binds.push((*local, slot));
+                                }
+                                vec![None; fields.len()]
+                            }
+                        };
+                        row.patterns.splice(column..=column, replacement);
+                        Some(row)
+                    })
+                    .collect();
+                let body = self.compile(&inner, specialized, span);
+                alts.push(Alt {
+                    pat: AltPat::Con {
+                        con: constructor,
+                        fields,
+                    },
+                    body,
+                });
+            }
+            self.types.siblings(*con).len() == heads.len()
+        } else {
+            let mut heads: Vec<Literal> = Vec::new();
+            for row in &rows {
+                if let Some(literal) = row.patterns[column].and_then(literal_of) {
+                    if !heads.contains(&literal) {
+                        heads.push(literal);
+                    }
+                }
+            }
+            let mut rest = occurrences.to_vec();
+            rest.remove(column);
+            for head in heads {
+                let specialized = rows
+                    .iter()
+                    .filter_map(|row| {
+                        let mut row = row.clone();
+                        let pattern = row.patterns.remove(column);
+                        match pattern.and_then(literal_of) {
+                            Some(literal) if literal == head => {}
+                            Some(_) => return None,
+                            None => {
+                                if let Some(PatternKind::Bind(local)) = pattern.map(|p| &p.kind) {
+                                    row.binds.push((*local, slot));
+                                }
+                            }
+                        }
+                        Some(row)
+                    })
+                    .collect();
+                let body = self.compile(&rest, specialized, span);
+                alts.push(Alt {
+                    pat: AltPat::Lit(head),
+                    body,
+                });
+            }
+            false
+        };
+        let default = (!complete).then(|| {
+            let mut rest = occurrences.to_vec();
+            rest.remove(column);
+            let defaults = rows
+                .iter()
+                .filter(|row| !row.patterns[column].is_some_and(refutable))
+                .map(|row| {
+                    let mut row = row.clone();
+                    if let Some(PatternKind::Bind(local)) =
+                        row.patterns.remove(column).map(|p| &p.kind)
+                    {
+                        row.binds.push((*local, slot));
+                    }
+                    row
+                })
+                .collect();
+            self.compile(&rest, defaults, span)
+        });
+        Rc::new(Expr::Case(Rc::new(Case {
+            scrutinee: Rc::new(Expr::Local(slot)),
+            alts,
+            default,
+            span,
+        })))
     }
 
     /// Lowers a chain of nested lambdas into one multi-parameter lambda.
@@ -198,6 +489,30 @@ fn shift(expr: &Rc<Expr>, captured: u32) -> Rc<Expr> {
             value: shift(value, captured),
             body: shift(body, captured),
         },
+        Expr::Con { con, args, span } => Expr::Con {
+            con: con.clone(),
+            args: args.iter().map(|a| shift(a, captured)).collect(),
+            span: *span,
+        },
+        Expr::Case(case) => Expr::Case(Rc::new(Case {
+            scrutinee: shift(&case.scrutinee, captured),
+            alts: case
+                .alts
+                .iter()
+                .map(|alt| Alt {
+                    pat: match &alt.pat {
+                        AltPat::Con { con, fields } => AltPat::Con {
+                            con: con.clone(),
+                            fields: fields.iter().map(|&s| fix(s)).collect(),
+                        },
+                        AltPat::Lit(literal) => AltPat::Lit(literal.clone()),
+                    },
+                    body: shift(&alt.body, captured),
+                })
+                .collect(),
+            default: case.default.as_ref().map(|d| shift(d, captured)),
+            span: case.span,
+        })),
         Expr::Lit(_) | Expr::Global(_) | Expr::Builtin(_) => return expr.clone(),
     })
 }
@@ -214,7 +529,14 @@ mod tests {
         let loaded = load_text(&mut sources, "<test>", text);
         let resolved = resolve(loaded.items, &EmptyScope);
         assert!(resolved.diagnostics.is_empty());
-        lower_unit(&resolved.unit, &sources)
+        let typed = crate::types::check_unit(
+            &resolved.unit,
+            &[],
+            &TypeEnv::new(),
+            crate::types::TopLevel::Any,
+        );
+        assert!(typed.diagnostics.is_empty(), "{:?}", typed.diagnostics);
+        lower_unit(&resolved.unit, &sources, &typed.types)
     }
 
     fn global(text: &str) -> String {
@@ -277,6 +599,52 @@ mod tests {
         assert_eq!(
             module.to_string(),
             "@0 a [frame=0] = 1\n@1 b [frame=0] = 2\nentry [frame=0] = (print @0)\nentry [frame=0] = (print @1)\n"
+        );
+    }
+
+    const OPTION: &str = "type Option<a> = None | Some a\n";
+
+    #[test]
+    fn constructors_are_saturated_or_wrapped_in_lambdas() {
+        let module = lower_text(&format!("{OPTION}a = (Some 1)\nb = Some\nc = None"));
+        let shown: Vec<String> = module
+            .globals
+            .iter()
+            .map(|g| g.body.expr.to_string())
+            .collect();
+        assert_eq!(
+            shown,
+            ["(Some 1)", "(lambda/1 [] frame=1 (Some $0))", "None"]
+        );
+    }
+
+    #[test]
+    fn nested_patterns_become_a_tree_of_flat_cases() {
+        assert_eq!(
+            global(&format!(
+                "{OPTION}f = \\o. match o | Some 0 -> 1 | Some n -> n | None -> 2"
+            )),
+            "(lambda/1 [] frame=2 (case $0 | Some $1 -> (case $1 | 0 -> 1 | _ -> $1) | None -> 2))"
+        );
+    }
+
+    #[test]
+    fn a_scrutinee_that_is_not_a_variable_gets_a_slot() {
+        assert_eq!(
+            global(&format!(
+                "{OPTION}h = \\x. match (Some x) | Some y -> y | _ -> x"
+            )),
+            "(lambda/1 [] frame=3 (let $1 = (Some $0) in (case $1 | Some $2 -> $2 | _ -> $0)))"
+        );
+    }
+
+    #[test]
+    fn case_slots_follow_captures() {
+        assert_eq!(
+            global(&format!(
+                "{OPTION}k = \\o. \\y. (map \\z. (match o | Some v -> (add v z) | None -> y) [1])"
+            )),
+            "(lambda/2 [] frame=2 (map (lambda/1 [$0 $1] frame=4 (case $0 | Some $3 -> (add $3 $2) | None -> $1)) [1]))"
         );
     }
 }

@@ -113,22 +113,20 @@ pub(super) fn pure(
 
         B::Eq | B::Neq => {
             let equal = args[0].equals(&args[1]).map_err(fail)?;
-            Value::Bool(equal == (builtin == B::Eq))
+            Value::bool(equal == (builtin == B::Eq))
         }
         B::Lt | B::Le | B::Gt | B::Ge | B::Compare => {
             let ordering = args[0].compare(&args[1]).map_err(fail)?;
             match builtin {
-                B::Lt => Value::Bool(ordering.is_lt()),
-                B::Le => Value::Bool(ordering.is_le()),
-                B::Gt => Value::Bool(ordering.is_gt()),
-                B::Ge => Value::Bool(ordering.is_ge()),
+                B::Lt => Value::bool(ordering.is_lt()),
+                B::Le => Value::bool(ordering.is_le()),
+                B::Gt => Value::bool(ordering.is_gt()),
+                B::Ge => Value::bool(ordering.is_ge()),
                 _ => Value::Number(ordering as i8 as f64),
             }
         }
 
-        B::True => Value::Bool(true),
-        B::False => Value::Bool(false),
-        B::Not => Value::Bool(!bool_of(&args[0])?),
+        B::Not => Value::bool(!bool_of(&args[0])?),
 
         B::Concat => Value::String(Rc::from(format!("{}{}", text(0)?, text(1)?))),
         B::Show => Value::String(Rc::from(args[0].show())),
@@ -163,7 +161,7 @@ pub(super) fn pure(
         B::Trim => Value::String(Rc::from(text(0)?.trim())),
 
         B::Length => Value::Number(list(0)?.len() as f64),
-        B::IsEmpty => Value::Bool(list(0)?.is_empty()),
+        B::IsEmpty => Value::bool(list(0)?.is_empty()),
         B::Tail => {
             let items = list(0)?;
             if items.is_empty() {
@@ -326,10 +324,7 @@ pub(super) fn number_of(value: &Value) -> Result<f64> {
 }
 
 pub(super) fn bool_of(value: &Value) -> Result<bool> {
-    match value {
-        Value::Bool(b) => Ok(*b),
-        other => Err(internal("Bool", other)),
-    }
+    value.as_bool().ok_or_else(|| internal("Bool", value))
 }
 
 pub(super) fn string_of(value: &Value) -> Result<Rc<str>> {
@@ -397,7 +392,12 @@ mod tests {
                 .show(),
             "3"
         );
-        assert_eq!(pure(Builtin::True, &[], &[], None).unwrap().show(), "true");
+        assert_eq!(
+            pure(Builtin::Not, &[Value::bool(false)], &[], None)
+                .unwrap()
+                .show(),
+            "True"
+        );
         let error = element(Builtin::Head, &[Value::List(Vector::new())], None).unwrap_err();
         assert_eq!(error.message, "`head` of an empty list");
         let error = pure(Builtin::Add, &[Value::Unit, n(1.0)], &[], None).unwrap_err();

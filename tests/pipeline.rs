@@ -27,7 +27,7 @@ fn session_evaluates_and_reports_types() {
 #[test]
 fn diagnostics_render_against_session_sources() {
     let mut session = Session::new(Box::new(std::io::sink()));
-    let diagnostics = session.eval("demo.lbd", "(add true 1)").unwrap_err();
+    let diagnostics = session.eval("demo.lbd", "(add True 1)").unwrap_err();
     let mut rendered = Vec::new();
     session.render(&diagnostics, &mut rendered, false);
     let rendered = String::from_utf8(rendered).unwrap();

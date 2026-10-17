@@ -108,8 +108,6 @@ builtins! {
     Ge => "ge" : "a -> a -> Bool", Compare, "`(ge a b)` is `a >= b`.";
     Compare => "compare" : "a -> a -> Number", Compare, "`-1`, `0` or `1` as `a` is less than, equal to or greater than `b`.";
 
-    True => "true" : "Bool", Bool, "Boolean truth.";
-    False => "false" : "Bool", Bool, "Boolean falsehood.";
     Not => "not" : "Bool -> Bool", Bool, "Boolean negation.";
     And => "and" : "Bool -> Bool -> Bool", Bool, "Conjunction; the second argument is only evaluated when needed.";
     Or => "or" : "Bool -> Bool -> Bool", Bool, "Disjunction; the second argument is only evaluated when needed.";
@@ -237,6 +235,9 @@ pub fn reference() -> String {
     let mut out = String::new();
     for module in Module::ALL {
         out.push_str(&format!("-- {}\n", module.title()));
+        if module == Module::Bool {
+            out.push_str("type Bool = False | True\n    Booleans are data: `match` on `True` and `False`, or use `if`.\n");
+        }
         for builtin in Builtin::ALL.iter().filter(|b| b.module() == module) {
             out.push_str(&format!(
                 "{} : {}\n    {}\n",
@@ -327,7 +328,7 @@ mod tests {
 
     #[test]
     fn arity_counts_top_level_arrows_only() {
-        assert_eq!(Builtin::True.arity(), 0);
+        assert_eq!(Builtin::Line.arity(), 0);
         assert_eq!(Builtin::Neg.arity(), 1);
         assert_eq!(Builtin::Add.arity(), 2);
         assert_eq!(Builtin::If.arity(), 3);

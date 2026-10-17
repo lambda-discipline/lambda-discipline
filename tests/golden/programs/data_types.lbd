@@ -1,0 +1,57 @@
+-- User-defined data types, constructors as functions and `match`.
+type Option<a> = None | Some a
+
+type Expr =
+    | Num Number
+    | Add Expr Expr
+    | Mul Expr Expr
+    | Neg Expr
+
+type Tree<a> = Leaf | Node Tree<a> a Tree<a>
+
+eval : Expr -> Number = \e. match e
+    | Num n -> n
+    | Add a b -> (add (eval a) (eval b))
+    | Mul a b -> (mul (eval a) (eval b))
+    | Neg a -> (neg (eval a))
+
+-- Nested patterns: simplify `x * 1`, `1 * x` and double negation.
+simplify : Expr -> Expr = \e. match e
+    | Mul x (Num 1) -> (simplify x)
+    | Mul (Num 1) x -> (simplify x)
+    | Neg (Neg x) -> (simplify x)
+    | Add a b -> (Add (simplify a) (simplify b))
+    | Mul a b -> (Mul (simplify a) (simplify b))
+    | Neg a -> (Neg (simplify a))
+    | other -> other
+
+find : (a -> Bool) -> List<a> -> Option<a> = \p. \xs.
+    (foldr \x. \rest. (if (p x) (Some x) rest) None xs)
+
+withDefault : a -> Option<a> -> a = \fallback. \o. match o
+    | Some x -> x
+    | None -> fallback
+
+insert : a -> Tree<a> -> Tree<a> = \x. \t. match t
+    | Leaf -> (Node Leaf x Leaf)
+    | Node l v r -> (if (lt x v) (Node (insert x l) v r) (Node l v (insert x r)))
+
+toList : Tree<a> -> List<a> = \t. match t
+    | Leaf -> []
+    | Node l v r -> (append (toList l) (cons v (toList r)))
+
+describe : Number -> String = \n. match n
+    | 0 -> "zero"
+    | 1 -> "one"
+    | _ -> "many"
+
+expr = (Add (Mul (Num 2) (Num 1)) (Neg (Neg (Num 3))))
+(println (eval expr))
+(println (simplify expr))
+(println (find (lt 2) [1, 2, 3, 4]) " " (find (lt 9) [1, 2]))
+(println (withDefault 0 (find (lt 2) [1, 5])))
+(println (toList (foldl \t. \x. (insert x t) Leaf ["pear", "apple", "fig"])))
+(println (map describe [0, 1, 2]))
+(println (map Some [1, 2]))
+(println (sort [(Some 3), None, (Some 1)]) " " (eq (Num 1) (Num 1)))
+(println (match (lt 1 2) | True -> "yes" | False -> "no"))

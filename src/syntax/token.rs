@@ -17,6 +17,10 @@ pub enum TokenKind {
     Let,
     #[token("in")]
     In,
+    #[token("type")]
+    Type,
+    #[token("match")]
+    Match,
 
     #[regex(r"[A-Za-z_][A-Za-z0-9_']*")]
     Ident,
@@ -40,6 +44,8 @@ pub enum TokenKind {
     Arrow,
     #[token("<-")]
     LeftArrow,
+    #[token("|")]
+    Bar,
     #[token("<")]
     LAngle,
     #[token(">")]
@@ -64,6 +70,8 @@ impl TokenKind {
             TokenKind::Use => "`use`",
             TokenKind::Let => "`let`",
             TokenKind::In => "`in`",
+            TokenKind::Type => "`type`",
+            TokenKind::Match => "`match`",
             TokenKind::Ident => "an identifier",
             TokenKind::Number => "a number",
             TokenKind::String => "a string",
@@ -74,6 +82,7 @@ impl TokenKind {
             TokenKind::Equals => "`=`",
             TokenKind::Arrow => "`->`",
             TokenKind::LeftArrow => "`<-`",
+            TokenKind::Bar => "`|`",
             TokenKind::LAngle => "`<`",
             TokenKind::RAngle => "`>`",
             TokenKind::LParen => "`(`",
@@ -208,8 +217,10 @@ mod tests {
     fn keywords_are_not_identifiers_but_prefixes_are() {
         use TokenKind::*;
         assert_eq!(
-            kinds("use let in user letter inner"),
-            vec![Use, Let, In, Ident, Ident, Ident, Eof]
+            kinds("use let in type match user letter inner types matches"),
+            vec![
+                Use, Let, In, Type, Match, Ident, Ident, Ident, Ident, Ident, Eof
+            ]
         );
     }
 
@@ -248,6 +259,15 @@ mod tests {
         assert_eq!(
             kinds("let x <- a in b -> c"),
             vec![Let, Ident, LeftArrow, Ident, In, Ident, Arrow, Ident, Eof]
+        );
+    }
+
+    #[test]
+    fn match_arms() {
+        use TokenKind::*;
+        assert_eq!(
+            kinds("match o | Some x -> x"),
+            vec![Match, Ident, Bar, Ident, Ident, Arrow, Ident, Eof]
         );
     }
 
