@@ -128,6 +128,29 @@ fn emit_every_stage() {
 }
 
 #[test]
+fn emit_prints_numbers_like_run() {
+    let (_dir, path) = program(
+        "big = 1e300
+small = 1e-7
+(println big small)",
+    );
+    lbd()
+        .args(["check", "--emit", "ast"])
+        .arg(&path)
+        .assert()
+        .success()
+        .stdout(
+            predicate::str::contains("big = 1e+300").and(predicate::str::contains("small = 1e-7")),
+        );
+    lbd()
+        .args(["check", "--emit", "core"])
+        .arg(&path)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("1e+300").and(predicate::str::contains("1e-7")));
+}
+
+#[test]
 fn docs_lists_builtins() {
     lbd().arg("docs").assert().success().stdout(
         predicate::str::contains("map : (a -> b) -> List<a> -> List<b>")

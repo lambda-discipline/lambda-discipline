@@ -15,6 +15,7 @@ use imbl::Vector;
 use crate::builtins::Builtin;
 use crate::core::{Expr, Lambda};
 use crate::source::Span;
+use crate::syntax::number::format_number;
 
 #[derive(Clone)]
 pub enum Value {
@@ -310,18 +311,6 @@ impl Drop for Env {
     }
 }
 
-/// Numbers print the way most languages print them: `42`, `3.14`, `0.1`.
-pub fn format_number(n: f64) -> String {
-    if n.is_infinite() {
-        return if n > 0.0 {
-            "Infinity".into()
-        } else {
-            "-Infinity".into()
-        };
-    }
-    format!("{n}")
-}
-
 impl fmt::Debug for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(&self.show())
@@ -417,16 +406,6 @@ mod tests {
 
     fn list(items: Vec<Value>) -> Value {
         Value::List(items.into_iter().map(Thunk::done).collect())
-    }
-
-    #[test]
-    fn numbers_print_like_other_languages() {
-        assert_eq!(format_number(42.0), "42");
-        assert_eq!(format_number(2.25), "2.25");
-        assert_eq!(format_number(-0.5), "-0.5");
-        assert_eq!(format_number(0.1 + 0.2), "0.30000000000000004");
-        assert_eq!(format_number(f64::INFINITY), "Infinity");
-        assert_eq!(format_number(f64::NAN), "NaN");
     }
 
     #[test]

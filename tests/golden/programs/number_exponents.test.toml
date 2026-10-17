@@ -1,0 +1,11 @@
+file = "number_exponents.lbd"
+
+[expect]
+exit_code = 0
+stdout = """
+1e+300
+1e-7
+0
+100000000000000000000 0.000001
+[1.5e+21, -2e-9]
+"""
