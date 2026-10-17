@@ -1,5 +1,5 @@
 -- Problem: https://adventofcode.com/2024/day/1 (part two)
--- Run from the crate root: lbd run examples/aoc-24/day-01/part_02.lbd
+-- Run from anywhere: lbd run examples/aoc-24/day-01/part_02.lbd
 
 use "../../std.lbd"
 
@@ -12,6 +12,7 @@ similarity : String -> Number = \input.
     let right = (get 1 columns) in
     (sum (map \x. (mul x (count (eq x) right)) left))
 
--- Reading the input is an action; `<-` names its result.
-let input <- (readFile "examples/aoc-24/day-01/input.txt") in
+-- Reading the input is an action; `<-` names its result. `__DIR__` is
+-- this file's directory, so the input is found from any working directory.
+let input <- (readFile (concat __DIR__ "/input.txt")) in
 (println "Answer: " (similarity input))

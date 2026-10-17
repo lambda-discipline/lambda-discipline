@@ -1,0 +1,5 @@
+file = "source_location.lbd"
+
+[expect]
+exit_code = 0
+stdout = "read next to the program\nline 5\n"

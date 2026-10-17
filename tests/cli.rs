@@ -237,3 +237,45 @@ fn deeply_nested_programs_are_reported_not_crashed_on() {
             "expression nested too deeply (the limit is 10000 levels)",
         ));
 }
+
+#[test]
+fn read_file_is_relative_to_the_working_directory_and_dir_to_the_file() {
+    let dir = tempfile::tempdir().unwrap();
+    for sub in ["sub", "lib"] {
+        fs::create_dir(dir.path().join(sub)).unwrap();
+    }
+    fs::write(dir.path().join("data.txt"), "working directory\n").unwrap();
+    fs::write(dir.path().join("sub/data.txt"), "next to main\n").unwrap();
+    fs::write(dir.path().join("lib/data.txt"), "next to lib\n").unwrap();
+    fs::write(
+        dir.path().join("lib/lib.lbd"),
+        "libData : String = (concat __DIR__ \"/data.txt\")\n\
+         libFile : String = __FILE__\n\
+         libLine : Number = __LINE__\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.path().join("sub/main.lbd"),
+        r#"use "../lib/lib.lbd"
+read : String -> IO<Unit> = \path. let text <- (readFile path) in (print text)
+(read "data.txt")
+(read (concat __DIR__ "/data.txt"))
+(read libData)
+(println libFile)
+(println "lib line " libLine ", main line " __LINE__)
+"#,
+    )
+    .unwrap();
+    let canonical = fs::canonicalize(dir.path().join("lib/lib.lbd")).unwrap();
+    let shown = canonical.display().to_string();
+    let lib_file = shown.strip_prefix(r"\\?\").unwrap_or(&shown);
+    lbd()
+        .current_dir(dir.path())
+        .args(["run", "sub/main.lbd"])
+        .assert()
+        .success()
+        .stdout(format!(
+            "working directory\nnext to main\nnext to lib\n{lib_file}\nlib line 3, main line 7\n"
+        ))
+        .stderr("");
+}

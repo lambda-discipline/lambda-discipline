@@ -124,7 +124,7 @@ impl Session {
         if !diagnostics.is_empty() {
             return Err(diagnostics);
         }
-        let module = lower_unit(&resolved.unit);
+        let module = lower_unit(&resolved.unit, &self.sources);
         for (def, scheme) in resolved.unit.defs.iter().zip(&typed.def_schemes) {
             debug_assert_eq!(def.id.index(), self.globals.len());
             self.globals.push(GlobalInfo {

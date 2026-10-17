@@ -105,6 +105,12 @@ impl SourceFile {
         }
     }
 
+    /// [`base_dir`](Self::base_dir) as a program sees it (`__DIR__`): the
+    /// absolute directory of a file on disk, `.` for in-memory text.
+    pub fn dir_name(&self) -> String {
+        self.base_dir().map_or_else(|| ".".to_owned(), display_path)
+    }
+
     /// 1-based `(line, column)` of a byte offset; columns count characters.
     pub fn line_col(&self, offset: usize) -> (usize, usize) {
         let line = self.line_starts.partition_point(|&start| start <= offset) - 1;
@@ -118,9 +124,14 @@ impl SourceFile {
     }
 }
 
-/// Strips the `\\?\` prefix Windows adds to canonical paths so messages stay readable.
+/// Strips the `\\?\` prefix Windows adds to canonical paths so messages stay
+/// readable and `__DIR__` can be joined with `/` (`\\?\UNC\server\share`
+/// becomes `\\server\share`).
 fn display_path(path: &Path) -> String {
     let shown = path.display().to_string();
+    if let Some(share) = shown.strip_prefix(r"\\?\UNC\") {
+        return format!(r"\\{share}");
+    }
     shown
         .strip_prefix(r"\\?\")
         .map(str::to_owned)
