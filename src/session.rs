@@ -174,7 +174,15 @@ impl Session {
     /// relative to the working directory.
     pub fn eval(&mut self, name: &str, text: &str) -> Result<Evaluated, Diagnostics> {
         let loaded = loader::load_text(&mut self.sources, name, text);
-        self.evaluated(loaded, TopLevel::Any)
+        let mut evaluated = self.evaluated(loaded, TopLevel::Any)?;
+        // The REPL shows these values, so their list elements are needed.
+        for (value, _) in &mut evaluated.values {
+            *value = self
+                .interpreter
+                .normalize(value.clone())
+                .map_err(|error| vec![error.into_diagnostic()])?;
+        }
+        Ok(evaluated)
     }
 
     /// Loads a program file into the session (REPL `:load`), performing its
