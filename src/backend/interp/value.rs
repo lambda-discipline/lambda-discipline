@@ -23,7 +23,9 @@ pub enum Value {
     Bool(bool),
     Unit,
     /// Persistent vector: cheap to clone, `O(log n)` push, get and update.
-    List(Vector<Value>),
+    /// The spine is strict but the elements are thunks, evaluated only when
+    /// something uses them.
+    List(Vector<Thunk>),
     Closure(Rc<Closure>),
     /// A function applied to fewer arguments than it needs.
     Partial(Rc<Partial>),
@@ -71,19 +73,21 @@ impl Value {
         }
     }
 
-    /// Structural equality; `Err` when functions are compared.
+    /// Structural equality; `Err` when functions are compared. The elements
+    /// of lists must already be evaluated (see `Interpreter::normalize`).
     pub fn equals(&self, other: &Value) -> Result<bool, String> {
-        // Pairs of lists whose elements are still being compared.
-        let mut pending = Vec::new();
-        let (mut a, mut b) = (self, other);
+        // Pairs of lists whose elements are still being compared, with the
+        // index of the next pair.
+        let mut pending: Vec<(Vector<Thunk>, Vector<Thunk>, usize)> = Vec::new();
+        let (mut a, mut b) = (self.clone(), other.clone());
         loop {
-            let equal = match (a, b) {
+            let equal = match (&a, &b) {
                 (Value::Number(a), Value::Number(b)) => a == b,
                 (Value::String(a), Value::String(b)) => a == b,
                 (Value::Bool(a), Value::Bool(b)) => a == b,
                 (Value::Unit, Value::Unit) => true,
                 (Value::List(a), Value::List(b)) => {
-                    pending.push(a.iter().zip(b));
+                    pending.push((a.clone(), b.clone(), 0));
                     a.len() == b.len()
                 }
                 (Value::Io(_), _) | (_, Value::Io(_)) => {
@@ -98,25 +102,30 @@ impl Value {
                 return Ok(false);
             }
             (a, b) = loop {
-                let Some(pairs) = pending.last_mut() else {
+                let Some((xs, ys, index)) = pending.last_mut() else {
                     return Ok(true);
                 };
-                match pairs.next() {
-                    Some(pair) => break pair,
-                    None => drop(pending.pop()),
+                match (xs.get(*index), ys.get(*index)) {
+                    (Some(x), Some(y)) => {
+                        *index += 1;
+                        break (evaluated(x)?, evaluated(y)?);
+                    }
+                    _ => drop(pending.pop()),
                 }
             };
         }
     }
 
-    /// Total order on comparable values; `Err` for functions and `NaN`.
+    /// Total order on comparable values; `Err` for functions and `NaN`. The
+    /// elements of lists must already be evaluated.
     pub fn compare(&self, other: &Value) -> Result<Ordering, String> {
         // Pairs of lists whose elements are still being compared, with the
-        // order of their lengths for when all shared elements are equal.
-        let mut pending = Vec::new();
-        let (mut a, mut b) = (self, other);
+        // index of the next pair and the order of their lengths for when all
+        // shared elements are equal.
+        let mut pending: Vec<(Vector<Thunk>, Vector<Thunk>, usize, Ordering)> = Vec::new();
+        let (mut a, mut b) = (self.clone(), other.clone());
         loop {
-            let ordering = match (a, b) {
+            let ordering = match (&a, &b) {
                 (Value::Number(a), Value::Number(b)) => a
                     .partial_cmp(b)
                     .ok_or_else(|| "`NaN` cannot be ordered".to_owned())?,
@@ -124,7 +133,7 @@ impl Value {
                 (Value::Bool(a), Value::Bool(b)) => a.cmp(b),
                 (Value::Unit, Value::Unit) => Ordering::Equal,
                 (Value::List(a), Value::List(b)) => {
-                    pending.push((a.iter().zip(b), a.len().cmp(&b.len())));
+                    pending.push((a.clone(), b.clone(), 0, a.len().cmp(&b.len())));
                     Ordering::Equal
                 }
                 (Value::Io(_), _) | (_, Value::Io(_)) => {
@@ -139,13 +148,16 @@ impl Value {
                 return Ok(ordering);
             }
             (a, b) = loop {
-                let Some((pairs, lengths)) = pending.last_mut() else {
+                let Some((xs, ys, index, lengths)) = pending.last_mut() else {
                     return Ok(Ordering::Equal);
                 };
-                match pairs.next() {
-                    Some(pair) => break pair,
-                    None if lengths.is_ne() => return Ok(*lengths),
-                    None => drop(pending.pop()),
+                match (xs.get(*index), ys.get(*index)) {
+                    (Some(x), Some(y)) => {
+                        *index += 1;
+                        break (evaluated(x)?, evaluated(y)?);
+                    }
+                    _ if lengths.is_ne() => return Ok(*lengths),
+                    _ => drop(pending.pop()),
                 }
             };
         }
@@ -167,44 +179,52 @@ impl Value {
     }
 
     fn write_shown(&self, out: &mut String) {
-        // Lists being rendered, innermost last: their remaining elements and
-        // whether one has been written yet.
-        let mut open = Vec::new();
-        let mut value = self;
+        // Lists being rendered, innermost last, with the index of the next
+        // element to write.
+        let mut open: Vec<(Vector<Thunk>, usize)> = Vec::new();
+        let mut value = self.clone();
         loop {
-            match value {
+            match &value {
                 Value::Number(n) => out.push_str(&format_number(*n)),
                 Value::String(s) => out.push_str(&format!("{:?}", s.as_ref())),
                 Value::Bool(b) => out.push_str(if *b { "true" } else { "false" }),
                 Value::Unit => out.push_str("()"),
                 Value::List(items) => {
                     out.push('[');
-                    open.push((items.iter(), false));
+                    open.push((items.clone(), 0));
                 }
                 Value::Builtin(b) => out.push_str(&format!("<builtin {b}>")),
                 Value::Closure(_) | Value::Partial(_) => out.push_str("<function>"),
                 Value::Io(_) => out.push_str("<action>"),
             }
             value = loop {
-                let Some((items, started)) = open.last_mut() else {
+                let Some((items, index)) = open.last_mut() else {
                     return;
                 };
-                match items.next() {
-                    Some(item) => {
-                        if *started {
-                            out.push_str(", ");
-                        }
-                        *started = true;
-                        break item;
-                    }
-                    None => {
-                        out.push(']');
-                        open.pop();
-                    }
+                let Some(item) = items.get(*index) else {
+                    out.push(']');
+                    open.pop();
+                    continue;
+                };
+                if *index > 0 {
+                    out.push_str(", ");
+                }
+                *index += 1;
+                match item.value() {
+                    Some(value) => break value,
+                    // Normalized values have none; shown for completeness.
+                    None => out.push_str("<unevaluated>"),
                 }
             };
         }
     }
+}
+
+/// The value of a list element that must already be evaluated.
+fn evaluated(thunk: &Thunk) -> Result<Value, String> {
+    thunk
+        .value()
+        .ok_or_else(|| "internal error: a list element was not evaluated".to_owned())
 }
 
 // ---- dropping ----------------------------------------------------------------
@@ -216,7 +236,7 @@ impl Value {
 /// The owned parts of a value, waiting to be dropped.
 #[allow(dead_code, reason = "the fields are only ever dropped")]
 enum Garbage {
-    List(Vector<Value>),
+    List(Vector<Thunk>),
     Value(Value),
     Thunks(Vec<Thunk>),
     Captured(Box<[Thunk]>),
@@ -308,6 +328,15 @@ impl fmt::Debug for Value {
     }
 }
 
+impl fmt::Debug for Thunk {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.value() {
+            Some(value) => f.write_str(&value.show()),
+            None => f.write_str("<unevaluated>"),
+        }
+    }
+}
+
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(&self.display())
@@ -387,7 +416,7 @@ mod tests {
     use super::*;
 
     fn list(items: Vec<Value>) -> Value {
-        Value::List(items.into_iter().collect())
+        Value::List(items.into_iter().map(Thunk::done).collect())
     }
 
     #[test]

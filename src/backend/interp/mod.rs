@@ -13,8 +13,15 @@
 //! * Deep non-tail recursion costs one small heap frame per level instead of
 //!   a native stack frame; it is bounded by [`Interpreter::set_max_frames`] and
 //!   reported as an error rather than crashing.
-//! * Higher-order builtins (`map`, `foldr`, ...) are frames too, so the
-//!   functions they call can recurse as deeply as any other code.
+//! * Lists have a strict spine but lazy elements: a list literal suspends
+//!   its elements, `map` and `zipWith` build suspended calls, and `foldr`
+//!   passes the fold of the rest of the list as an unevaluated argument, so
+//!   it stops as soon as its function ignores that argument.
+//! * Higher-order builtins that must call their function (`filter`, `foldl`)
+//!   are frames too, so the functions they call can recurse as deeply as any
+//!   other code.
+//! * Builtins that inspect elements (`eq`, `show`, `print`, `sum`, ...)
+//!   force them first through walk frames, again without native recursion.
 //! * Evaluation has no effects. Applying `print`, `readFile`, `bind` and the
 //!   other action builtins builds a [`Value::Io`] that describes an action;
 //!   only [`Interpreter::perform`] runs one, and [`Backend::run`] performs a
@@ -33,6 +40,8 @@ use crate::builtins::Builtin;
 use crate::core::{Expr, Lambda, Literal, Module};
 use crate::hir::GlobalId;
 use crate::source::Span;
+
+use prims::Strictness;
 
 pub use value::{Action, Closure, Env, Partial, Thunk, ThunkState, Value};
 
@@ -61,13 +70,11 @@ enum Frame {
     Apply { args: Vec<Thunk>, span: Span },
     /// Collect a forced argument of a builtin, then force the next one.
     Strict(BuiltinCall),
-    /// Evaluate the remaining elements of a list literal.
-    List {
-        expr: Rc<Expr>,
-        env: Rc<Env>,
-        next: usize,
-        values: Vector<Value>,
-    },
+    /// Evaluate the elements of the returned list, then return it; with
+    /// `deep`, the elements of the lists inside it too.
+    Force { deep: bool },
+    /// A walk through a list's elements, waiting for one to be evaluated.
+    Walk(Box<Walk>),
     /// A higher-order builtin waiting for one of its calls to return.
     Iterate(Box<Iteration>),
     /// Perform the returned action; its result goes to the frame below.
@@ -81,9 +88,39 @@ enum Frame {
     /// Collect the result of the action being performed, then perform the
     /// rest (`sequence`).
     Sequence {
-        actions: Vector<Value>,
-        results: Vector<Value>,
+        actions: Vector<Thunk>,
+        results: Vector<Thunk>,
     },
+}
+
+/// Progress through the elements of `root`, evaluating each of them.
+struct Walk {
+    root: Value,
+    /// Whether to descend into the lists found among the elements.
+    deep: bool,
+    /// Lists being walked, innermost last, with the index of the next element.
+    pending: Vec<(Vector<Thunk>, usize)>,
+}
+
+impl Walk {
+    fn new(root: Value, deep: bool) -> Self {
+        let mut walk = Walk {
+            root: root.clone(),
+            deep,
+            pending: Vec::new(),
+        };
+        walk.enter(root);
+        walk
+    }
+
+    /// Queues the elements of `value`, if it is a non-empty list.
+    fn enter(&mut self, value: Value) {
+        if let Value::List(items) = &value {
+            if !items.is_empty() {
+                self.pending.push((items.clone(), 0));
+            }
+        }
+    }
 }
 
 /// A builtin applied to exactly its arity, while its strict arguments are forced.
@@ -99,22 +136,17 @@ struct BuiltinCall {
 struct Iteration {
     kind: IterationKind,
     func: Value,
-    items: Vector<Value>,
-    /// Second list, for `zipWith`.
-    others: Vector<Value>,
+    items: Vector<Thunk>,
     /// Index of the element whose call is in flight.
     index: usize,
-    results: Vector<Value>,
+    results: Vector<Thunk>,
     span: Span,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum IterationKind {
-    Map,
     Filter,
     Foldl,
-    Foldr,
-    ZipWith,
 }
 
 impl Interpreter {
@@ -170,6 +202,13 @@ impl Interpreter {
     /// Evaluates an expression in an environment.
     pub fn eval(&mut self, expr: Rc<Expr>, env: Rc<Env>) -> Result<Value, RuntimeError> {
         self.run(Control::Eval(expr, env))
+    }
+
+    /// Evaluates every list element inside a value, so it can be shown.
+    pub fn normalize(&mut self, value: Value) -> Result<Value, RuntimeError> {
+        let base = self.stack.len();
+        self.stack.push(Frame::Force { deep: true });
+        self.run_from(base, Control::Return(value))
     }
 
     /// Performs an action, returning its result. Any other value is
@@ -269,19 +308,9 @@ impl Interpreter {
                 Control::Return(Value::Builtin(*builtin))
             }
             Expr::Lambda(lambda) => Control::Return(make_closure(lambda, &env)),
-            Expr::List { items, .. } => match items.first() {
-                None => Control::Return(Value::List(Vector::new())),
-                Some(first) => {
-                    let first = first.clone();
-                    self.stack.push(Frame::List {
-                        expr: expr.clone(),
-                        env: env.clone(),
-                        next: 1,
-                        values: Vector::new(),
-                    });
-                    Control::Eval(first, env)
-                }
-            },
+            Expr::List { items, .. } => Control::Return(Value::List(
+                items.iter().map(|item| self.suspend(item, &env)).collect(),
+            )),
             Expr::Let { slot, value, body } => {
                 // Always delayed: the value may refer to its own slot.
                 env.set(*slot, Thunk::delayed(value.clone(), env.clone()));
@@ -314,28 +343,12 @@ impl Interpreter {
                 call.values.push(value);
                 self.continue_builtin(call)
             }
-            Frame::List {
-                expr,
-                env,
-                next,
-                mut values,
-            } => {
-                values.push_back(value);
-                let Expr::List { items, .. } = expr.as_ref() else {
-                    unreachable!("list frames hold list expressions")
-                };
-                match items.get(next).cloned() {
-                    None => Ok(Control::Return(Value::List(values))),
-                    Some(item) => {
-                        self.stack.push(Frame::List {
-                            expr: expr.clone(),
-                            env: env.clone(),
-                            next: next + 1,
-                            values,
-                        });
-                        Ok(Control::Eval(item, env))
-                    }
+            Frame::Force { deep } => self.walk(Walk::new(value, deep)),
+            Frame::Walk(mut walk) => {
+                if walk.deep {
+                    walk.enter(value);
                 }
+                self.walk(*walk)
             }
             Frame::Iterate(iteration) => self.iterate(*iteration, value),
             Frame::Perform => match value.into_action() {
@@ -351,8 +364,31 @@ impl Interpreter {
                 actions,
                 mut results,
             } => {
-                results.push_back(value);
+                results.push_back(Thunk::done(value));
                 self.next_in_sequence(actions, results)
+            }
+        }
+    }
+
+    /// Evaluates the elements left in a walk, one at a time, then returns
+    /// its root.
+    fn walk(&mut self, mut walk: Walk) -> Result<Control, RuntimeError> {
+        loop {
+            let Some((items, index)) = walk.pending.last_mut() else {
+                return Ok(Control::Return(walk.root));
+            };
+            let Some(item) = items.get(*index).cloned() else {
+                walk.pending.pop();
+                continue;
+            };
+            *index += 1;
+            match item.value() {
+                Some(value) if walk.deep => walk.enter(value),
+                Some(_) => {}
+                None => {
+                    self.stack.push(Frame::Walk(Box::new(walk)));
+                    return self.enter(item);
+                }
             }
         }
     }
@@ -497,20 +533,30 @@ impl Interpreter {
         })
     }
 
-    /// Forces the builtin's strict arguments one at a time, then runs it.
+    /// Forces the builtin's strict arguments one at a time, as far as it
+    /// needs them, then runs it.
     fn continue_builtin(&mut self, mut call: BuiltinCall) -> Result<Control, RuntimeError> {
         while call.values.len() < call.args.len() {
             let index = call.values.len();
-            if !prims::is_strict(call.builtin, index) {
-                call.values.push(Value::Unit);
-                continue;
-            }
             let thunk = call.args[index].clone();
-            if let Some(value) = thunk.value() {
-                call.values.push(value);
-                continue;
-            }
+            let deep = match prims::strictness(call.builtin, index) {
+                Strictness::Lazy => {
+                    call.values.push(Value::Unit);
+                    continue;
+                }
+                Strictness::Shallow => {
+                    if let Some(value) = thunk.value() {
+                        call.values.push(value);
+                        continue;
+                    }
+                    self.stack.push(Frame::Strict(call));
+                    return self.enter(thunk);
+                }
+                Strictness::Elements => false,
+                Strictness::Deep => true,
+            };
             self.stack.push(Frame::Strict(call));
+            self.stack.push(Frame::Force { deep });
             return self.enter(thunk);
         }
         self.run_builtin(call)
@@ -552,55 +598,81 @@ impl Interpreter {
                 })?;
                 Ok(Control::Return(Value::Unit))
             }
+            B::Head | B::Get => self.enter(prims::element(builtin, &values, span)?),
             B::Sequence => self.next_in_sequence(prims::list_of(&values[0])?, Vector::new()),
-            B::Map | B::Filter | B::ZipWith => {
-                let kind = match builtin {
-                    B::Map => IterationKind::Map,
-                    B::Filter => IterationKind::Filter,
-                    _ => IterationKind::ZipWith,
-                };
-                let others = match kind {
-                    IterationKind::ZipWith => prims::list_of(&values[2])?,
-                    _ => Vector::new(),
-                };
+            B::Map => {
+                let span = span.expect("higher-order builtins are applied at a call site");
+                // Each element becomes `(f x)`, evaluated only when used.
+                let call = call_of(Expr::Local(0), 1, 1, span);
+                let results = prims::list_of(&values[1])?
+                    .iter()
+                    .map(|x| {
+                        Thunk::delayed(call.clone(), Env::with(2, [args[0].clone(), x.clone()]))
+                    })
+                    .collect();
+                Ok(Control::Return(Value::List(results)))
+            }
+            B::ZipWith => {
+                let span = span.expect("higher-order builtins are applied at a call site");
+                let call = call_of(Expr::Local(0), 1, 2, span);
+                let others = prims::list_of(&values[2])?;
+                let results = prims::list_of(&values[1])?
+                    .iter()
+                    .zip(others.iter())
+                    .map(|(x, y)| {
+                        let env = Env::with(3, [args[0].clone(), x.clone(), y.clone()]);
+                        Thunk::delayed(call.clone(), env)
+                    })
+                    .collect();
+                Ok(Control::Return(Value::List(results)))
+            }
+            B::Filter => {
                 let iteration = Iteration {
-                    kind,
+                    kind: IterationKind::Filter,
                     func: values[0].clone(),
                     items: prims::list_of(&values[1])?,
-                    others,
                     index: 0,
                     results: Vector::new(),
                     span: span.expect("higher-order builtins are applied at a call site"),
                 };
                 self.next_call(iteration, None)
             }
-            B::Foldl | B::Foldr => {
+            B::Foldl => {
                 let items = prims::list_of(&values[2])?;
                 let initial = args.swap_remove(1);
                 if items.is_empty() {
                     return self.tail(initial);
                 }
-                let kind = if builtin == B::Foldl {
-                    IterationKind::Foldl
-                } else {
-                    IterationKind::Foldr
-                };
                 let iteration = Iteration {
-                    kind,
+                    kind: IterationKind::Foldl,
                     func: values[0].clone(),
-                    index: if kind == IterationKind::Foldl {
-                        0
-                    } else {
-                        items.len() - 1
-                    },
+                    index: 0,
                     items,
-                    others: Vector::new(),
                     results: Vector::new(),
                     span: span.expect("higher-order builtins are applied at a call site"),
                 };
                 self.next_call(iteration, Some(initial))
             }
-            _ => prims::pure(builtin, &values, span).map(Control::Return),
+            B::Foldr => {
+                // `(foldr f z (cons x rest))` is `(f x (foldr f z rest))`, with
+                // the inner fold suspended until `f` uses it.
+                let mut items = prims::list_of(&values[2])?;
+                let Some(first) = items.pop_front() else {
+                    return self.tail(args.swap_remove(1));
+                };
+                let span = span.expect("higher-order builtins are applied at a call site");
+                let env = Env::with(
+                    3,
+                    [
+                        args[0].clone(),
+                        args[1].clone(),
+                        Thunk::done(Value::List(items)),
+                    ],
+                );
+                let rest = Thunk::delayed(call_of(Expr::Builtin(B::Foldr), 0, 3, span), env);
+                self.apply(values[0].clone(), vec![first, rest], span)
+            }
+            _ => prims::pure(builtin, &values, &args, span).map(Control::Return),
         }
     }
 
@@ -682,15 +754,15 @@ impl Interpreter {
     /// Performs the first of `actions`, or returns the results when none are left.
     fn next_in_sequence(
         &mut self,
-        mut actions: Vector<Value>,
-        results: Vector<Value>,
+        mut actions: Vector<Thunk>,
+        results: Vector<Thunk>,
     ) -> Result<Control, RuntimeError> {
         match actions.pop_front() {
             None => Ok(Control::Return(Value::List(results))),
             Some(action) => {
                 self.stack.push(Frame::Sequence { actions, results });
                 self.stack.push(Frame::Perform);
-                Ok(Control::Return(action))
+                self.enter(action)
             }
         }
     }
@@ -704,30 +776,16 @@ impl Interpreter {
         iteration: Iteration,
         acc: Option<Thunk>,
     ) -> Result<Control, RuntimeError> {
-        let item = |i: usize| Thunk::done(iteration.items[i].clone());
         let args = match iteration.kind {
-            IterationKind::Map | IterationKind::Filter => {
+            IterationKind::Filter => {
                 if iteration.index >= iteration.items.len() {
                     return Ok(Control::Return(Value::List(iteration.results)));
                 }
-                vec![item(iteration.index)]
-            }
-            IterationKind::ZipWith => {
-                if iteration.index >= iteration.items.len().min(iteration.others.len()) {
-                    return Ok(Control::Return(Value::List(iteration.results)));
-                }
-                vec![
-                    item(iteration.index),
-                    Thunk::done(iteration.others[iteration.index].clone()),
-                ]
+                vec![iteration.items[iteration.index].clone()]
             }
             IterationKind::Foldl => vec![
                 acc.expect("folds carry an accumulator"),
-                item(iteration.index),
-            ],
-            IterationKind::Foldr => vec![
-                item(iteration.index),
-                acc.expect("folds carry an accumulator"),
+                iteration.items[iteration.index].clone(),
             ],
         };
         let (func, span) = (iteration.func.clone(), iteration.span);
@@ -738,10 +796,6 @@ impl Interpreter {
     /// Handles the result of one call made by a higher-order builtin.
     fn iterate(&mut self, mut iteration: Iteration, value: Value) -> Result<Control, RuntimeError> {
         let acc = match iteration.kind {
-            IterationKind::Map | IterationKind::ZipWith => {
-                iteration.results.push_back(value);
-                None
-            }
             IterationKind::Filter => {
                 if prims::bool_of(&value)? {
                     iteration
@@ -755,13 +809,6 @@ impl Interpreter {
                     return Ok(Control::Return(value));
                 }
                 Some(Thunk::done(value))
-            }
-            IterationKind::Foldr => {
-                if iteration.index == 0 {
-                    return Ok(Control::Return(value));
-                }
-                iteration.index -= 1;
-                return self.next_call(iteration, Some(Thunk::done(value)));
             }
         };
         iteration.index += 1;
@@ -792,6 +839,18 @@ impl Backend for Interpreter {
 
 fn partial(func: Value, args: Vec<Thunk>) -> Control {
     Control::Return(Value::Partial(Rc::new(Partial { func, args })))
+}
+
+/// `func` applied to `count` frame slots starting at `first`: the body of a
+/// call the machine suspends, run in a frame holding the arguments.
+fn call_of(func: Expr, first: u32, count: u32, span: Span) -> Rc<Expr> {
+    Rc::new(Expr::App {
+        func: Rc::new(func),
+        args: (first..first + count)
+            .map(|slot| Rc::new(Expr::Local(slot)))
+            .collect(),
+        span,
+    })
 }
 
 fn literal_value(literal: &Literal) -> Value {

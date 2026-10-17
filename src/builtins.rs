@@ -131,7 +131,7 @@ builtins! {
     Map => "map" : "(a -> b) -> List<a> -> List<b>", List, "Applies a function to every element.";
     Filter => "filter" : "(a -> Bool) -> List<a> -> List<a>", List, "Keeps the elements satisfying a predicate.";
     Foldl => "foldl" : "(b -> a -> b) -> b -> List<a> -> b", List, "Left fold: `(foldl f z [x, y])` is `(f (f z x) y)`.";
-    Foldr => "foldr" : "(a -> b -> b) -> b -> List<a> -> b", List, "Right fold: `(foldr f z [x, y])` is `(f x (f y z))`.";
+    Foldr => "foldr" : "(a -> b -> b) -> b -> List<a> -> b", List, "Right fold: `(foldr f z [x, y])` is `(f x (f y z))`, where each inner fold is evaluated only if `f` uses it.";
     Reverse => "reverse" : "List<a> -> List<a>", List, "Reverses a list.";
     Sort => "sort" : "List<a> -> List<a>", List, "Stable ascending sort using the same ordering as `lt`.";
     Range => "range" : "Number -> Number -> List<Number>", List, "`(range from to)` counts from `from` up to, not including, `to`.";

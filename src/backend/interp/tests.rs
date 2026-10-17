@@ -229,6 +229,55 @@ fn arguments_are_lazy() {
 }
 
 #[test]
+fn list_elements_are_lazy() {
+    // Each unused element would fail if evaluated.
+    assert_eq!(eval(r#"(head [1, (error "boom")])"#), "1");
+    assert_eq!(eval(r#"(length [(error "a"), (error "b")])"#), "2");
+    assert_eq!(eval(r#"(get 1 (cons (error "a") [2]))"#), "2");
+    assert_eq!(eval(r#"(head (push (error "a") [1]))"#), "1");
+    assert_eq!(eval(r#"(head (reverse [(error "a"), 2]))"#), "2");
+    assert_eq!(eval(r#"(length (map (error "a") [1, 2]))"#), "2");
+    assert_eq!(eval(r#"(get 1 (map (div 6) [(error "a"), 3]))"#), "2");
+    assert_eq!(eval(r#"(head (zipWith add [1, (error "a")] [2, 3]))"#), "3");
+    assert_eq!(eval(r#"(length (filter (\x. true) [(error "a")]))"#), "1");
+    assert_eq!(
+        eval(r#"(head (transpose [[1, (error "a")], [2]]))"#),
+        "[1, 2]"
+    );
+}
+
+#[test]
+fn foldr_stops_when_its_function_ignores_the_rest() {
+    let program = r#"(foldr \x. \acc. (or (eq x 1) acc) false [1, (error "never needed")])"#;
+    assert_eq!(eval(program), "true");
+    assert_eq!(output(r#"(println (head [1, (error "boom")]))"#), "1\n");
+    // A function that uses the rest still sees every element, in order.
+    assert_eq!(
+        eval("(foldr (\\x. \\acc. (concat x acc)) \"\" [\"a\", \"b\"])"),
+        "\"ab\""
+    );
+    assert_eq!(eval("(foldr add 0 (range 0 100000))"), "4999950000");
+}
+
+#[test]
+fn inspecting_a_list_evaluates_its_elements() {
+    assert_eq!(runtime_error(r#"[1, (error "shown")]"#).message, "shown");
+    assert_eq!(
+        runtime_error(r#"(sum [1, (error "added")])"#).message,
+        "added"
+    );
+    assert_eq!(
+        runtime_error(r#"(eq [[1]] [[(error "compared")]])"#).message,
+        "compared"
+    );
+    assert_eq!(
+        output("(println (map (map (add 1)) [[1, 2], [3]]))"),
+        "[[2, 3], [4]]\n"
+    );
+    assert_eq!(eval("(sort (map neg [1, 3, 2]))"), "[-3, -2, -1]");
+}
+
+#[test]
 fn effects_run_only_when_performed() {
     // Neither the definition nor the unused binding is ever performed.
     assert_eq!(

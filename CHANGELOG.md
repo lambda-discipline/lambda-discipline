@@ -34,6 +34,9 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- List elements are evaluated only when used, like arguments: `head`, `get`,
+  `map`, `zipWith` and `foldr` no longer evaluate elements nobody needs, so
+  `(foldr f z xs)` stops as soon as `f` ignores its second argument (#7).
 - Deeply nested programs no longer crash with a stack overflow: expressions
   and types nested more than 10,000 levels are reported as an error, and
   showing, comparing and freeing deeply nested values no longer uses the

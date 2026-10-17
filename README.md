@@ -123,8 +123,12 @@ recursion stops with a "recursion is too deep" error instead of crashing).
 A value that depends on itself (`x = (add x 1)`) is reported, not looped on.
 
 Lists are immutable persistent vectors: `push`, `remove`, `get` and friends
-return new lists in `O(log n)` and never change their argument. Their elements
-are evaluated when the list is.
+return new lists in `O(log n)` and never change their argument. A list's
+length is fixed when it is built, but its elements are lazy like arguments:
+`(head [1, (error "boom")])` is `1`, `map` and `zipWith` compute an element
+only when it is used, and `foldr` stops as soon as its function ignores the
+rest of the list. Comparing, showing, printing or summing a list evaluates
+the elements it inspects. Lists are always finite.
 
 ### Input and output
 
