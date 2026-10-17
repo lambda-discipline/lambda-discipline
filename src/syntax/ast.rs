@@ -27,6 +27,8 @@ pub enum Item {
     Use { path: String, span: Span },
     /// `name : Type = expr` (the annotation is optional)
     Def(Def),
+    /// `type Name<a> = Con field ... | ...`
+    Type(TypeDecl),
     /// A top-level expression. In a program it is an action, and running the
     /// program performs these in order.
     Expr(Expr),
@@ -37,6 +39,23 @@ pub struct Def {
     pub name: Ident,
     pub ann: Option<TypeExpr>,
     pub value: Expr,
+    pub span: Span,
+}
+
+/// A data type declaration: `type Option<a> = None | Some a`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TypeDecl {
+    pub name: Ident,
+    pub params: Vec<Ident>,
+    pub constructors: Vec<CtorDecl>,
+    pub span: Span,
+}
+
+/// One constructor of a [`TypeDecl`] with the types of its fields.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CtorDecl {
+    pub name: Ident,
+    pub fields: Vec<TypeExpr>,
     pub span: Span,
 }
 
@@ -81,8 +100,43 @@ pub enum ExprKind {
         action: Box<Expr>,
         body: Box<Expr>,
     },
+    /// `match scrutinee | pattern -> body | ...`
+    Match {
+        scrutinee: Box<Expr>,
+        arms: Vec<Arm>,
+    },
     /// Placeholder produced after a syntax error so parsing can continue.
     Error,
+}
+
+/// `| pattern -> body`
+#[derive(Debug, Clone, PartialEq)]
+pub struct Arm {
+    pub pattern: Pattern,
+    pub body: Expr,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Pattern {
+    pub kind: PatternKind,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum PatternKind {
+    /// `_`
+    Wild,
+    /// A lowercase name, bound to the matched value.
+    Var(Ident),
+    /// `Some x`: a constructor and patterns for its fields.
+    Con {
+        name: Ident,
+        args: Vec<Pattern>,
+    },
+    Number(f64),
+    String(Rc<str>),
+    /// `()`
+    Unit,
 }
 
 /// A type as written in an annotation.
@@ -175,8 +229,75 @@ impl fmt::Display for Expr {
                 Some(t) => write!(f, "(let {}: {} <- {} in {})", name.name, t, action, body),
                 None => write!(f, "(let {} <- {} in {})", name.name, action, body),
             },
+            ExprKind::Match { scrutinee, arms } => {
+                write!(f, "(match {scrutinee}")?;
+                for arm in arms {
+                    write!(f, " | ")?;
+                    arm.pattern.write(f, false)?;
+                    write!(f, " -> {}", arm.body)?;
+                }
+                f.write_str(")")
+            }
             ExprKind::Error => f.write_str("<error>"),
         }
+    }
+}
+
+impl Pattern {
+    /// Writes the pattern; `nested` parenthesizes a constructor with fields.
+    fn write(&self, f: &mut fmt::Formatter<'_>, nested: bool) -> fmt::Result {
+        match &self.kind {
+            PatternKind::Wild => f.write_str("_"),
+            PatternKind::Var(name) => f.write_str(&name.name),
+            PatternKind::Con { name, args } if args.is_empty() => f.write_str(&name.name),
+            PatternKind::Con { name, args } => {
+                if nested {
+                    f.write_str("(")?;
+                }
+                f.write_str(&name.name)?;
+                for arg in args {
+                    f.write_str(" ")?;
+                    arg.write(f, true)?;
+                }
+                if nested {
+                    f.write_str(")")?;
+                }
+                Ok(())
+            }
+            PatternKind::Number(n) => f.write_str(&format_number(*n)),
+            PatternKind::String(s) => write!(f, "{s:?}"),
+            PatternKind::Unit => f.write_str("()"),
+        }
+    }
+}
+
+impl fmt::Display for Pattern {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.write(f, false)
+    }
+}
+
+impl fmt::Display for TypeDecl {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "type {}", self.name.name)?;
+        if !self.params.is_empty() {
+            let params: Vec<&str> = self.params.iter().map(|p| p.name.as_ref()).collect();
+            write!(f, "<{}>", params.join(", "))?;
+        }
+        f.write_str(" =")?;
+        for (i, ctor) in self.constructors.iter().enumerate() {
+            if i > 0 {
+                f.write_str(" |")?;
+            }
+            write!(f, " {}", ctor.name.name)?;
+            for field in &ctor.fields {
+                match field.kind {
+                    TypeExprKind::Fun(..) => write!(f, " ({field})")?,
+                    _ => write!(f, " {field}")?,
+                }
+            }
+        }
+        Ok(())
     }
 }
 
@@ -189,6 +310,7 @@ impl fmt::Display for Module {
                     Some(t) => writeln!(f, "{} : {} = {}", def.name.name, t, def.value)?,
                     None => writeln!(f, "{} = {}", def.name.name, def.value)?,
                 },
+                Item::Type(decl) => writeln!(f, "{decl}")?,
                 Item::Expr(expr) => writeln!(f, "{expr}")?,
             }
         }

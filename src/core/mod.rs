@@ -11,6 +11,11 @@
 //! * Names are gone; globals and builtins are referenced by id.
 //! * `__FILE__`, `__DIR__` and `__LINE__` become the literals they stand for,
 //!   since they are fixed by where they are written.
+//! * **Saturated constructors.** A constructor applied to all its fields is a
+//!   [`Expr::Con`] node; anywhere else it becomes a lambda that builds one.
+//! * **Match compilation.** Nested patterns become a tree of flat
+//!   [`Expr::Case`] nodes, each of which inspects one value and binds the
+//!   fields of the constructor it finds to frame slots.
 //!
 //! The interpreter in [`crate::backend::interp`] executes this IR lazily. A
 //! code generator (C, uxn, LLVM) would start from the same IR.
@@ -21,7 +26,7 @@ use std::fmt;
 use std::rc::Rc;
 
 use crate::builtins::Builtin;
-use crate::hir::GlobalId;
+use crate::hir::{ConId, GlobalId};
 use crate::source::Span;
 use crate::syntax::number::format_number;
 
@@ -57,6 +62,61 @@ pub enum Expr {
         value: Rc<Expr>,
         body: Rc<Expr>,
     },
+    /// A constructor applied to exactly as many arguments as it has fields.
+    Con {
+        con: Rc<Constructor>,
+        args: Vec<Rc<Expr>>,
+        span: Span,
+    },
+    Case(Rc<Case>),
+}
+
+/// A data constructor, as a backend needs it.
+#[derive(Debug, PartialEq, Eq)]
+pub struct Constructor {
+    /// Unique in a session. The constructors of a type have consecutive ids
+    /// in declaration order.
+    pub id: ConId,
+    pub name: Rc<str>,
+    pub arity: u32,
+}
+
+/// `True` or `False`, which builtins produce.
+pub fn bool_constructor(value: bool) -> Rc<Constructor> {
+    thread_local! {
+        static BOOLS: [Rc<Constructor>; 2] = [
+            Rc::new(Constructor { id: ConId::FALSE, name: Rc::from("False"), arity: 0 }),
+            Rc::new(Constructor { id: ConId::TRUE, name: Rc::from("True"), arity: 0 }),
+        ];
+    }
+    BOOLS.with(|bools| bools[usize::from(value)].clone())
+}
+
+/// Evaluates `scrutinee` to its outermost constructor or literal and
+/// continues with the first alternative that matches it, or `default`.
+/// Type checking guarantees that one of them applies.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Case {
+    pub scrutinee: Rc<Expr>,
+    pub alts: Vec<Alt>,
+    pub default: Option<Rc<Expr>>,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Alt {
+    pub pat: AltPat,
+    pub body: Rc<Expr>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AltPat {
+    /// A constructor; its fields are stored in these slots, unevaluated.
+    Con {
+        con: Rc<Constructor>,
+        fields: Vec<u32>,
+    },
+    Lit(Literal),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -132,6 +192,34 @@ impl fmt::Display for Expr {
                 f.write_str("]")
             }
             Expr::Let { slot, value, body } => write!(f, "(let ${slot} = {value} in {body})"),
+            Expr::Con { con, args, .. } if args.is_empty() => f.write_str(&con.name),
+            Expr::Con { con, args, .. } => {
+                write!(f, "({}", con.name)?;
+                for arg in args {
+                    write!(f, " {arg}")?;
+                }
+                f.write_str(")")
+            }
+            Expr::Case(case) => {
+                write!(f, "(case {}", case.scrutinee)?;
+                for alt in &case.alts {
+                    f.write_str(" | ")?;
+                    match &alt.pat {
+                        AltPat::Con { con, fields } => {
+                            f.write_str(&con.name)?;
+                            for field in fields {
+                                write!(f, " ${field}")?;
+                            }
+                        }
+                        AltPat::Lit(literal) => write!(f, "{}", Expr::Lit(literal.clone()))?,
+                    }
+                    write!(f, " -> {}", alt.body)?;
+                }
+                if let Some(default) = &case.default {
+                    write!(f, " | _ -> {default}")?;
+                }
+                f.write_str(")")
+            }
         }
     }
 }

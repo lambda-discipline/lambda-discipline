@@ -1,0 +1,6 @@
+type Shape = Circle Number | Rect Number Number
+
+area : Shape -> Number = \s. match s
+    | Circle r -> (mul r r)
+
+(println (area (Circle 1)))

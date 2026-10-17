@@ -4,9 +4,38 @@ use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::rc::Rc;
 
+use crate::hir::TyConId;
+
 /// A unification variable, owned by an inference context.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct TyVar(pub u32);
+
+/// A type constructor: a built-in type such as `Number` or `List`, or a
+/// declared data type. Two constructors are the same when their ids are,
+/// whatever their names.
+#[derive(Debug, Clone)]
+pub struct TyCon {
+    pub id: TyConId,
+    pub name: Rc<str>,
+}
+
+impl PartialEq for TyCon {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+
+impl Eq for TyCon {}
+
+impl TyCon {
+    /// One of the built-in type constructors (see [`super::env::BUILTIN_TYPES`]).
+    pub fn builtin(id: TyConId) -> TyCon {
+        TyCon {
+            id,
+            name: Rc::from(super::env::BUILTIN_TYPES[id.index()].name),
+        }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Type {
@@ -18,62 +47,45 @@ pub enum Type {
     /// `id : a -> a`; it only unifies with itself.
     Rigid(Rc<str>),
     /// A type constructor applied to arguments: `Number`, `List<a>`.
-    Con(Rc<str>, Vec<Type>),
+    Con(TyCon, Vec<Type>),
     /// A function type.
     Fun(Box<Type>, Box<Type>),
 }
 
-/// Built-in type constructors and their arities.
-pub const CONSTRUCTORS: &[(&str, usize)] = &[
-    ("Number", 0),
-    ("String", 0),
-    ("Bool", 0),
-    ("Unit", 0),
-    ("List", 1),
-    ("IO", 1),
-];
-
-pub fn constructor_arity(name: &str) -> Option<usize> {
-    CONSTRUCTORS
-        .iter()
-        .find(|(n, _)| *n == name)
-        .map(|&(_, arity)| arity)
-}
-
 impl Type {
-    pub fn con(name: &str) -> Type {
-        Type::Con(Rc::from(name), Vec::new())
+    fn builtin(id: TyConId, args: Vec<Type>) -> Type {
+        Type::Con(TyCon::builtin(id), args)
     }
 
     pub fn number() -> Type {
-        Type::con("Number")
+        Type::builtin(TyConId::NUMBER, Vec::new())
     }
 
     pub fn string() -> Type {
-        Type::con("String")
+        Type::builtin(TyConId::STRING, Vec::new())
     }
 
     pub fn bool() -> Type {
-        Type::con("Bool")
+        Type::builtin(TyConId::BOOL, Vec::new())
     }
 
     pub fn unit() -> Type {
-        Type::con("Unit")
+        Type::builtin(TyConId::UNIT, Vec::new())
     }
 
     pub fn list(element: Type) -> Type {
-        Type::Con(Rc::from("List"), vec![element])
+        Type::builtin(TyConId::LIST, vec![element])
     }
 
     /// `IO<result>`: an action producing a `result` when it runs.
     pub fn io(result: Type) -> Type {
-        Type::Con(Rc::from("IO"), vec![result])
+        Type::builtin(TyConId::IO, vec![result])
     }
 
     /// The result type, if this is `IO<result>`.
     pub fn io_result(&self) -> Option<&Type> {
         match self {
-            Type::Con(name, args) if name.as_ref() == "IO" => args.first(),
+            Type::Con(con, args) if con.id == TyConId::IO => args.first(),
             _ => None,
         }
     }
@@ -166,8 +178,8 @@ impl Namer {
                 out.push_str(&self.gens[g]);
             }
             Type::Rigid(name) => out.push_str(name),
-            Type::Con(name, args) => {
-                out.push_str(name);
+            Type::Con(con, args) => {
+                out.push_str(&con.name);
                 if !args.is_empty() {
                     out.push('<');
                     for (i, arg) in args.iter().enumerate() {
@@ -277,13 +289,5 @@ mod tests {
         let v = Type::Var(TyVar(1));
         let shown = display_together(&[&v, &Type::list(v.clone())]);
         assert_eq!(shown, ["a", "List<a>"]);
-    }
-
-    #[test]
-    fn constructor_arities() {
-        assert_eq!(constructor_arity("List"), Some(1));
-        assert_eq!(constructor_arity("IO"), Some(1));
-        assert_eq!(constructor_arity("Number"), Some(0));
-        assert_eq!(constructor_arity("Map"), None);
     }
 }

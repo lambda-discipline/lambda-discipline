@@ -27,9 +27,17 @@ All notable changes to this project are documented here. The format follows
   next to the program from any working directory. `readFile` itself stays
   relative to the working directory, like a path typed on the command line
   (#28).
+- Algebraic data types: `type Option<a> = None | Some a` declares a type
+  whose constructors are curried functions, and `match` takes values apart
+  with nested patterns. A `match` that misses a case is an error naming the
+  missing case. Fields are lazy, data is compared and shown structurally,
+  and `:info` shows a type's declaration (#5).
 
 ### Changed
 
+- `Bool` is now the data type `False | True`: write `True` and `False`
+  instead of `true` and `false`. Names that start with an uppercase letter
+  are reserved for types and constructors (#5).
 - I/O is typed: `print`, `println` and `readFile` return `IO` actions, which
   run only when performed. `lbd run` performs the top-level expressions in
   source order, and a top-level expression that is not an action is a type

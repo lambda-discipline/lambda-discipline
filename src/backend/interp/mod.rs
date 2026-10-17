@@ -22,6 +22,10 @@
 //!   other code.
 //! * Builtins that inspect elements (`eq`, `show`, `print`, `sum`, ...)
 //!   force them first through walk frames, again without native recursion.
+//! * Constructor fields are lazy like list elements. A `case` evaluates its
+//!   scrutinee under a case frame, which picks the alternative and binds the
+//!   fields, still unevaluated, to frame slots; the alternative runs in tail
+//!   position.
 //! * Evaluation has no effects. Applying `print`, `readFile`, `bind` and the
 //!   other action builtins builds a [`Value::Io`] that describes an action;
 //!   only [`Interpreter::perform`] runs one, and [`Backend::run`] performs a
@@ -37,7 +41,7 @@ use imbl::Vector;
 
 use crate::backend::{Backend, RuntimeError};
 use crate::builtins::Builtin;
-use crate::core::{Expr, Lambda, Literal, Module};
+use crate::core::{AltPat, Case, Expr, Lambda, Literal, Module};
 use crate::hir::GlobalId;
 use crate::source::Span;
 
@@ -77,6 +81,8 @@ enum Frame {
     Walk(Box<Walk>),
     /// A higher-order builtin waiting for one of its calls to return.
     Iterate(Box<Iteration>),
+    /// Choose the alternative of `case` that matches the returned value.
+    Case { case: Rc<Case>, env: Rc<Env> },
     /// Perform the returned action; its result goes to the frame below.
     Perform,
     /// Pass the result of the action being performed to `func`, then
@@ -98,7 +104,8 @@ struct Walk {
     root: Value,
     /// Whether to descend into the lists found among the elements.
     deep: bool,
-    /// Lists being walked, innermost last, with the index of the next element.
+    /// Lists and data being walked, innermost last, with the index of the
+    /// next element or field.
     pending: Vec<(Vector<Thunk>, usize)>,
 }
 
@@ -113,9 +120,10 @@ impl Walk {
         walk
     }
 
-    /// Queues the elements of `value`, if it is a non-empty list.
+    /// Queues the elements of `value` if it is a list, or its fields if it
+    /// is data.
     fn enter(&mut self, value: Value) {
-        if let Value::List(items) = &value {
+        if let Value::List(items) | Value::Data(_, items) = &value {
             if !items.is_empty() {
                 self.pending.push((items.clone(), 0));
             }
@@ -204,7 +212,7 @@ impl Interpreter {
         self.run(Control::Eval(expr, env))
     }
 
-    /// Evaluates every list element inside a value, so it can be shown.
+    /// Evaluates every list element and field inside a value, so it can be shown.
     pub fn normalize(&mut self, value: Value) -> Result<Value, RuntimeError> {
         let base = self.stack.len();
         self.stack.push(Frame::Force { deep: true });
@@ -316,6 +324,21 @@ impl Interpreter {
                 env.set(*slot, Thunk::delayed(value.clone(), env.clone()));
                 Control::Eval(body.clone(), env)
             }
+            Expr::Con { con, args, .. } => Control::Return(Value::Data(
+                con.clone(),
+                args.iter().map(|arg| self.suspend(arg, &env)).collect(),
+            )),
+            Expr::Case(case) => {
+                if let Some(value) = self.known_value(&case.scrutinee, &env) {
+                    return self.select(case, env, value);
+                }
+                let scrutinee = case.scrutinee.clone();
+                self.stack.push(Frame::Case {
+                    case: case.clone(),
+                    env: env.clone(),
+                });
+                Control::Eval(scrutinee, env)
+            }
             Expr::App { func, args, span } => {
                 let thunks: Vec<Thunk> = args.iter().map(|arg| self.suspend(arg, &env)).collect();
                 match self.known_value(func, &env) {
@@ -351,6 +374,7 @@ impl Interpreter {
                 self.walk(*walk)
             }
             Frame::Iterate(iteration) => self.iterate(*iteration, value),
+            Frame::Case { case, env } => self.select(&case, env, value),
             Frame::Perform => match value.into_action() {
                 Ok(action) => self.start_action(action),
                 Err(other) => Err(RuntimeError::new(format!(
@@ -367,6 +391,39 @@ impl Interpreter {
                 results.push_back(Thunk::done(value));
                 self.next_in_sequence(actions, results)
             }
+        }
+    }
+
+    /// Continues with the alternative of `case` that matches `value`.
+    fn select(
+        &mut self,
+        case: &Rc<Case>,
+        env: Rc<Env>,
+        value: Value,
+    ) -> Result<Control, RuntimeError> {
+        for alt in &case.alts {
+            let matches = match (&alt.pat, &value) {
+                (AltPat::Con { con, fields }, Value::Data(found, values)) if con.id == found.id => {
+                    for (&slot, field) in fields.iter().zip(values.iter()) {
+                        env.set(slot, field.clone());
+                    }
+                    true
+                }
+                (AltPat::Lit(Literal::Number(n)), Value::Number(m)) => n == m,
+                (AltPat::Lit(Literal::String(s)), Value::String(t)) => s == t,
+                _ => false,
+            };
+            if matches {
+                return Ok(Control::Eval(alt.body.clone(), env));
+            }
+        }
+        match &case.default {
+            Some(default) => Ok(Control::Eval(default.clone(), env)),
+            None => Err(RuntimeError::new(format!(
+                "internal error: no alternative matches `{}`",
+                value.show()
+            ))
+            .at(case.span)),
         }
     }
 
@@ -578,10 +635,10 @@ impl Interpreter {
             }
             B::And => match prims::bool_of(&values[0])? {
                 true => self.tail(args.swap_remove(1)),
-                false => Ok(Control::Return(Value::Bool(false))),
+                false => Ok(Control::Return(Value::bool(false))),
             },
             B::Or => match prims::bool_of(&values[0])? {
-                true => Ok(Control::Return(Value::Bool(true))),
+                true => Ok(Control::Return(Value::bool(true))),
                 false => self.tail(args.swap_remove(1)),
             },
             B::Print | B::Println => {
@@ -871,7 +928,8 @@ fn make_closure(lambda: &Rc<Lambda>, env: &Rc<Env>) -> Value {
 /// Source location of an expression, when it has one.
 fn expr_span(expr: &Expr) -> Option<Span> {
     match expr {
-        Expr::App { span, .. } | Expr::List { span, .. } => Some(*span),
+        Expr::App { span, .. } | Expr::List { span, .. } | Expr::Con { span, .. } => Some(*span),
+        Expr::Case(case) => Some(case.span),
         Expr::Lambda(lambda) => Some(lambda.span),
         Expr::Let { body, .. } => expr_span(body),
         _ => None,

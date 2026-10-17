@@ -13,7 +13,8 @@ use std::rc::Rc;
 use imbl::Vector;
 
 use crate::builtins::Builtin;
-use crate::core::{Expr, Lambda};
+use crate::core::{Constructor, Expr, Lambda, bool_constructor};
+use crate::hir::ConId;
 use crate::source::Span;
 use crate::syntax::number::format_number;
 
@@ -21,12 +22,15 @@ use crate::syntax::number::format_number;
 pub enum Value {
     Number(f64),
     String(Rc<str>),
-    Bool(bool),
     Unit,
     /// Persistent vector: cheap to clone, `O(log n)` push, get and update.
     /// The spine is strict but the elements are thunks, evaluated only when
     /// something uses them.
     List(Vector<Thunk>),
+    /// A constructor applied to its fields, which are evaluated only when
+    /// something uses them, like list elements. `Bool` values are `True`
+    /// and `False`.
+    Data(Rc<Constructor>, Vector<Thunk>),
     Closure(Rc<Closure>),
     /// A function applied to fewer arguments than it needs.
     Partial(Rc<Partial>),
@@ -55,6 +59,19 @@ pub struct Action {
 }
 
 impl Value {
+    pub fn bool(value: bool) -> Value {
+        Value::Data(bool_constructor(value), Vector::new())
+    }
+
+    /// The boolean, if this is `True` or `False`.
+    pub fn as_bool(&self) -> Option<bool> {
+        match self {
+            Value::Data(con, _) if con.id == ConId::TRUE => Some(true),
+            Value::Data(con, _) if con.id == ConId::FALSE => Some(false),
+            _ => None,
+        }
+    }
+
     pub fn is_function(&self) -> bool {
         matches!(
             self,
@@ -75,7 +92,8 @@ impl Value {
     }
 
     /// Structural equality; `Err` when functions are compared. The elements
-    /// of lists must already be evaluated (see `Interpreter::normalize`).
+    /// of lists and the fields of data must already be evaluated (see
+    /// `Interpreter::normalize`).
     pub fn equals(&self, other: &Value) -> Result<bool, String> {
         // Pairs of lists whose elements are still being compared, with the
         // index of the next pair.
@@ -85,11 +103,14 @@ impl Value {
             let equal = match (&a, &b) {
                 (Value::Number(a), Value::Number(b)) => a == b,
                 (Value::String(a), Value::String(b)) => a == b,
-                (Value::Bool(a), Value::Bool(b)) => a == b,
                 (Value::Unit, Value::Unit) => true,
                 (Value::List(a), Value::List(b)) => {
                     pending.push((a.clone(), b.clone(), 0));
                     a.len() == b.len()
+                }
+                (Value::Data(c, a), Value::Data(d, b)) => {
+                    pending.push((a.clone(), b.clone(), 0));
+                    c.id == d.id
                 }
                 (Value::Io(_), _) | (_, Value::Io(_)) => {
                     return Err("actions cannot be compared".to_owned());
@@ -118,7 +139,8 @@ impl Value {
     }
 
     /// Total order on comparable values; `Err` for functions and `NaN`. The
-    /// elements of lists must already be evaluated.
+    /// elements of lists and the fields of data must already be evaluated.
+    /// Data is ordered by constructor (in declaration order), then by fields.
     pub fn compare(&self, other: &Value) -> Result<Ordering, String> {
         // Pairs of lists whose elements are still being compared, with the
         // index of the next pair and the order of their lengths for when all
@@ -131,11 +153,14 @@ impl Value {
                     .partial_cmp(b)
                     .ok_or_else(|| "`NaN` cannot be ordered".to_owned())?,
                 (Value::String(a), Value::String(b)) => a.cmp(b),
-                (Value::Bool(a), Value::Bool(b)) => a.cmp(b),
                 (Value::Unit, Value::Unit) => Ordering::Equal,
                 (Value::List(a), Value::List(b)) => {
                     pending.push((a.clone(), b.clone(), 0, a.len().cmp(&b.len())));
                     Ordering::Equal
+                }
+                (Value::Data(c, a), Value::Data(d, b)) => {
+                    pending.push((a.clone(), b.clone(), 0, Ordering::Equal));
+                    c.id.cmp(&d.id)
                 }
                 (Value::Io(_), _) | (_, Value::Io(_)) => {
                     return Err("actions cannot be compared".to_owned());
@@ -180,34 +205,41 @@ impl Value {
     }
 
     fn write_shown(&self, out: &mut String) {
-        // Lists being rendered, innermost last, with the index of the next
-        // element to write.
-        let mut open: Vec<(Vector<Thunk>, usize)> = Vec::new();
+        // Lists and data being rendered, innermost last, with the index of
+        // the next element or field to write and whether it is a list.
+        let mut open: Vec<(Vector<Thunk>, usize, bool)> = Vec::new();
         let mut value = self.clone();
         loop {
             match &value {
                 Value::Number(n) => out.push_str(&format_number(*n)),
                 Value::String(s) => out.push_str(&format!("{:?}", s.as_ref())),
-                Value::Bool(b) => out.push_str(if *b { "true" } else { "false" }),
                 Value::Unit => out.push_str("()"),
                 Value::List(items) => {
                     out.push('[');
-                    open.push((items.clone(), 0));
+                    open.push((items.clone(), 0, true));
+                }
+                Value::Data(con, fields) if fields.is_empty() => out.push_str(&con.name),
+                Value::Data(con, fields) => {
+                    out.push('(');
+                    out.push_str(&con.name);
+                    open.push((fields.clone(), 0, false));
                 }
                 Value::Builtin(b) => out.push_str(&format!("<builtin {b}>")),
                 Value::Closure(_) | Value::Partial(_) => out.push_str("<function>"),
                 Value::Io(_) => out.push_str("<action>"),
             }
             value = loop {
-                let Some((items, index)) = open.last_mut() else {
+                let Some((items, index, list)) = open.last_mut() else {
                     return;
                 };
                 let Some(item) = items.get(*index) else {
-                    out.push(']');
+                    out.push(if *list { ']' } else { ')' });
                     open.pop();
                     continue;
                 };
-                if *index > 0 {
+                if !*list {
+                    out.push(' ');
+                } else if *index > 0 {
                     out.push_str(", ");
                 }
                 *index += 1;
@@ -221,11 +253,11 @@ impl Value {
     }
 }
 
-/// The value of a list element that must already be evaluated.
+/// The value of a list element or field that must already be evaluated.
 fn evaluated(thunk: &Thunk) -> Result<Value, String> {
     thunk
         .value()
-        .ok_or_else(|| "internal error: a list element was not evaluated".to_owned())
+        .ok_or_else(|| "internal error: a list element or field was not evaluated".to_owned())
 }
 
 // ---- dropping ----------------------------------------------------------------
@@ -269,7 +301,7 @@ fn defer_drop(garbage: Garbage) {
 impl Drop for Value {
     fn drop(&mut self) {
         match self {
-            Value::List(items) if !items.is_empty() => {
+            Value::List(items) | Value::Data(_, items) if !items.is_empty() => {
                 defer_drop(Garbage::List(std::mem::take(items)));
             }
             _ => {}
@@ -414,7 +446,7 @@ mod tests {
         assert_eq!(value.show(), r#"["a\"b", 1]"#);
         assert_eq!(Value::String("hi\n".into()).display(), "hi\n");
         assert_eq!(Value::String("hi\n".into()).show(), r#""hi\n""#);
-        assert_eq!(Value::Bool(true).show(), "true");
+        assert_eq!(Value::bool(true).show(), "True");
         assert_eq!(Value::Unit.show(), "()");
         assert_eq!(Value::Builtin(Builtin::Add).show(), "<builtin add>");
     }

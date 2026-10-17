@@ -17,8 +17,15 @@ fibonacci : Number -> Number = \n.
 
 compose = \f. \g. \x. (f (g x))          -- inferred: (a -> b) -> (c -> a) -> c -> b
 
+type Shape = Circle Number | Rect Number Number
+
+area : Shape -> Number = \s. match s
+    | Circle r -> (mul 3.14 (mul r r))
+    | Rect w h -> (mul w h)
+
 (println (map fibonacci (range 0 10)))   -- [0, 1, 1, 2, 3, 5, 8, 13, 21, 34]
 (println ((compose show (mul 2)) 21))   -- 42
+(println (map area [(Circle 1), (Rect 2 3)]))   -- [3.14, 6]
 ```
 
 ## Getting started
@@ -56,7 +63,7 @@ common commands winning ties (`:t` is `:type`, `:l` is `:load`, `:r` is
 | `:help` (`:?`) | List the commands. |
 | `:quit` (`:exit`, Ctrl-D) | Leave. |
 | `:type <expr>` | Type of an expression, without evaluating it. |
-| `:info <name>` | Type and definition site of a name, or a builtin's docs. |
+| `:info <name>` | Type and definition site of a name, a type's declaration, or a builtin's docs. |
 | `:load <file>` / `:reload` | Load and run a file / load the last one again. |
 | `:env` (`:browse`) | Your definitions and their types. |
 | `:docs [name]` | Builtin reference. |
@@ -82,17 +89,25 @@ Error: mismatched types
 
 ```text
 item  = "use" STRING                         include another file (path relative to this file)
-      | IDENT [":" type] "=" expr            definition; the annotation is optional
+      | "type" UPPER ["<" LOWER, ... ">"] "=" ["|"] UPPER type* ("|" UPPER type*)*
+                                             data type; see "Data types"
+      | LOWER [":" type] "=" expr            definition; the annotation is optional
       | expr                                 an action, performed in order when the program runs
-expr  = "\" IDENT [":" type] "." expr        lambda (also `λ`)
-      | "let" IDENT [":" type] "=" expr "in" expr
-      | "let" IDENT [":" type] "<-" expr "in" expr   perform an action and name its result
+expr  = "\" LOWER [":" type] "." expr        lambda (also `λ`)
+      | "let" LOWER [":" type] "=" expr "in" expr
+      | "let" LOWER [":" type] "<-" expr "in" expr   perform an action and name its result
+      | "match" expr ("|" pattern "->" expr)+
       | "(" expr expr+ ")"                   application; any expression can be called
       | "(" expr ")" | "(" ")"               grouping, unit
       | "[" expr, ... "]"                    list
-      | NUMBER | STRING | IDENT
-type  = Number | String | Bool | Unit | List<type> | IO<type> | lowercase-variable | type -> type | (type)
+      | NUMBER | STRING | LOWER | UPPER       UPPER is a constructor
+pattern = UPPER pattern* | "_" | LOWER | NUMBER | STRING | "(" ")" | "(" pattern ")"
+type  = Number | String | Bool | Unit | List<type> | IO<type> | Declared<type, ...>
+      | lowercase-variable | type -> type | (type)
 ```
+
+Names that start with a lowercase letter (or `_`) are values; names that
+start with an uppercase letter are types and constructors.
 
 * Numbers are 64-bit floats and print the way most languages print them: `42`,
   `3.14`, `0.30000000000000004`, `Infinity`.
@@ -115,6 +130,55 @@ Full Hindley-Milner inference with let-polymorphism:
 * Numbers print as JavaScript prints them: `42`, `0.000001`, and with an
   exponent below `1e-6` or from `1e21` up (`1e-7`, `1e+300`). `-0` prints
   as `0`.
+
+### Data types
+
+`type` declares a data type: a set of alternatives, each a constructor with
+fields. `match` takes a value apart by trying patterns from top to bottom.
+
+```haskell
+type Option<a> = None | Some a
+
+type Tree<a> =
+    | Leaf
+    | Node Tree<a> a Tree<a>
+
+withDefault : a -> Option<a> -> a = \fallback. \o. match o
+    | Some x -> x
+    | None -> fallback
+
+depth : Tree<a> -> Number = \t. match t
+    | Leaf -> 0
+    | Node left _ right -> (add 1 (max (depth left) (depth right)))
+
+(println (map Some [1, 2]))              -- [(Some 1), (Some 2)]
+(println (withDefault 0 None))           -- 0
+```
+
+* Type parameters are written in angle brackets, as in `List<a>`. Types may
+  be recursive, mutually recursive and declared in any order.
+* Constructors are curried functions: `Some : a -> Option<a>`, so
+  `(map Some xs)` and `(Node Leaf)` work. A constructor without fields is a
+  value. A declaration ends at the next line that starts in the first
+  column.
+* Patterns are constructors with patterns for every field, variables, `_`,
+  number and string literals, and `()`. A variable may appear once per
+  pattern.
+* Every `match` must cover all values of its type; otherwise it is an error
+  that names a missing case (`` `Rect _ _` is not covered ``). Numbers and
+  strings need a `_` or variable arm.
+* An arm's body extends as far as it can, like a `let` body, so a `match`
+  inside the last arm of another needs parentheses.
+* Fields are lazy, like list elements, and `match` evaluates only what it
+  needs to choose an arm: `(match (Some (error "x")) | Some _ -> 1 | None -> 0)`
+  is `1`.
+* `eq`, `lt`, `compare`, `sort` and `show` work on data structurally. Values
+  are ordered by constructor, in declaration order, then by their fields.
+  `show` and `print` write them as code: `(Some (Node Leaf 1 Leaf))`.
+* `Bool` is the built-in data type `type Bool = False | True`, so booleans
+  can be matched too.
+* In the REPL, declaring a type again makes a new type; values of the old one
+  keep the old type.
 
 ### Evaluation
 
@@ -182,7 +246,7 @@ takes the data it works on last, so partial application reads well:
 | --- | --- |
 | Numbers | `add sub mul div mod pow neg abs floor ceil round sqrt min max` |
 | Comparison | `eq neq lt le gt ge compare` (structural, like OCaml; comparing functions is a runtime error) |
-| Booleans | `true false not and or if` |
+| Booleans | `not and or if`, and the constructors `True` and `False` |
 | Strings | `concat show parseNumber stringLength chars split lines join trim` |
 | Lists | `length isEmpty head tail get cons push remove append map filter foldl foldr reverse sort range zipWith transpose sum take drop` |
 | Input/output | `pure bind then sequence print println readFile error` |
@@ -203,11 +267,12 @@ source text
   ▼
 loader               expands `use`, each file once
   ▼
-resolve              names ─▶ locals / globals / builtins ─▶ hir
+resolve              names ─▶ locals / globals / constructors / builtins ─▶ hir
   ▼
-types::infer         Hindley-Milner, SCC-ordered, level-based generalization
+types::infer         Hindley-Milner, SCC-ordered, level-based generalization;
+                     match exhaustiveness (types::exhaustive)
   ▼
-core::lower          closure conversion + uncurrying ─▶ core (Core IR)
+core::lower          closure conversion + uncurrying + match compilation ─▶ core (Core IR)
   ▼
 backend::Backend     today: backend::interp, a lazy abstract machine
 ```
@@ -217,9 +282,9 @@ backend::Backend     today: backend::interp, a lazy abstract machine
 | `source`, `diagnostics` | File registry, byte spans, `Diagnostic` values rendered with ariadne. No stage prints or exits. |
 | `syntax` | `logos` lexer and a hand-written parser (like rustc's) that reports several errors per run. |
 | `loader`, `resolve`, `hir` | `use` expansion, scoping, "did you mean" suggestions, the resolved IR. |
-| `types` | Type representation, unification with occurs check, rigid annotation variables, schemes. |
+| `types` | Type representation, the type environment (built-in and declared types and constructors, identified by id), unification with occurs check, rigid annotation variables, schemes, and Maranget's exhaustiveness check. |
 | `builtins` | One `Builtin` enum declaring name, signature, module and docs, like GHC's primops. The type checker reads the signatures; each backend implements the enum. |
-| `core` | The backend-facing IR: frame slots instead of names, explicit captures, multi-argument lambdas. |
+| `core` | The backend-facing IR: frame slots instead of names, explicit captures, multi-argument lambdas, saturated constructors, and flat `case` decision trees compiled from nested patterns. |
 | `backend::interp` | An STG-style machine with an explicit continuation stack, memoizing thunks, update frames, tail calls, and higher-order builtins as frames. |
 | `session` | The driver; keeps globals across units so the REPL can feed one input at a time. |
 | `repl`, `cli` | rustyline front end (with a line-mode fallback) and the clap command line. |

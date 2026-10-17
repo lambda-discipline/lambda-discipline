@@ -3,8 +3,8 @@ file = "mutual_recursion.lbd"
 [expect]
 exit_code = 0
 stdout = """
-true
-false
-false
-true
+True
+False
+False
+True
 """

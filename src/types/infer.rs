@@ -11,17 +11,25 @@
 //! * `let` is recursive and generalized (let-polymorphism).
 //! * Type variables written in lambda annotations are scoped over the whole
 //!   definition, like Haskell's `ScopedTypeVariables`.
+//! * The unit's `type` declarations are added to the type environment
+//!   first, so annotations and other declarations can use them in any order.
+//!   A constructor's type is `forall params. fields -> Type<params>`.
+//! * Pattern variables are monomorphic, like lambda parameters, and every
+//!   `match` must cover all values of its scrutinee's type
+//!   (see [`super::exhaustive`]).
 
 use std::collections::HashMap;
 use std::rc::Rc;
 
 use crate::builtins::Builtin;
 use crate::diagnostics::Diagnostic;
-use crate::hir::{self, Body, ExprKind, GlobalDef, GlobalId, LocalId, Unit};
+use crate::hir::{self, Body, ExprKind, GlobalDef, GlobalId, LocalId, PatternKind, TypeDef, Unit};
 use crate::source::{SourceMap, Span};
 use crate::syntax::ast::{TypeExpr, TypeExprKind};
 
-use super::ty::{Scheme, TyVar, Type, constructor_arity, display_together};
+use super::env::{ConInfo, TypeEnv, TypeInfo};
+use super::exhaustive;
+use super::ty::{Scheme, TyCon, TyVar, Type, display_together};
 
 /// The result of checking one unit.
 #[derive(Debug, Default)]
@@ -30,6 +38,8 @@ pub struct Typed {
     pub def_schemes: Vec<Scheme>,
     /// Types of the unit's top-level expressions, in order.
     pub entry_schemes: Vec<Scheme>,
+    /// The type environment with the unit's declared types added.
+    pub types: TypeEnv,
     pub diagnostics: Vec<Diagnostic>,
 }
 
@@ -46,9 +56,11 @@ pub enum TopLevel {
 
 /// Type-checks a unit. `prior` holds the schemes of globals from earlier
 /// units, indexed by [`GlobalId`]; the unit's own ids start at `prior.len()`.
-pub fn check_unit(unit: &Unit, prior: &[Scheme], top_level: TopLevel) -> Typed {
-    let mut checker = Checker::new(prior);
+/// `types` holds the types known before the unit.
+pub fn check_unit(unit: &Unit, prior: &[Scheme], types: &TypeEnv, top_level: TopLevel) -> Typed {
+    let mut checker = Checker::new(prior, types.clone());
     let first = prior.len();
+    checker.declare_types(&unit.types);
 
     // Annotated definitions are known up front.
     let mut annotations: HashMap<GlobalId, Option<Rigid>> = HashMap::new();
@@ -92,13 +104,14 @@ pub fn check_unit(unit: &Unit, prior: &[Scheme], top_level: TopLevel) -> Typed {
     Typed {
         def_schemes,
         entry_schemes,
+        types: checker.env,
         diagnostics: checker.diagnostics,
     }
 }
 
 /// Infers the type of a single expression body (the REPL's `:type`).
-pub fn check_expr(body: &Body, prior: &[Scheme]) -> (Scheme, Vec<Diagnostic>) {
-    let mut checker = Checker::new(prior);
+pub fn check_expr(body: &Body, prior: &[Scheme], types: &TypeEnv) -> (Scheme, Vec<Diagnostic>) {
+    let mut checker = Checker::new(prior, types.clone());
     let scheme = checker.check_entry(body, TopLevel::Any);
     (scheme, checker.diagnostics)
 }
@@ -123,7 +136,7 @@ fn parse_builtin_scheme(builtin: Builtin) -> Scheme {
     let file = sources.add_virtual("<builtin>", builtin.signature());
     let ann = crate::syntax::parse_type(file, builtin.signature())
         .unwrap_or_else(|_| panic!("malformed signature for `{builtin}`"));
-    let mut checker = Checker::new(&[]);
+    let mut checker = Checker::new(&[], TypeEnv::new());
     checker
         .annotation_scheme(&ann)
         .unwrap_or_else(|| panic!("ill-formed signature for `{builtin}`"))
@@ -252,6 +265,7 @@ struct BodyCtx {
 
 struct Checker<'a> {
     prior: &'a [Scheme],
+    env: TypeEnv,
     globals: HashMap<GlobalId, GlobalType>,
     vars: Vec<VarState>,
     level: u32,
@@ -275,9 +289,10 @@ enum MismatchReason {
 }
 
 impl<'a> Checker<'a> {
-    fn new(prior: &'a [Scheme]) -> Self {
+    fn new(prior: &'a [Scheme], env: TypeEnv) -> Self {
         Self {
             prior,
+            env,
             globals: HashMap::new(),
             vars: Vec::new(),
             level: 0,
@@ -520,7 +535,11 @@ impl<'a> Checker<'a> {
             TypeExprKind::Con { name, args } => {
                 let converted: Vec<Option<Type>> =
                     args.iter().map(|a| self.convert(a, var, ok)).collect();
-                match constructor_arity(&name.name) {
+                let known = self
+                    .env
+                    .lookup_type(&name.name)
+                    .map(|info| (info.con.clone(), info.arity()));
+                match known {
                     None => {
                         *ok = false;
                         let mut diagnostic =
@@ -533,7 +552,7 @@ impl<'a> Checker<'a> {
                         self.diagnostics.push(diagnostic);
                         return None;
                     }
-                    Some(arity) if arity != args.len() => {
+                    Some((_, arity)) if arity != args.len() => {
                         *ok = false;
                         self.diagnostics.push(
                             Diagnostic::error(format!(
@@ -546,18 +565,22 @@ impl<'a> Checker<'a> {
                             ))
                             .at(ann.span)
                             .with_label("wrong number of type arguments")
-                            .with_help(if arity == 1 {
-                                format!("write `{}<a>`", name.name)
-                            } else {
-                                format!("write `{}`", name.name)
+                            .with_help(match arity {
+                                0 => format!("write `{}`", name.name),
+                                1 => format!("write `{}<a>`", name.name),
+                                _ => format!(
+                                    "write `{}<{}>`",
+                                    name.name,
+                                    (0..arity)
+                                        .map(|i| ((b'a' + i as u8) as char).to_string())
+                                        .collect::<Vec<_>>()
+                                        .join(", ")
+                                ),
                             }),
                         );
                         return None;
                     }
-                    Some(_) => Type::Con(
-                        name.name.clone(),
-                        converted.into_iter().collect::<Option<_>>()?,
-                    ),
+                    Some((con, _)) => Type::Con(con, converted.into_iter().collect::<Option<_>>()?),
                 }
             }
         })
@@ -580,6 +603,100 @@ impl<'a> Checker<'a> {
             &mut ok,
         )?;
         ok.then_some(ty)
+    }
+
+    // ---- type declarations ------------------------------------------------------
+
+    /// Adds the unit's types to the environment, then their constructors,
+    /// whose field types may refer to any of the types.
+    fn declare_types(&mut self, types: &[TypeDef]) {
+        for def in types {
+            self.env.add_type(TypeInfo {
+                con: TyCon {
+                    id: def.id,
+                    name: def.name.name.clone(),
+                },
+                params: def.params.iter().map(|p| p.name.clone()).collect(),
+                constructors: def.constructors.iter().map(|c| c.id).collect(),
+                span: Some(def.name.span),
+            });
+        }
+        for def in types {
+            self.declare_constructors(def);
+        }
+    }
+
+    fn declare_constructors(&mut self, def: &TypeDef) {
+        let params: Vec<Rc<str>> = def.params.iter().map(|p| p.name.clone()).collect();
+        for (i, param) in def.params.iter().enumerate() {
+            if let Some(first) = def.params[..i].iter().find(|p| p.name == param.name) {
+                self.diagnostics.push(
+                    Diagnostic::error(format!(
+                        "the type parameter `{}` is declared more than once",
+                        param.name
+                    ))
+                    .at(param.span)
+                    .with_label("declared again here")
+                    .with_secondary(first.span, "first declared here"),
+                );
+            }
+        }
+        let result = Type::Con(
+            self.env.ty(def.id).con.clone(),
+            (0..params.len() as u32).map(Type::Gen).collect(),
+        );
+        for ctor in &def.constructors {
+            // A field that fails to convert becomes a fresh quantified
+            // variable, so uses of the constructor do not add more errors.
+            let mut extra = 0;
+            let mut fields = Vec::new();
+            for field in &ctor.fields {
+                let mut ok = true;
+                let converted = self.convert(
+                    field,
+                    &mut |name, this| match params.iter().position(|p| p == name) {
+                        Some(index) => Some(Type::Gen(index as u32)),
+                        None => {
+                            this.diagnostics.push(
+                                Diagnostic::error(format!(
+                                    "the type variable `{name}` is not a parameter of `{}`",
+                                    def.name.name
+                                ))
+                                .at(field.span)
+                                .with_label("not declared")
+                                .with_help(format!(
+                                    "declare it after the type's name: `type {}<{}>`",
+                                    def.name.name,
+                                    params
+                                        .iter()
+                                        .map(|p| p.as_ref())
+                                        .chain([name.as_ref()])
+                                        .collect::<Vec<_>>()
+                                        .join(", ")
+                                )),
+                            );
+                            None
+                        }
+                    },
+                    &mut ok,
+                );
+                fields.push(converted.filter(|_| ok).unwrap_or_else(|| {
+                    extra += 1;
+                    Type::Gen((params.len() + extra - 1) as u32)
+                }));
+            }
+            self.env.add_constructor(ConInfo {
+                id: ctor.id,
+                name: ctor.name.name.clone(),
+                ty: def.id,
+                scheme: Scheme {
+                    arity: (params.len() + extra) as u32,
+                    ty: Type::curried(fields, result.clone()),
+                },
+                arity: ctor.fields.len(),
+                span: Some(ctor.name.span),
+            });
+        }
     }
 
     // ---- definitions ----------------------------------------------------------
@@ -703,6 +820,11 @@ impl<'a> Checker<'a> {
                 let body_ty = self.infer(body, ctx);
                 Type::fun(param_ty, body_ty)
             }
+            ExprKind::Con(con) => {
+                let scheme = self.env.constructor(*con).scheme.clone();
+                self.instantiate(&scheme)
+            }
+            ExprKind::Match { scrutinee, arms } => self.infer_match(scrutinee, arms, ctx),
             ExprKind::App { func, args } => self.infer_app(func, args, ctx),
             ExprKind::List(items) => {
                 let element = self.fresh();
@@ -885,6 +1007,115 @@ impl<'a> Checker<'a> {
         current
     }
 
+    // ---- match ----------------------------------------------------------------
+
+    fn infer_match(&mut self, scrutinee: &hir::Expr, arms: &[hir::Arm], ctx: &mut BodyCtx) -> Type {
+        let matched = self.infer(scrutinee, ctx);
+        let result = self.fresh();
+        for arm in arms {
+            self.check_pattern(&arm.pattern, &matched, ctx);
+            let found = self.infer(&arm.body, ctx);
+            if let Err(mismatch) = self.unify(&result, &found) {
+                self.report(ctx, mismatch, arm.body.span, |expected, found| {
+                    format!("the arms of a `match` must all have the same type: expected `{expected}`, found `{found}`")
+                });
+            }
+        }
+        // A pattern with a type error could make a complete match look
+        // incomplete, so only well-typed matches are checked.
+        if !ctx.failed {
+            let patterns: Vec<&hir::Pattern> = arms.iter().map(|arm| &arm.pattern).collect();
+            if let Some(missing) = exhaustive::missing(&self.env, &patterns) {
+                let ty = self.zonk(&matched);
+                self.error(
+                    ctx,
+                    Diagnostic::error(format!(
+                        "this `match` does not cover every value of type `{ty}`"
+                    ))
+                    .at(scrutinee.span)
+                    .with_label(format!("`{missing}` is not covered"))
+                    .with_help(if missing == "_" {
+                        "add an arm `| _ -> ...` to cover every other value".to_owned()
+                    } else {
+                        format!(
+                            "add an arm `| {missing} -> ...`, or `| _ -> ...` to cover every other value"
+                        )
+                    }),
+                );
+            }
+        }
+        result
+    }
+
+    /// Checks that `pattern` can match values of type `expected` and gives
+    /// its variables their types.
+    fn check_pattern(&mut self, pattern: &hir::Pattern, expected: &Type, ctx: &mut BodyCtx) {
+        let found = match &pattern.kind {
+            PatternKind::Wild | PatternKind::Error => return,
+            PatternKind::Bind(local) => {
+                ctx.locals.insert(*local, Scheme::mono(expected.clone()));
+                return;
+            }
+            PatternKind::Number(_) => Type::number(),
+            PatternKind::String(_) => Type::string(),
+            PatternKind::Unit => Type::unit(),
+            PatternKind::Con { con, args } => {
+                let info = self.env.constructor(*con).clone();
+                let mut ty = self.instantiate(&info.scheme);
+                let mut fields = Vec::with_capacity(info.arity);
+                while let Type::Fun(param, result) = ty {
+                    fields.push(*param);
+                    ty = *result;
+                }
+                if args.len() != info.arity {
+                    let plural = |n: usize| if n == 1 { "" } else { "s" };
+                    self.error(
+                        ctx,
+                        Diagnostic::error(format!(
+                            "the constructor `{}` has {} field{}, but this pattern has {}",
+                            info.name,
+                            info.arity,
+                            plural(info.arity),
+                            args.len()
+                        ))
+                        .at(pattern.span)
+                        .with_label(format!(
+                            "expected {} field pattern{}",
+                            info.arity,
+                            plural(info.arity)
+                        ))
+                        .with_help(format!(
+                            "write `{}{}`, with `_` for each field you do not need",
+                            info.name,
+                            " _".repeat(info.arity)
+                        )),
+                    );
+                }
+                if let Err(mismatch) = self.unify(expected, &ty) {
+                    self.report(ctx, mismatch, pattern.span, |expected, found| {
+                        format!("this pattern has type `{found}`, but the value matched has type `{expected}`")
+                    });
+                }
+                for (arg, field) in args.iter().zip(fields) {
+                    self.check_pattern(arg, &field, ctx);
+                }
+                // Bind the variables of surplus patterns so the body can use them.
+                for arg in args.iter().skip(info.arity) {
+                    let unknown = self.fresh();
+                    self.check_pattern(arg, &unknown, ctx);
+                }
+                return;
+            }
+        };
+        if let Err(mismatch) = self.unify(expected, &found) {
+            self.report(ctx, mismatch, pattern.span, |expected, found| {
+                format!(
+                    "this pattern has type `{found}`, but the value matched has type `{expected}`"
+                )
+            });
+        }
+    }
+
     // ---- errors -------------------------------------------------------------
 
     fn error(&mut self, ctx: &mut BodyCtx, diagnostic: Diagnostic) {
@@ -967,7 +1198,7 @@ mod tests {
             "{:?}",
             resolved.diagnostics
         );
-        let typed = check_unit(&resolved.unit, &[], TopLevel::Any);
+        let typed = check_unit(&resolved.unit, &[], &TypeEnv::new(), TopLevel::Any);
         (resolved.unit, typed)
     }
 
@@ -1028,14 +1259,14 @@ mod tests {
     #[test]
     fn builtins_are_instantiated_freshly() {
         assert_eq!(type_of_entry("(map (add 1) [1, 2])"), "List<Number>");
-        assert_eq!(type_of_entry(r#"(map show [true])"#), "List<String>");
+        assert_eq!(type_of_entry(r#"(map show [True])"#), "List<String>");
         assert_eq!(type_of_entry("(foldr cons [] [1])"), "List<Number>");
     }
 
     #[test]
     fn partial_application() {
         assert_eq!(type_of_entry("(add 1)"), "Number -> Number");
-        assert_eq!(type_of_entry("(if true)"), "a -> a -> a");
+        assert_eq!(type_of_entry("(if True)"), "a -> a -> a");
     }
 
     #[test]
@@ -1046,7 +1277,7 @@ mod tests {
         );
         assert_eq!(
             types_of(
-                r"even = \n. (if (eq n 0) true (odd (sub n 1)))  odd = \n. (if (eq n 0) false (even (sub n 1)))"
+                r"even = \n. (if (eq n 0) True (odd (sub n 1)))  odd = \n. (if (eq n 0) False (even (sub n 1)))"
             ),
             ["even : Number -> Bool", "odd : Number -> Bool"]
         );
@@ -1190,7 +1421,7 @@ mod tests {
 
     #[test]
     fn variadic_builtins() {
-        assert_eq!(type_of_entry(r#"(print 1 "a" [true])"#), "IO<Unit>");
+        assert_eq!(type_of_entry(r#"(print 1 "a" [True])"#), "IO<Unit>");
         let errors = errors_of("(map print [1])");
         assert_eq!(errors[0].message, "`print` must be called directly");
     }
@@ -1227,7 +1458,7 @@ mod tests {
         let mut sources = SourceMap::new();
         let loaded = load_text(&mut sources, "<test>", text);
         let resolved = resolve(loaded.items, &EmptyScope);
-        check_unit(&resolved.unit, &[], TopLevel::Actions).diagnostics
+        check_unit(&resolved.unit, &[], &TypeEnv::new(), TopLevel::Actions).diagnostics
     }
 
     #[test]
@@ -1265,7 +1496,7 @@ mod tests {
             builtin_scheme(Builtin::Map).to_string(),
             "(a -> b) -> List<a> -> List<b>"
         );
-        assert_eq!(builtin_scheme(Builtin::True).to_string(), "Bool");
+        assert_eq!(builtin_scheme(Builtin::Not).to_string(), "Bool -> Bool");
         for builtin in Builtin::ALL {
             builtin_scheme(*builtin);
         }
@@ -1292,7 +1523,129 @@ mod tests {
             arity: 1,
             ty: Type::fun(Type::Gen(0), Type::list(Type::Gen(0))),
         }];
-        let typed = check_unit(&resolved.unit, &prior, TopLevel::Any);
+        let typed = check_unit(&resolved.unit, &prior, &TypeEnv::new(), TopLevel::Any);
         assert_eq!(typed.entry_schemes[0].to_string(), "List<Number>");
+    }
+
+    const OPTION: &str = "type Option<a> = None | Some a\n";
+
+    #[test]
+    fn constructors_are_curried_polymorphic_functions() {
+        assert_eq!(
+            types_of(&format!(
+                "{OPTION}type Pair<a, b> = Pair a b\nsome = Some\nnone = None\npair = Pair\nboxed = (Pair 1)"
+            )),
+            [
+                "some : a -> Option<a>",
+                "none : Option<a>",
+                "pair : a -> b -> Pair<a, b>",
+                "boxed : a -> Pair<Number, a>",
+            ]
+        );
+        assert_eq!(
+            type_of_entry(&format!("{OPTION}(map Some [1])")),
+            "List<Option<Number>>"
+        );
+        assert_eq!(type_of_entry("[True, False]"), "List<Bool>");
+    }
+
+    #[test]
+    fn declared_types_can_be_recursive_and_used_in_any_order() {
+        assert_eq!(
+            types_of(
+                "depth : Tree<a> -> Number = \\t. match t\n\
+                 | Node l _ r -> (add 1 (max (depth l) (depth r)))\n\
+                 | _ -> 0\n\
+                 type Tree<a> = Leaf | Node Tree<a> a Tree<a> | Branches Forest<a>\n\
+                 type Forest<a> = Forest List<Tree<a>>\n\
+                 f = \\t. match t | Node _ x _ -> x | _ -> 0"
+            ),
+            ["depth : Tree<a> -> Number", "f : Tree<Number> -> Number"]
+        );
+    }
+
+    #[test]
+    fn match_infers_pattern_and_result_types() {
+        assert_eq!(
+            types_of(&format!(
+                "{OPTION}withDefault = \\d. \\o. match o | Some x -> x | None -> d\n\
+                 isZero = \\n. match n | 0 -> True | _ -> False"
+            )),
+            [
+                "withDefault : a -> Option<a> -> a",
+                "isZero : Number -> Bool"
+            ]
+        );
+    }
+
+    #[test]
+    fn pattern_type_errors() {
+        let errors = errors_of(&format!(
+            "{OPTION}type Shape = Circle Number\nf = \\o. match o | Some x -> x | Circle r -> r"
+        ));
+        assert_eq!(errors[0].message, "mismatched types");
+        assert_eq!(
+            errors[0].label.as_deref(),
+            Some("this pattern has type `Shape`, but the value matched has type `Option<a>`")
+        );
+        let errors = errors_of(&format!(
+            "{OPTION}f = \\o. match o | Some x y -> x | None -> 0"
+        ));
+        assert_eq!(
+            errors[0].message,
+            "the constructor `Some` has 1 field, but this pattern has 2"
+        );
+        assert_eq!(
+            errors[0].help.as_deref(),
+            Some("write `Some _`, with `_` for each field you do not need")
+        );
+        let errors = errors_of("f = \\b. match b | True -> 1 | False -> \"no\"");
+        assert_eq!(
+            errors[0].label.as_deref(),
+            Some(
+                "the arms of a `match` must all have the same type: expected `Number`, found `String`"
+            )
+        );
+    }
+
+    #[test]
+    fn non_exhaustive_matches_are_errors() {
+        let errors = errors_of(&format!("{OPTION}f = \\o. match o | Some x -> x"));
+        assert_eq!(
+            errors[0].message,
+            "this `match` does not cover every value of type `Option<a>`"
+        );
+        assert_eq!(errors[0].label.as_deref(), Some("`None` is not covered"));
+        assert_eq!(
+            errors[0].help.as_deref(),
+            Some("add an arm `| None -> ...`, or `| _ -> ...` to cover every other value")
+        );
+    }
+
+    #[test]
+    fn type_declaration_errors() {
+        let errors = errors_of("type Box = Box a");
+        assert_eq!(
+            errors[0].message,
+            "the type variable `a` is not a parameter of `Box`"
+        );
+        assert_eq!(
+            errors[0].help.as_deref(),
+            Some("declare it after the type's name: `type Box<a>`")
+        );
+        let errors = errors_of("type Box<a, a> = Box a");
+        assert_eq!(
+            errors[0].message,
+            "the type parameter `a` is declared more than once"
+        );
+        let errors = errors_of("type T = T Shape");
+        assert_eq!(errors[0].message, "unknown type `Shape`");
+        let errors = errors_of(&format!("{OPTION}type T = T Option"));
+        assert_eq!(
+            errors[0].message,
+            "`Option` takes 1 type argument, but 0 were given"
+        );
+        let errors = errors_of("type P<a, b> = P a b\nx : P<Number> = (P 1 2)");
+        assert_eq!(errors[0].help.as_deref(), Some("write `P<a, b>`"));
     }
 }

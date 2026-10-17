@@ -1,0 +1,10 @@
+file = "unknown_constructor.lbd"
+
+[expect]
+exit_code = 1
+stdout = ""
+stderr_contains = [
+    "Error: cannot find constructor `Rec`",
+    "unknown_constructor.lbd:3:24",
+    "a similar name exists: `Rect`",
+]

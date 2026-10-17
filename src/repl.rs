@@ -77,6 +77,9 @@ impl Repl {
     pub fn completion_names(&self) -> Vec<String> {
         let mut names: Vec<String> = Builtin::ALL.iter().map(|b| b.name().to_owned()).collect();
         names.extend(self.session.bindings().iter().map(|g| g.name.to_string()));
+        let types = self.session.types();
+        names.extend(types.type_names().map(|n| n.to_string()));
+        names.extend(types.constructor_names().map(|n| n.to_string()));
         names.sort();
         names.dedup();
         names
@@ -210,8 +213,35 @@ impl Repl {
         }
     }
 
-    /// `:info`: a definition's type and where it was defined, or a builtin's docs.
+    /// `:info`: a definition's type and where it was defined, a builtin's
+    /// docs, or a type's or constructor's declaration.
     fn info(&mut self, name: &str) {
+        let types = self.session.types();
+        let declared = if let Some(con) = types.lookup_constructor(name) {
+            let info = types.constructor(con);
+            Some((
+                format!(
+                    "{} : {}\n    a constructor of `{}`",
+                    info.name,
+                    info.scheme,
+                    types.ty(info.ty).con.name
+                ),
+                info.span,
+            ))
+        } else {
+            types
+                .lookup_type(name)
+                .map(|info| (types.describe(info.con.id), info.span))
+        };
+        if let Some((text, span)) = declared {
+            let _ = writeln!(self.out, "{text}");
+            if let Some(span) = span {
+                let file = self.session.sources.get(span.file);
+                let (line, column) = file.line_col(span.start as usize);
+                let _ = writeln!(self.out, "    defined at {}:{line}:{column}", file.name());
+            }
+            return;
+        }
         if let Some(binding) = self.session.binding(name) {
             let file = self.session.sources.get(binding.span.file);
             let (line, column) = file.line_col(binding.span.start as usize);
@@ -255,14 +285,18 @@ pub fn is_complete(text: &str) -> bool {
         return false;
     }
     let mut depth = 0i32;
+    // Whether a `match` has no arm yet: its arms are still to come.
+    let mut armless_match = false;
     for token in &tokens {
         match token.kind {
             TokenKind::LParen | TokenKind::LBracket => depth += 1,
             TokenKind::RParen | TokenKind::RBracket => depth -= 1,
+            TokenKind::Match => armless_match = true,
+            TokenKind::Bar => armless_match = false,
             _ => {}
         }
     }
-    if depth > 0 {
+    if depth > 0 || armless_match {
         return false;
     }
     let last = tokens
@@ -284,6 +318,9 @@ pub fn is_complete(text: &str) -> bool {
                 | TokenKind::Use
                 | TokenKind::LAngle
                 | TokenKind::LeftArrow
+                | TokenKind::Type
+                | TokenKind::Match
+                | TokenKind::Bar
         )
     )
 }
@@ -593,11 +630,11 @@ mod tests {
     fn commands_accept_unique_prefixes() {
         let mut h = harness();
         h.repl.handle(":t (add 1)");
-        h.repl.handle(":ty true");
+        h.repl.handle(":ty True");
         assert_eq!(
             h.out.take(),
             "(add 1) : Number -> Number
-true : Bool
+True : Bool
 "
         );
         assert_eq!(h.repl.handle(":q"), Control::Quit);
@@ -620,6 +657,28 @@ true : Bool
             "map : (a -> b) -> List<a> -> List<b>
 "
         ));
+        h.repl
+            .handle("type Shape =\n    | Circle Number\n    | Pair (Number -> Number) List<Shape>");
+        h.out.take();
+        h.repl.handle(":info Shape");
+        assert_eq!(
+            h.out.take(),
+            "type Shape = Circle Number | Pair (Number -> Number) List<Shape>
+    defined at <repl>:1:6
+"
+        );
+        h.repl.handle(":info Circle");
+        assert_eq!(
+            h.out.take(),
+            "Circle : Number -> Shape
+    a constructor of `Shape`
+    defined at <repl>:2:7
+"
+        );
+        h.repl.handle(":info Option");
+        assert!(h.err.take().contains("`Option` is not defined"));
+        h.repl.handle(":info True");
+        assert_eq!(h.out.take(), "True : Bool\n    a constructor of `Bool`\n");
         h.repl.handle(":info nothing");
         assert_eq!(
             h.err.take(),
@@ -663,6 +722,11 @@ true : Bool
         assert!(!is_complete("x = let y = 1 in"));
         assert!(!is_complete("x = let y <-"));
         assert!(!is_complete("\"unterminated"));
+        assert!(!is_complete("type Shape ="));
+        assert!(!is_complete("type Shape = Circle Number |"));
+        assert!(!is_complete("f = \\s. match s"));
+        assert!(!is_complete("f = \\s. match s | Circle r ->"));
+        assert!(is_complete("f = \\s. match s | Circle r -> r"));
         assert!(is_complete(":type (add"));
         assert!(is_complete("x = 1 -- comment ("));
         assert!(

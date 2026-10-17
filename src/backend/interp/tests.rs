@@ -64,11 +64,11 @@ fn arithmetic() {
 fn comparison() {
     assert_eq!(
         eval("[(eq 1 1), (neq 1 1), (lt 1 2), (le 2 2), (gt 1 2), (ge 1 2)]"),
-        "[true, false, true, true, false, false]"
+        "[True, False, True, True, False, False]"
     );
     assert_eq!(
-        eval("[(eq [1, 2] [1, 2]), (lt \"abc\" \"abd\"), (lt [1] [1, 0]), (lt false true)]"),
-        "[true, true, true, true]"
+        eval("[(eq [1, 2] [1, 2]), (lt \"abc\" \"abd\"), (lt [1] [1, 0]), (lt False True)]"),
+        "[True, True, True, True]"
     );
     assert_eq!(
         eval("[(compare 1 2), (compare 2 2), (compare 3 2)]"),
@@ -78,12 +78,12 @@ fn comparison() {
 
 #[test]
 fn booleans_are_lazy() {
-    assert_eq!(eval("(if true 1 (error \"no\"))"), "1");
-    assert_eq!(eval("(and false (error \"no\"))"), "false");
-    assert_eq!(eval("(or true (error \"no\"))"), "true");
+    assert_eq!(eval("(if True 1 (error \"no\"))"), "1");
+    assert_eq!(eval("(and False (error \"no\"))"), "False");
+    assert_eq!(eval("(or True (error \"no\"))"), "True");
     assert_eq!(
-        eval("[(not true), (and true true), (or false false)]"),
-        "[false, true, false]"
+        eval("[(not True), (and True True), (or False False)]"),
+        "[False, True, False]"
     );
 }
 
@@ -118,7 +118,7 @@ fn lists_are_immutable() {
 #[test]
 fn list_operations() {
     assert_eq!(eval("[(length [1, 2]), (length [])]"), "[2, 0]");
-    assert_eq!(eval("[(isEmpty []), (isEmpty [1])]"), "[true, false]");
+    assert_eq!(eval("[(isEmpty []), (isEmpty [1])]"), "[True, False]");
     assert_eq!(eval("[(head [1, 2]), (get 1 [1, 2])]"), "[1, 2]");
     assert_eq!(eval("(tail [1, 2, 3])"), "[2, 3]");
     assert_eq!(eval("(cons 0 [1])"), "[0, 1]");
@@ -146,8 +146,8 @@ fn list_operations() {
 #[test]
 fn printing() {
     assert_eq!(
-        output(r#"(print "a" 1 [2] "\n") (println "b" true)"#),
-        "a1[2]\nbtrue\n"
+        output(r#"(print "a" 1 [2] "\n") (println "b" True)"#),
+        "a1[2]\nbTrue\n"
     );
 }
 
@@ -167,7 +167,7 @@ fn closures_capture_their_environment() {
 fn partial_and_over_application() {
     assert_eq!(eval(r"k = \x. \y. x  ((k 1) 2)"), "1");
     assert_eq!(eval(r"id = \x. x  (id add 1 2)"), "3");
-    assert_eq!(eval(r"(map (if true) [1]) "), "[<function>]");
+    assert_eq!(eval(r"(map (if True) [1]) "), "[<function>]");
     assert_eq!(
         eval(r"pair = \x. \y. \f. (f x y)  ((pair 1 2) \a. \b. b)"),
         "2"
@@ -192,9 +192,9 @@ fn recursion_and_mutual_recursion() {
     );
     assert_eq!(
         eval(
-            r"even = \n. (if (eq n 0) true (odd (sub n 1)))  odd = \n. (if (eq n 0) false (even (sub n 1)))  (even 101)"
+            r"even = \n. (if (eq n 0) True (odd (sub n 1)))  odd = \n. (if (eq n 0) False (even (sub n 1)))  (even 101)"
         ),
-        "false"
+        "False"
     );
 }
 
@@ -239,7 +239,7 @@ fn list_elements_are_lazy() {
     assert_eq!(eval(r#"(length (map (error "a") [1, 2]))"#), "2");
     assert_eq!(eval(r#"(get 1 (map (div 6) [(error "a"), 3]))"#), "2");
     assert_eq!(eval(r#"(head (zipWith add [1, (error "a")] [2, 3]))"#), "3");
-    assert_eq!(eval(r#"(length (filter (\x. true) [(error "a")]))"#), "1");
+    assert_eq!(eval(r#"(length (filter (\x. True) [(error "a")]))"#), "1");
     assert_eq!(
         eval(r#"(head (transpose [[1, (error "a")], [2]]))"#),
         "[1, 2]"
@@ -248,8 +248,8 @@ fn list_elements_are_lazy() {
 
 #[test]
 fn foldr_stops_when_its_function_ignores_the_rest() {
-    let program = r#"(foldr \x. \acc. (or (eq x 1) acc) false [1, (error "never needed")])"#;
-    assert_eq!(eval(program), "true");
+    let program = r#"(foldr \x. \acc. (or (eq x 1) acc) False [1, (error "never needed")])"#;
+    assert_eq!(eval(program), "True");
     assert_eq!(output(r#"(println (head [1, (error "boom")]))"#), "1\n");
     // A function that uses the rest still sees every element, in order.
     assert_eq!(
@@ -435,6 +435,24 @@ fn definitions_persist_across_inputs() {
 }
 
 #[test]
+fn redefined_types_are_new_types() {
+    let (mut session, out) = session();
+    session.eval("<1>", "type T = A | B\nold = A").unwrap();
+    session
+        .eval("<2>", "type T = C Number\nnew = (C 1)")
+        .unwrap();
+    // The old value still has the old type, so it cannot pass for the new one.
+    let errors = session.eval("<3>", "same = (eq old new)").unwrap_err();
+    assert_eq!(errors[0].message, "mismatched types");
+    session.eval("<4>", "(println old \" \" new)").unwrap();
+    assert_eq!(out.contents(), "A (C 1)\n");
+    assert!(
+        session.eval("<5>", "x = A").is_ok(),
+        "old constructors stay usable"
+    );
+}
+
+#[test]
 fn errors_leave_the_session_usable() {
     let (mut session, _) = session();
     session.eval("<1>", "x = 1").unwrap();
@@ -445,4 +463,113 @@ fn errors_leave_the_session_usable() {
         session.eval("<5>", "y").is_err(),
         "a failed definition is not added"
     );
+}
+
+const SHAPES: &str = "type Shape = Circle Number | Rect Number Number\n";
+const OPTION: &str = "type Option<a> = None | Some a\n";
+
+#[test]
+fn constructors_build_data_and_match_takes_it_apart() {
+    let program = format!(
+        "{SHAPES}area = \\s. match s | Circle r -> (mul 3 (mul r r)) | Rect w h -> (mul w h)\n\
+         (map area [(Circle 1), (Rect 2 3)])"
+    );
+    assert_eq!(eval(&program), "[3, 6]");
+    assert_eq!(
+        eval(&format!("{SHAPES}(map Circle [1, 2])")),
+        "[(Circle 1), (Circle 2)]"
+    );
+    assert_eq!(eval(&format!("{SHAPES}((Rect 2) 3)")), "(Rect 2 3)");
+    assert_eq!(
+        eval(&format!("{OPTION}[None, (Some (Some \"x\"))]")),
+        r#"[None, (Some (Some "x"))]"#
+    );
+}
+
+#[test]
+fn nested_patterns_and_literals() {
+    let program = format!(
+        "{OPTION}f = \\o. match o\n\
+         | Some (Some 0) -> \"zero\"\n\
+         | Some (Some n) -> (show n)\n\
+         | Some None -> \"inner none\"\n\
+         | None -> \"none\"\n\
+         [(f (Some (Some 0))), (f (Some (Some 7))), (f (Some None)), (f None)]"
+    );
+    assert_eq!(eval(&program), r#"["zero", "7", "inner none", "none"]"#);
+    let strings = "f = \\s. match s | \"a\" -> 1 | \"b\" -> 2 | other -> (stringLength other)\n\
+                   [(f \"a\"), (f \"b\"), (f \"cde\")]";
+    assert_eq!(eval(strings), "[1, 2, 3]");
+    assert_eq!(eval("match () | () -> 1"), "1");
+}
+
+#[test]
+fn the_first_matching_arm_wins() {
+    let program = format!(
+        "{OPTION}f = \\o. match o | Some 1 -> \"one\" | Some _ -> \"some\" | _ -> \"other\"\n\
+         [(f (Some 1)), (f (Some 2)), (f None)]"
+    );
+    assert_eq!(eval(&program), r#"["one", "some", "other"]"#);
+}
+
+#[test]
+fn fields_are_lazy() {
+    let program = format!(
+        "{OPTION}type Pair<a, b> = Pair a b\n\
+         first = \\p. match p | Pair x _ -> x\n\
+         (first (Pair 1 (error \"never needed\")))"
+    );
+    assert_eq!(eval(&program), "1");
+    let program =
+        format!("{OPTION}match (Some (error \"boom\")) | Some _ -> \"fine\" | None -> \"no\"");
+    assert_eq!(eval(&program), r#""fine""#);
+}
+
+#[test]
+fn matching_forces_only_what_the_first_possible_arm_needs() {
+    // The first arm only needs the first field; it matches, so the second
+    // field is never evaluated even though a later arm tests it.
+    let program = "type Pair<a, b> = Pair a b\n\
+                   f = \\p. match p | Pair True _ -> 1 | Pair _ True -> 2 | Pair _ _ -> 3\n\
+                   (f (Pair True (error \"not needed\")))";
+    assert_eq!(eval(program), "1");
+}
+
+#[test]
+fn data_compares_by_constructor_then_fields() {
+    let program = format!(
+        "{OPTION}[(eq (Some 1) (Some 1)), (eq (Some 1) None), (lt None (Some 0)), (lt (Some 1) (Some 2))]"
+    );
+    assert_eq!(eval(&program), "[True, False, True, True]");
+    assert_eq!(
+        eval(&format!("{OPTION}(sort [(Some 2), None, (Some 1)])")),
+        "[None, (Some 1), (Some 2)]"
+    );
+    assert_eq!(eval("(compare False True)"), "-1");
+}
+
+#[test]
+fn recursive_data_and_tail_calls_through_match() {
+    let program = "type Tree<a> = Leaf | Node Tree<a> a Tree<a>\n\
+                   insert = \\x. \\t. match t\n\
+                   | Leaf -> (Node Leaf x Leaf)\n\
+                   | Node l v r -> (if (lt x v) (Node (insert x l) v r) (Node l v (insert x r)))\n\
+                   toList = \\t. match t | Leaf -> [] | Node l v r -> (append (toList l) (cons v (toList r)))\n\
+                   (toList (foldl \\t. \\x. (insert x t) Leaf [5, 3, 8, 1, 4]))";
+    assert_eq!(eval(program), "[1, 3, 4, 5, 8]");
+    // A loop written with `match` runs in constant space.
+    let program = "type Nat = Zero | Succ Nat\n\
+                   count = \\n. \\acc. match n | Zero -> acc | Succ m -> (count m (add acc 1))\n\
+                   build = \\k. \\acc. (if (eq k 0) acc (build (sub k 1) (Succ acc)))\n\
+                   (count (build 1000000 Zero) 0)";
+    assert_eq!(eval(program), "1000000");
+}
+
+#[test]
+fn deep_data_shows_compares_and_drops_without_overflow() {
+    let program = "type Nat = Zero | Succ Nat\n\
+                   build = \\k. \\acc. (if (eq k 0) acc (build (sub k 1) (Succ acc)))\n\
+                   n = (build 200000 Zero)\n\
+                   [(eq n n), (gt (Succ n) n), (eq (stringLength (show n)) 1400004)]";
+    assert_eq!(eval(program), "[True, True, True]");
 }

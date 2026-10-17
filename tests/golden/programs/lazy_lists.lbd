@@ -8,7 +8,7 @@
 
 -- `foldr` stops as soon as its function ignores the rest of the list.
 hasOne : List<Number> -> Bool = \xs.
-    (foldr \x. \acc. (or (eq x 1) acc) false xs)
+    (foldr \x. \acc. (or (eq x 1) acc) False xs)
 (println (hasOne [1, (error "never needed")]))
 
 -- A fold that uses every element still sees them all, in order.

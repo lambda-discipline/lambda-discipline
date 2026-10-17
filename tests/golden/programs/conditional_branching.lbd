@@ -12,4 +12,4 @@ toString : (String -> String -> String) -> String = \bool. (churchIf bool "true"
 
 -- The built-in `Bool` and the lazy `if`.
 (println (if (lt 1 2) "yes" "no"))
-(println (if false (error "never evaluated") "lazy"))
+(println (if False (error "never evaluated") "lazy"))
