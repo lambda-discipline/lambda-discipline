@@ -9,6 +9,8 @@
 //! * **Uncurrying.** `\x. \y. body` becomes one lambda of arity 2; partial
 //!   and over-application are handled by the backend's apply.
 //! * Names are gone; globals and builtins are referenced by id.
+//! * `__FILE__`, `__DIR__` and `__LINE__` become the literals they stand for,
+//!   since they are fixed by where they are written.
 //!
 //! The interpreter in [`crate::backend::interp`] executes this IR lazily. A
 //! code generator (C, uxn, LLVM) would start from the same IR.

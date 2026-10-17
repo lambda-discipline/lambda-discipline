@@ -1,14 +1,17 @@
-//! HIR to Core lowering: closure conversion and uncurrying.
+//! HIR to Core lowering: closure conversion, uncurrying and source locations.
 
 use std::collections::HashMap;
 use std::rc::Rc;
 
+use crate::builtins::Builtin;
 use crate::hir::{self, ExprKind, LocalId};
+use crate::source::SourceMap;
 
 use super::{Body, Expr, GlobalBody, Lambda, Literal, Module};
 
-/// Lowers a resolved, type-checked unit.
-pub fn lower_unit(unit: &hir::Unit) -> Module {
+/// Lowers a resolved, type-checked unit. `sources` holds the files its spans
+/// point into.
+pub fn lower_unit(unit: &hir::Unit, sources: &SourceMap) -> Module {
     Module {
         globals: unit
             .defs
@@ -16,15 +19,20 @@ pub fn lower_unit(unit: &hir::Unit) -> Module {
             .map(|def| GlobalBody {
                 id: def.id,
                 name: def.name.clone(),
-                body: lower_body(&def.body),
+                body: lower_body(&def.body, sources),
             })
             .collect(),
-        entries: unit.entries.iter().map(lower_body).collect(),
+        entries: unit
+            .entries
+            .iter()
+            .map(|body| lower_body(body, sources))
+            .collect(),
     }
 }
 
-pub fn lower_body(body: &hir::Body) -> Body {
+pub fn lower_body(body: &hir::Body, sources: &SourceMap) -> Body {
     let mut lowerer = Lowerer {
+        sources,
         frames: vec![Frame::default()],
     };
     let expr = lowerer.expr(&body.expr);
@@ -54,11 +62,12 @@ impl Frame {
     }
 }
 
-struct Lowerer {
+struct Lowerer<'a> {
+    sources: &'a SourceMap,
     frames: Vec<Frame>,
 }
 
-impl Lowerer {
+impl Lowerer<'_> {
     /// The slot of `local` in frame `depth`, capturing it through every
     /// intermediate lambda if it lives further out.
     fn slot(&mut self, depth: usize, local: LocalId) -> u32 {
@@ -86,6 +95,19 @@ impl Lowerer {
             ExprKind::Unit => Expr::Lit(Literal::Unit),
             ExprKind::Local(local) => Expr::Local(self.slot(self.frames.len() - 1, *local)),
             ExprKind::Global(id) => Expr::Global(*id),
+            // Constants of the place they are written, like literals.
+            ExprKind::Builtin(Builtin::File) => Expr::Lit(Literal::String(
+                self.sources.get(expr.span.file).name().into(),
+            )),
+            ExprKind::Builtin(Builtin::Dir) => Expr::Lit(Literal::String(
+                self.sources.get(expr.span.file).dir_name().into(),
+            )),
+            ExprKind::Builtin(Builtin::Line) => {
+                let file = self.sources.get(expr.span.file);
+                Expr::Lit(Literal::Number(
+                    file.line_col(expr.span.start as usize).0 as f64,
+                ))
+            }
             ExprKind::Builtin(builtin) => Expr::Builtin(*builtin),
             ExprKind::Lambda { .. } => Expr::Lambda(Rc::new(self.lambda(expr))),
             ExprKind::App { func, args } => Expr::App {
@@ -192,7 +214,7 @@ mod tests {
         let loaded = load_text(&mut sources, "<test>", text);
         let resolved = resolve(loaded.items, &EmptyScope);
         assert!(resolved.diagnostics.is_empty());
-        lower_unit(&resolved.unit)
+        lower_unit(&resolved.unit, &sources)
     }
 
     fn global(text: &str) -> String {
@@ -202,6 +224,16 @@ mod tests {
     #[test]
     fn nested_lambdas_are_uncurried() {
         assert_eq!(global(r"k = \x. \y. x"), "(lambda/2 [] frame=2 $0)");
+    }
+
+    #[test]
+    fn source_locations_are_literals_unless_shadowed() {
+        // In-memory text has no directory of its own: paths in it are
+        // relative to the working directory, like its `use` paths.
+        assert_eq!(global("f = __FILE__"), r#""<test>""#);
+        assert_eq!(global("d = __DIR__"), r#"".""#);
+        assert_eq!(global("l =\n\n    __LINE__"), "3");
+        assert_eq!(global(r"f = \__DIR__. __DIR__"), "(lambda/1 [] frame=1 $0)");
     }
 
     #[test]

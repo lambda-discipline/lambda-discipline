@@ -290,6 +290,7 @@ pub(super) fn pure(
         | B::ZipWith => {
             unreachable!("`{builtin}` is implemented by the machine")
         }
+        B::File | B::Dir | B::Line => unreachable!("`{builtin}` is lowered to a literal"),
     })
 }
 

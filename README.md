@@ -153,6 +153,17 @@ shout : String -> IO<Unit> = \path.
 performs one action after another, `bind` is the function behind `<-`, and
 `pure` makes an action that just returns a value.
 
+A relative path given to `readFile` is relative to the working directory, as
+in other languages, so paths typed on the command line mean what the user
+expects. `use` paths are different: they are relative to the file that
+contains the `use`. To read a file that ships with the program, start its path
+with `__DIR__`, the directory of the file it is written in (`.` in the REPL):
+
+```haskell
+let input <- (readFile (concat __DIR__ "/input.txt")) in   -- works from any directory
+(println (length (lines input)))
+```
+
 `lbd run` performs the program's top-level expressions in source order, and
 nothing else: a definition such as `greeting = (println "hi")` only runs when a
 top-level action uses it, and a top-level expression that is not an action is
@@ -175,6 +186,7 @@ takes the data it works on last, so partial application reads well:
 | Strings | `concat show parseNumber stringLength chars split lines join trim` |
 | Lists | `length isEmpty head tail get cons push remove append map filter foldl foldr reverse sort range zipWith transpose sum take drop` |
 | Input/output | `pure bind then sequence print println readFile error` |
+| Source location | `__FILE__ __DIR__ __LINE__` (spelled as in C and Elixir, since their value depends on where they are written) |
 
 [`examples/std.lbd`](examples/std.lbd) is a small library written in the
 language itself (`compose`, `flip`, Church pairs, `count`, `all`, `any`, `forEach`, ...).

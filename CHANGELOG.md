@@ -22,6 +22,11 @@ All notable changes to this project are documented here. The format follows
 - REPL with GHCi-style commands (`:type`, `:info`, `:load`, `:reload`, `:env`,
   `:docs`, `:reset`), multi-line input and tab completion.
 - Diagnostics rendered with `ariadne`.
+- `__FILE__`, `__DIR__` and `__LINE__`: the path, directory and line where
+  they are written. `(readFile (concat __DIR__ "/input.txt"))` reads a file
+  next to the program from any working directory. `readFile` itself stays
+  relative to the working directory, like a path typed on the command line
+  (#28).
 
 ### Changed
 

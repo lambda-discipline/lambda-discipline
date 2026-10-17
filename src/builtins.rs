@@ -7,7 +7,10 @@
 //!
 //! Naming follows one convention: lowerCamelCase, and the data a function
 //! works on comes last, so partial application reads naturally
-//! (`(map (add 1))`, `(split ",")`, `(get 0)`).
+//! (`(map (add 1))`, `(split ",")`, `(get 0)`). The exception is the source
+//! location constants (`__FILE__`, `__DIR__`, `__LINE__`), which are spelled
+//! as in C, OCaml and Elixir because their value depends on where they are
+//! written.
 
 use std::fmt;
 
@@ -20,16 +23,18 @@ pub enum Module {
     String,
     List,
     Io,
+    Source,
 }
 
 impl Module {
-    pub const ALL: [Module; 6] = [
+    pub const ALL: [Module; 7] = [
         Module::Number,
         Module::Compare,
         Module::Bool,
         Module::String,
         Module::List,
         Module::Io,
+        Module::Source,
     ];
 
     pub fn title(self) -> &'static str {
@@ -40,6 +45,7 @@ impl Module {
             Module::String => "Strings",
             Module::List => "Lists",
             Module::Io => "Input/output",
+            Module::Source => "Source location",
         }
     }
 }
@@ -147,8 +153,12 @@ builtins! {
     Sequence => "sequence" : "List<IO<a>> -> IO<List<a>>", Io, "Runs a list of actions in order and collects their results.";
     Print => "print" : "a -> IO<Unit>", Io, "An action that prints its arguments without separators. Takes any number of arguments of any types.";
     Println => "println" : "a -> IO<Unit>", Io, "Like `print`, followed by a newline.";
-    ReadFile => "readFile" : "String -> IO<String>", Io, "An action that reads a whole file, relative to the working directory.";
+    ReadFile => "readFile" : "String -> IO<String>", Io, "An action that reads a whole file. A relative path is relative to the working directory, like a path typed on the command line; start it with `__DIR__` to read a file that sits next to the program.";
     Error => "error" : "String -> a", Io, "Stops the program with an error message when it is evaluated. Not an action: it can occur anywhere.";
+
+    File => "__FILE__" : "String", Source, "The path of the source file this name is written in; `<repl>` in the REPL.";
+    Dir => "__DIR__" : "String", Source, "The directory of the source file this name is written in, which `use` paths are relative to; `.` in the REPL. `(readFile (concat __DIR__ \"/data.txt\"))` reads the `data.txt` next to the program from any working directory.";
+    Line => "__LINE__" : "Number", Source, "The line this name is written on, counting from 1.";
 }
 
 impl Builtin {

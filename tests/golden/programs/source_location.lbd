@@ -1,0 +1,5 @@
+-- Golden tests run from the crate root, not from this directory, so
+-- `__DIR__` is what finds the file next to this program.
+let text <- (readFile (concat __DIR__ "/source_location.txt")) in
+(print text)
+(println "line " __LINE__)
