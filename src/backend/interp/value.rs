@@ -1,6 +1,11 @@
 //! Runtime values, thunks and frames of the interpreter.
+//!
+//! Values can nest arbitrarily deeply at run time (a list built by polymorphic
+//! recursion, a long chain of unevaluated thunks), so nothing here recurses on
+//! the native stack: comparison and rendering keep explicit stacks, and
+//! dropping goes through `defer_drop`.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::cmp::Ordering;
 use std::fmt;
 use std::rc::Rc;
@@ -44,51 +49,75 @@ impl Value {
 
     /// Structural equality; `Err` when functions are compared.
     pub fn equals(&self, other: &Value) -> Result<bool, String> {
-        Ok(match (self, other) {
-            (Value::Number(a), Value::Number(b)) => a == b,
-            (Value::String(a), Value::String(b)) => a == b,
-            (Value::Bool(a), Value::Bool(b)) => a == b,
-            (Value::Unit, Value::Unit) => true,
-            (Value::List(a), Value::List(b)) => {
-                if a.len() != b.len() {
-                    return Ok(false);
+        // Pairs of lists whose elements are still being compared.
+        let mut pending = Vec::new();
+        let (mut a, mut b) = (self, other);
+        loop {
+            let equal = match (a, b) {
+                (Value::Number(a), Value::Number(b)) => a == b,
+                (Value::String(a), Value::String(b)) => a == b,
+                (Value::Bool(a), Value::Bool(b)) => a == b,
+                (Value::Unit, Value::Unit) => true,
+                (Value::List(a), Value::List(b)) => {
+                    pending.push(a.iter().zip(b));
+                    a.len() == b.len()
                 }
-                for (x, y) in a.iter().zip(b) {
-                    if !x.equals(y)? {
-                        return Ok(false);
-                    }
+                (a, b) if a.is_function() || b.is_function() => {
+                    return Err("functions cannot be compared".to_owned());
                 }
-                true
+                _ => false,
+            };
+            if !equal {
+                return Ok(false);
             }
-            (a, b) if a.is_function() || b.is_function() => {
-                return Err("functions cannot be compared".to_owned());
-            }
-            _ => false,
-        })
+            (a, b) = loop {
+                let Some(pairs) = pending.last_mut() else {
+                    return Ok(true);
+                };
+                match pairs.next() {
+                    Some(pair) => break pair,
+                    None => drop(pending.pop()),
+                }
+            };
+        }
     }
 
     /// Total order on comparable values; `Err` for functions and `NaN`.
     pub fn compare(&self, other: &Value) -> Result<Ordering, String> {
-        match (self, other) {
-            (Value::Number(a), Value::Number(b)) => a
-                .partial_cmp(b)
-                .ok_or_else(|| "`NaN` cannot be ordered".to_owned()),
-            (Value::String(a), Value::String(b)) => Ok(a.cmp(b)),
-            (Value::Bool(a), Value::Bool(b)) => Ok(a.cmp(b)),
-            (Value::Unit, Value::Unit) => Ok(Ordering::Equal),
-            (Value::List(a), Value::List(b)) => {
-                for (x, y) in a.iter().zip(b) {
-                    match x.compare(y)? {
-                        Ordering::Equal => {}
-                        other => return Ok(other),
-                    }
+        // Pairs of lists whose elements are still being compared, with the
+        // order of their lengths for when all shared elements are equal.
+        let mut pending = Vec::new();
+        let (mut a, mut b) = (self, other);
+        loop {
+            let ordering = match (a, b) {
+                (Value::Number(a), Value::Number(b)) => a
+                    .partial_cmp(b)
+                    .ok_or_else(|| "`NaN` cannot be ordered".to_owned())?,
+                (Value::String(a), Value::String(b)) => a.cmp(b),
+                (Value::Bool(a), Value::Bool(b)) => a.cmp(b),
+                (Value::Unit, Value::Unit) => Ordering::Equal,
+                (Value::List(a), Value::List(b)) => {
+                    pending.push((a.iter().zip(b), a.len().cmp(&b.len())));
+                    Ordering::Equal
                 }
-                Ok(a.len().cmp(&b.len()))
+                (a, b) if a.is_function() || b.is_function() => {
+                    return Err("functions cannot be compared".to_owned());
+                }
+                _ => return Err("values of different types cannot be compared".to_owned()),
+            };
+            if ordering.is_ne() {
+                return Ok(ordering);
             }
-            (a, b) if a.is_function() || b.is_function() => {
-                Err("functions cannot be compared".to_owned())
-            }
-            _ => Err("values of different types cannot be compared".to_owned()),
+            (a, b) = loop {
+                let Some((pairs, lengths)) = pending.last_mut() else {
+                    return Ok(Ordering::Equal);
+                };
+                match pairs.next() {
+                    Some(pair) => break pair,
+                    None if lengths.is_ne() => return Ok(*lengths),
+                    None => drop(pending.pop()),
+                }
+            };
         }
     }
 
@@ -108,23 +137,116 @@ impl Value {
     }
 
     fn write_shown(&self, out: &mut String) {
-        match self {
-            Value::Number(n) => out.push_str(&format_number(*n)),
-            Value::String(s) => out.push_str(&format!("{:?}", s.as_ref())),
-            Value::Bool(b) => out.push_str(if *b { "true" } else { "false" }),
-            Value::Unit => out.push_str("()"),
-            Value::List(items) => {
-                out.push('[');
-                for (i, item) in items.iter().enumerate() {
-                    if i > 0 {
-                        out.push_str(", ");
-                    }
-                    item.write_shown(out);
+        // Lists being rendered, innermost last: their remaining elements and
+        // whether one has been written yet.
+        let mut open = Vec::new();
+        let mut value = self;
+        loop {
+            match value {
+                Value::Number(n) => out.push_str(&format_number(*n)),
+                Value::String(s) => out.push_str(&format!("{:?}", s.as_ref())),
+                Value::Bool(b) => out.push_str(if *b { "true" } else { "false" }),
+                Value::Unit => out.push_str("()"),
+                Value::List(items) => {
+                    out.push('[');
+                    open.push((items.iter(), false));
                 }
-                out.push(']');
+                Value::Builtin(b) => out.push_str(&format!("<builtin {b}>")),
+                Value::Closure(_) | Value::Partial(_) => out.push_str("<function>"),
             }
-            Value::Builtin(b) => out.push_str(&format!("<builtin {b}>")),
-            Value::Closure(_) | Value::Partial(_) => out.push_str("<function>"),
+            value = loop {
+                let Some((items, started)) = open.last_mut() else {
+                    return;
+                };
+                match items.next() {
+                    Some(item) => {
+                        if *started {
+                            out.push_str(", ");
+                        }
+                        *started = true;
+                        break item;
+                    }
+                    None => {
+                        out.push(']');
+                        open.pop();
+                    }
+                }
+            };
+        }
+    }
+}
+
+// ---- dropping ----------------------------------------------------------------
+//
+// Dropping a value drops what it owns, which can be another value of the same
+// kind, and so on to any depth. The `Drop` impls below move the owned parts
+// out and hand them to `defer_drop`, which drops them in a loop instead.
+
+/// The owned parts of a value, waiting to be dropped.
+#[allow(dead_code, reason = "the fields are only ever dropped")]
+enum Garbage {
+    List(Vector<Value>),
+    Value(Value),
+    Thunks(Vec<Thunk>),
+    Captured(Box<[Thunk]>),
+    Slots(Box<[RefCell<Option<Thunk>>]>),
+}
+
+thread_local! {
+    static DRAINING: Cell<bool> = const { Cell::new(false) };
+    static GARBAGE: RefCell<Vec<Garbage>> = const { RefCell::new(Vec::new()) };
+}
+
+/// Drops `garbage` without recursing: drops that happen meanwhile only queue
+/// their parts, and the outermost call empties the queue in a loop.
+fn defer_drop(garbage: Garbage) {
+    if DRAINING.try_with(Cell::get).unwrap_or(true) {
+        // During thread teardown the queue may be gone; the garbage is then
+        // dropped in place, with the closure.
+        let _ = GARBAGE.try_with(|queue| queue.borrow_mut().push(garbage));
+        return;
+    }
+    DRAINING.set(true);
+    drop(garbage);
+    while let Some(garbage) = GARBAGE.with(|queue| queue.borrow_mut().pop()) {
+        drop(garbage);
+    }
+    DRAINING.set(false);
+}
+
+impl Drop for Value {
+    fn drop(&mut self) {
+        match self {
+            Value::List(items) if !items.is_empty() => {
+                defer_drop(Garbage::List(std::mem::take(items)));
+            }
+            _ => {}
+        }
+    }
+}
+
+impl Drop for Closure {
+    fn drop(&mut self) {
+        if !self.captured.is_empty() {
+            defer_drop(Garbage::Captured(std::mem::take(&mut self.captured)));
+        }
+    }
+}
+
+impl Drop for Partial {
+    fn drop(&mut self) {
+        defer_drop(Garbage::Value(std::mem::replace(
+            &mut self.func,
+            Value::Unit,
+        )));
+        defer_drop(Garbage::Thunks(std::mem::take(&mut self.args)));
+    }
+}
+
+impl Drop for Env {
+    fn drop(&mut self) {
+        if !self.slots.is_empty() {
+            defer_drop(Garbage::Slots(std::mem::take(&mut self.slots)));
         }
     }
 }
@@ -292,6 +414,70 @@ mod tests {
             Ok(Greater)
         );
         assert!(n(f64::NAN).compare(&n(1.0)).is_err());
+    }
+
+    /// `depth` lists, each holding the next, around `[1]`.
+    fn nested_list(depth: usize, innermost: f64) -> Value {
+        let mut value = list(vec![Value::Number(innermost)]);
+        for _ in 0..depth {
+            value = list(vec![value]);
+        }
+        value
+    }
+
+    // These run on the test harness's small stack: deep values must not use it.
+    const DEEP: usize = 100_000;
+
+    #[test]
+    fn deep_lists_compare_show_and_drop_without_overflow() {
+        let a = nested_list(DEEP, 1.0);
+        let b = nested_list(DEEP, 2.0);
+        assert_eq!(a.equals(&a.clone()), Ok(true));
+        assert_eq!(a.equals(&b), Ok(false));
+        assert_eq!(a.compare(&b), Ok(Ordering::Less));
+        assert_eq!(b.compare(&a), Ok(Ordering::Greater));
+        let expected = format!("{}[1]{}", "[".repeat(DEEP), "]".repeat(DEEP));
+        assert_eq!(a.show(), expected);
+    }
+
+    #[test]
+    fn nested_lists_keep_their_rendering_and_order() {
+        let n = Value::Number;
+        let value = list(vec![list(vec![n(1.0), list(vec![])]), n(2.0), list(vec![])]);
+        assert_eq!(value.show(), "[[1, []], 2, []]");
+        assert_eq!(
+            list(vec![list(vec![n(1.0)]), n(2.0)])
+                .compare(&list(vec![list(vec![n(1.0), n(0.0)]), n(0.0)])),
+            Ok(Ordering::Less)
+        );
+        assert_eq!(
+            list(vec![list(vec![n(1.0)]), n(3.0)]).compare(&list(vec![list(vec![n(1.0)]), n(2.0)])),
+            Ok(Ordering::Greater)
+        );
+        assert!(
+            list(vec![list(vec![Value::Builtin(Builtin::Add)])])
+                .equals(&list(vec![list(vec![Value::Builtin(Builtin::Add)])]))
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn deep_thunk_and_partial_chains_drop_without_overflow() {
+        let expr = Rc::new(Expr::Lit(crate::core::Literal::Unit));
+        let mut thunk = Thunk::done(Value::Unit);
+        for _ in 0..DEEP {
+            thunk = Thunk::delayed(expr.clone(), Env::with(1, [thunk]));
+        }
+        drop(thunk);
+
+        let mut value = Value::Builtin(Builtin::Add);
+        for _ in 0..DEEP {
+            value = Value::Partial(Rc::new(Partial {
+                func: value,
+                args: Vec::new(),
+            }));
+        }
+        drop(value);
     }
 
     #[test]

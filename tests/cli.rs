@@ -199,3 +199,18 @@ fn colors_are_disabled_when_not_a_terminal() {
     assert!(stderr.contains("`head` of an empty list"));
     assert!(!stderr.contains('\u{1b}'));
 }
+
+#[test]
+fn deeply_nested_programs_are_reported_not_crashed_on() {
+    let deep = 100_000;
+    let (_dir, path) = program(&format!("{}1{}", "(".repeat(deep), ")".repeat(deep)));
+    lbd()
+        .arg("run")
+        .arg(&path)
+        .assert()
+        .code(1)
+        .stdout("")
+        .stderr(predicate::str::contains(
+            "expression nested too deeply (the limit is 10000 levels)",
+        ));
+}

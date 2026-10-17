@@ -1,0 +1,10 @@
+file = "deep_values.lbd"
+
+[expect]
+exit_code = 0
+stdout = """
+true
+0
+400001
+true
+"""

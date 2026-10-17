@@ -19,6 +19,10 @@
 //!
 //! On a syntax error the parser records a diagnostic and skips to the next
 //! line that starts a top-level item, so one run reports several errors.
+//!
+//! Every later stage recurses over the tree, so the parser rejects
+//! expressions and types nested deeper than [`MAX_NESTING`] instead of letting
+//! a later stage overflow the native stack.
 
 use std::rc::Rc;
 
@@ -33,6 +37,9 @@ struct Failed;
 
 type PResult<T> = Result<T, Failed>;
 
+/// How deeply expressions, and the types written inside them, may nest.
+pub const MAX_NESTING: u32 = 10_000;
+
 /// Parses a whole file.
 pub fn parse_module(file: FileId, text: &str) -> (Module, Vec<Diagnostic>) {
     let (tokens, mut diagnostics) = lex(file, text);
@@ -40,6 +47,7 @@ pub fn parse_module(file: FileId, text: &str) -> (Module, Vec<Diagnostic>) {
         text,
         tokens,
         pos: 0,
+        depth: 0,
         diagnostics: Vec::new(),
     };
     let module = parser.module();
@@ -54,6 +62,7 @@ pub fn parse_type(file: FileId, text: &str) -> Result<TypeExpr, Vec<Diagnostic>>
         text,
         tokens,
         pos: 0,
+        depth: 0,
         diagnostics: Vec::new(),
     };
     let result = parser
@@ -70,6 +79,8 @@ struct Parser<'a> {
     text: &'a str,
     tokens: Vec<Token>,
     pos: usize,
+    /// How many expressions and types enclose the current position.
+    depth: u32,
     diagnostics: Vec<Diagnostic>,
 }
 
@@ -114,6 +125,24 @@ impl Parser<'_> {
                 .at(found.span)
                 .with_label(format!("expected {kind}")),
         ))
+    }
+
+    /// Runs `parse` one nesting level deeper, failing past [`MAX_NESTING`].
+    fn nested<T>(&mut self, what: &str, parse: impl FnOnce(&mut Self) -> PResult<T>) -> PResult<T> {
+        if self.depth >= MAX_NESTING {
+            let found = self.peek();
+            return Err(self.error(
+                Diagnostic::error(format!(
+                    "{what} nested too deeply (the limit is {MAX_NESTING} levels)"
+                ))
+                .at(found.span)
+                .with_label("nested too deeply here"),
+            ));
+        }
+        self.depth += 1;
+        let result = parse(self);
+        self.depth -= 1;
+        result
     }
 
     fn error(&mut self, diagnostic: Diagnostic) -> Failed {
@@ -205,6 +234,10 @@ impl Parser<'_> {
     }
 
     fn expr(&mut self) -> PResult<Expr> {
+        self.nested("expression", Self::expr_inner)
+    }
+
+    fn expr_inner(&mut self) -> PResult<Expr> {
         let token = self.peek();
         let simple = |kind| {
             Ok(Expr {
@@ -340,6 +373,10 @@ impl Parser<'_> {
     }
 
     fn ty(&mut self) -> PResult<TypeExpr> {
+        self.nested("type", Self::ty_inner)
+    }
+
+    fn ty_inner(&mut self) -> PResult<TypeExpr> {
         let from = self.btype()?;
         if self.eat(TokenKind::Arrow).is_none() {
             return Ok(from);
@@ -529,6 +566,57 @@ mod tests {
     fn lexer_errors_are_included() {
         let (_, diagnostics) = parse("a : Number = 1;");
         assert_eq!(diagnostics[0].message, "unexpected character `;`");
+    }
+
+    /// Runs `f` on a thread with a stack like the one `lbd` gives the front end.
+    fn with_big_stack(f: impl FnOnce() + Send + 'static) {
+        std::thread::Builder::new()
+            .stack_size(256 * 1024 * 1024)
+            .spawn(f)
+            .unwrap()
+            .join()
+            .unwrap();
+    }
+
+    #[test]
+    fn deep_nesting_is_an_error_not_a_stack_overflow() {
+        with_big_stack(|| {
+            let deep = 100_000;
+            for (text, message) in [
+                (
+                    format!("{}1{}", "(".repeat(deep), ")".repeat(deep)),
+                    "expression nested too deeply (the limit is 10000 levels)",
+                ),
+                (
+                    format!("{}{}", "[".repeat(deep), "]".repeat(deep)),
+                    "expression nested too deeply (the limit is 10000 levels)",
+                ),
+                (
+                    format!("f = {}x", r"\x. ".repeat(deep)),
+                    "expression nested too deeply (the limit is 10000 levels)",
+                ),
+                (
+                    format!("f : {}Number = 1", "Number -> ".repeat(deep)),
+                    "type nested too deeply (the limit is 10000 levels)",
+                ),
+            ] {
+                let (_, diagnostics) = parse(&text);
+                assert_eq!(diagnostics.len(), 1, "{diagnostics:#?}");
+                assert_eq!(diagnostics[0].message, message);
+            }
+        });
+    }
+
+    #[test]
+    fn nesting_up_to_the_limit_is_accepted() {
+        with_big_stack(|| {
+            // The number inside the lists is one more level: exactly the limit.
+            let depth = MAX_NESTING as usize - 1;
+            let text = format!("{}1{}", "[".repeat(depth), "]".repeat(depth));
+            parse_ok(&text);
+            let text = format!("{}1{}", "[".repeat(depth + 1), "]".repeat(depth + 1));
+            assert_eq!(parse(&text).1.len(), 1);
+        });
     }
 
     #[test]

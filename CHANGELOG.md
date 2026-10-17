@@ -22,3 +22,10 @@ All notable changes to this project are documented here. The format follows
 - REPL with GHCi-style commands (`:type`, `:info`, `:load`, `:reload`, `:env`,
   `:docs`, `:reset`), multi-line input and tab completion.
 - Diagnostics rendered with `ariadne`.
+
+### Fixed
+
+- Deeply nested programs no longer crash with a stack overflow: expressions
+  and types nested more than 10,000 levels are reported as an error, and
+  showing, comparing and freeing deeply nested values no longer uses the
+  native stack (#31).
