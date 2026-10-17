@@ -1,0 +1,11 @@
+file = "top_level_value.lbd"
+
+[expect]
+exit_code = 1
+stdout = ""
+stderr_contains = [
+    "Error: a top-level expression must be an `IO` action",
+    "top_level_value.lbd:2:1",
+    "this has type `Number`",
+    "a program runs its top-level actions in source order",
+]

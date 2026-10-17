@@ -14,6 +14,7 @@ use imbl::Vector;
 
 use crate::builtins::Builtin;
 use crate::core::{Expr, Lambda};
+use crate::source::Span;
 
 #[derive(Clone)]
 pub enum Value {
@@ -27,6 +28,8 @@ pub enum Value {
     /// A function applied to fewer arguments than it needs.
     Partial(Rc<Partial>),
     Builtin(Builtin),
+    /// An `IO` action, not yet performed.
+    Io(Rc<Action>),
 }
 
 pub struct Closure {
@@ -39,12 +42,33 @@ pub struct Partial {
     pub args: Vec<Thunk>,
 }
 
+/// An action: an action builtin (`print`, `bind`, ...) applied to its
+/// arguments, which stay unevaluated until the action is performed.
+#[derive(Clone)]
+pub struct Action {
+    pub builtin: Builtin,
+    pub args: Vec<Thunk>,
+    pub span: Option<Span>,
+}
+
 impl Value {
     pub fn is_function(&self) -> bool {
         matches!(
             self,
             Value::Closure(_) | Value::Partial(_) | Value::Builtin(_)
         )
+    }
+
+    /// The action, if this is one; otherwise the value itself.
+    pub fn into_action(self) -> Result<Rc<Action>, Value> {
+        match &self {
+            Value::Io(action) => {
+                let action = action.clone();
+                drop(self);
+                Ok(action)
+            }
+            _ => Err(self),
+        }
     }
 
     /// Structural equality; `Err` when functions are compared.
@@ -61,6 +85,9 @@ impl Value {
                 (Value::List(a), Value::List(b)) => {
                     pending.push(a.iter().zip(b));
                     a.len() == b.len()
+                }
+                (Value::Io(_), _) | (_, Value::Io(_)) => {
+                    return Err("actions cannot be compared".to_owned());
                 }
                 (a, b) if a.is_function() || b.is_function() => {
                     return Err("functions cannot be compared".to_owned());
@@ -99,6 +126,9 @@ impl Value {
                 (Value::List(a), Value::List(b)) => {
                     pending.push((a.iter().zip(b), a.len().cmp(&b.len())));
                     Ordering::Equal
+                }
+                (Value::Io(_), _) | (_, Value::Io(_)) => {
+                    return Err("actions cannot be compared".to_owned());
                 }
                 (a, b) if a.is_function() || b.is_function() => {
                     return Err("functions cannot be compared".to_owned());
@@ -153,6 +183,7 @@ impl Value {
                 }
                 Value::Builtin(b) => out.push_str(&format!("<builtin {b}>")),
                 Value::Closure(_) | Value::Partial(_) => out.push_str("<function>"),
+                Value::Io(_) => out.push_str("<action>"),
             }
             value = loop {
                 let Some((items, started)) = open.last_mut() else {
@@ -240,6 +271,14 @@ impl Drop for Partial {
             Value::Unit,
         )));
         defer_drop(Garbage::Thunks(std::mem::take(&mut self.args)));
+    }
+}
+
+impl Drop for Action {
+    fn drop(&mut self) {
+        if !self.args.is_empty() {
+            defer_drop(Garbage::Thunks(std::mem::take(&mut self.args)));
+        }
     }
 }
 

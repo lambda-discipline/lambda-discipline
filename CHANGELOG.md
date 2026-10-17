@@ -23,6 +23,15 @@ All notable changes to this project are documented here. The format follows
   `:docs`, `:reset`), multi-line input and tab completion.
 - Diagnostics rendered with `ariadne`.
 
+### Changed
+
+- I/O is typed: `print`, `println` and `readFile` return `IO` actions, which
+  run only when performed. `lbd run` performs the top-level expressions in
+  source order, and a top-level expression that is not an action is a type
+  error. `let x <- action in body` performs an action and names its
+  result, and the new `sequence`, `then`, `bind` and `pure` builtins combine
+  actions. Effects no longer depend on evaluation order (#8).
+
 ### Fixed
 
 - Deeply nested programs no longer crash with a stack overflow: expressions

@@ -3,12 +3,13 @@
 
 parseLine : String -> List<Number> = \line. (map parseNumber (split "   " line))
 
-columns : List<List<Number>> =
-    (transpose (map parseLine (lines (readFile "examples/aoc-24/day-01/input.txt"))))
+-- The puzzle is a pure function of the input text.
+distance : String -> Number = \input.
+    let columns = (transpose (map parseLine (lines input))) in
+    let left = (sort (get 0 columns)) in
+    let right = (sort (get 1 columns)) in
+    (sum (zipWith \a. \b. (abs (sub a b)) left right))
 
-left : List<Number> = (sort (get 0 columns))
-right : List<Number> = (sort (get 1 columns))
-
-distance : Number = (sum (zipWith \a. \b. (abs (sub a b)) left right))
-
-(println "Answer: " distance)
+-- Reading the input is an action; `<-` names its result.
+let input <- (readFile "examples/aoc-24/day-01/input.txt") in
+(println "Answer: " (distance input))

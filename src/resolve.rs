@@ -221,6 +221,35 @@ impl<'a> BodyResolver<'a> {
                     body: Box::new(body),
                 }
             }
+            // `let x <- action in body` is `(bind action \x. body)`. The
+            // builtin is used directly, so a definition named `bind` cannot
+            // change it. Unlike `let`, `x` is not in scope in `action`.
+            ast::ExprKind::Bind {
+                name,
+                ann,
+                action,
+                body,
+            } => {
+                let action = self.expr(*action);
+                let param = self.bind(&name);
+                let body = self.expr(*body);
+                self.stack.pop();
+                let continuation = hir::Expr {
+                    span: name.span.to(body.span),
+                    kind: hir::ExprKind::Lambda {
+                        param,
+                        ann,
+                        body: Box::new(body),
+                    },
+                };
+                hir::ExprKind::App {
+                    func: Box::new(hir::Expr {
+                        kind: hir::ExprKind::Builtin(Builtin::Bind),
+                        span,
+                    }),
+                    args: vec![action, continuation],
+                }
+            }
             ast::ExprKind::Error => hir::ExprKind::Error,
         };
         hir::Expr { kind, span }

@@ -8,7 +8,7 @@
 //!         | IDENT [":" type] "=" expr
 //!         | expr ;
 //! expr    = "\" IDENT [":" type] "." expr
-//!         | "let" IDENT [":" type] "=" expr "in" expr
+//!         | "let" IDENT [":" type] ("=" | "<-") expr "in" expr
 //!         | NUMBER | STRING | IDENT
 //!         | "(" ")"                       (* unit *)
 //!         | "(" expr expr* ")"            (* grouping or application *)
@@ -299,19 +299,42 @@ impl Parser<'_> {
             Some(_) => Some(self.ty()?),
             None => None,
         };
-        self.expect(TokenKind::Equals)?;
-        let value = self.expr()?;
+        let binds = match self.eat(TokenKind::LeftArrow) {
+            Some(_) => true,
+            None if self.peek_kind() == TokenKind::Equals => {
+                self.bump();
+                false
+            }
+            None => {
+                let found = self.peek();
+                return Err(self.error(
+                    Diagnostic::error(format!("expected `=` or `<-`, found {}", found.kind))
+                        .at(found.span)
+                        .with_label("expected `=` or `<-`")
+                        .with_help("`let x = value in ...` names a value; `let x <- action in ...` performs an action and names its result"),
+                ));
+            }
+        };
+        let value = Box::new(self.expr()?);
         self.expect(TokenKind::In)?;
-        let body = self.expr()?;
-        Ok(Expr {
-            span: start.to(body.span),
-            kind: ExprKind::Let {
+        let body = Box::new(self.expr()?);
+        let span = start.to(body.span);
+        let kind = if binds {
+            ExprKind::Bind {
                 name,
                 ann,
-                value: Box::new(value),
-                body: Box::new(body),
-            },
-        })
+                action: value,
+                body,
+            }
+        } else {
+            ExprKind::Let {
+                name,
+                ann,
+                value,
+                body,
+            }
+        };
+        Ok(Expr { kind, span })
     }
 
     fn paren(&mut self) -> PResult<Expr> {
@@ -498,6 +521,19 @@ mod tests {
         assert_eq!(
             roundtrip("x = let y: Number = 2 in (add y y)"),
             "x = (let y: Number = 2 in (add y y))\n"
+        );
+    }
+
+    #[test]
+    fn let_bindings_of_action_results() {
+        assert_eq!(
+            roundtrip(r"x = let s <- (readFile f) in let n: Number <- (pure 1) in (println s n)"),
+            "x = (let s <- (readFile f) in (let n: Number <- (pure 1) in (println s n)))\n"
+        );
+        let (_, diagnostics) = parse("x = let s 1 in s");
+        assert_eq!(
+            diagnostics[0].message,
+            "expected `=` or `<-`, found a number"
         );
     }
 

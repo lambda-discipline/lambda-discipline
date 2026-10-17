@@ -38,6 +38,8 @@ pub enum TokenKind {
     Equals,
     #[token("->")]
     Arrow,
+    #[token("<-")]
+    LeftArrow,
     #[token("<")]
     LAngle,
     #[token(">")]
@@ -71,6 +73,7 @@ impl TokenKind {
             TokenKind::Comma => "`,`",
             TokenKind::Equals => "`=`",
             TokenKind::Arrow => "`->`",
+            TokenKind::LeftArrow => "`<-`",
             TokenKind::LAngle => "`<`",
             TokenKind::RAngle => "`>`",
             TokenKind::LParen => "`(`",
@@ -236,6 +239,15 @@ mod tests {
             vec![
                 LBracket, Number, Comma, Number, RBracket, Lambda, Ident, Dot, Ident, Eof
             ]
+        );
+    }
+
+    #[test]
+    fn arrows() {
+        use TokenKind::*;
+        assert_eq!(
+            kinds("let x <- a in b -> c"),
+            vec![Let, Ident, LeftArrow, Ident, In, Ident, Arrow, Ident, Eof]
         );
     }
 

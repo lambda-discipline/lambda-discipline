@@ -1,0 +1,2 @@
+(println "this line is fine")
+(add 1 2)

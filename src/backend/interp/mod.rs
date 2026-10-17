@@ -15,6 +15,10 @@
 //!   reported as an error rather than crashing.
 //! * Higher-order builtins (`map`, `foldr`, ...) are frames too, so the
 //!   functions they call can recurse as deeply as any other code.
+//! * Evaluation has no effects. Applying `print`, `readFile`, `bind` and the
+//!   other action builtins builds a [`Value::Io`] that describes an action;
+//!   only [`Interpreter::perform`] runs one, and [`Backend::run`] performs a
+//!   unit's top-level actions in order.
 
 mod prims;
 pub mod value;
@@ -30,7 +34,7 @@ use crate::core::{Expr, Lambda, Literal, Module};
 use crate::hir::GlobalId;
 use crate::source::Span;
 
-pub use value::{Closure, Env, Partial, Thunk, ThunkState, Value};
+pub use value::{Action, Closure, Env, Partial, Thunk, ThunkState, Value};
 
 /// Default limit on continuation frames (each is a few dozen bytes).
 pub const DEFAULT_MAX_FRAMES: usize = 10_000_000;
@@ -66,6 +70,20 @@ enum Frame {
     },
     /// A higher-order builtin waiting for one of its calls to return.
     Iterate(Box<Iteration>),
+    /// Perform the returned action; its result goes to the frame below.
+    Perform,
+    /// Pass the result of the action being performed to `func`, then
+    /// perform the action it returns (`bind`).
+    Bind { func: Thunk, span: Span },
+    /// Discard the result of the action being performed, then perform
+    /// `next` (`then`).
+    Then { next: Thunk },
+    /// Collect the result of the action being performed, then perform the
+    /// rest (`sequence`).
+    Sequence {
+        actions: Vector<Value>,
+        results: Vector<Value>,
+    },
 }
 
 /// A builtin applied to exactly its arity, while its strict arguments are forced.
@@ -154,6 +172,23 @@ impl Interpreter {
         self.run(Control::Eval(expr, env))
     }
 
+    /// Performs an action, returning its result. Any other value is
+    /// returned unchanged.
+    pub fn perform(&mut self, value: Value) -> Result<Value, RuntimeError> {
+        let action = match value.into_action() {
+            Ok(action) => action,
+            Err(value) => return Ok(value),
+        };
+        let base = self.stack.len();
+        match self.start_action(action) {
+            Ok(control) => self.run_from(base, control),
+            Err(error) => {
+                self.unwind(base);
+                Err(error)
+            }
+        }
+    }
+
     pub fn flush(&mut self) {
         let _ = self.out.flush();
     }
@@ -173,8 +208,12 @@ impl Interpreter {
 
     // ---- the machine loop ------------------------------------------------
 
-    fn run(&mut self, mut control: Control) -> Result<Value, RuntimeError> {
-        let base = self.stack.len();
+    fn run(&mut self, control: Control) -> Result<Value, RuntimeError> {
+        self.run_from(self.stack.len(), control)
+    }
+
+    /// Runs until a value returns to the frame at `base`.
+    fn run_from(&mut self, base: usize, mut control: Control) -> Result<Value, RuntimeError> {
         loop {
             let step = match control {
                 Control::Eval(expr, env) => self.eval_step(expr, env),
@@ -299,6 +338,22 @@ impl Interpreter {
                 }
             }
             Frame::Iterate(iteration) => self.iterate(*iteration, value),
+            Frame::Perform => match value.into_action() {
+                Ok(action) => self.start_action(action),
+                Err(other) => Err(RuntimeError::new(format!(
+                    "internal error: expected an action, found `{}`",
+                    other.show()
+                ))),
+            },
+            Frame::Bind { func, span } => self.bind_next(func, Thunk::done(value), span),
+            Frame::Then { next } => self.then_next(next),
+            Frame::Sequence {
+                actions,
+                mut results,
+            } => {
+                results.push_back(value);
+                self.next_in_sequence(actions, results)
+            }
         }
     }
 
@@ -424,6 +479,15 @@ impl Interpreter {
         args: Vec<Thunk>,
         span: Option<Span>,
     ) -> Result<Control, RuntimeError> {
+        if builtin.is_action() {
+            // Applying an action builtin only describes the action.
+            let action = Action {
+                builtin,
+                args,
+                span,
+            };
+            return Ok(Control::Return(Value::Io(Rc::new(action))));
+        }
         let values = Vec::with_capacity(args.len());
         self.continue_builtin(BuiltinCall {
             builtin,
@@ -488,6 +552,7 @@ impl Interpreter {
                 })?;
                 Ok(Control::Return(Value::Unit))
             }
+            B::Sequence => self.next_in_sequence(prims::list_of(&values[0])?, Vector::new()),
             B::Map | B::Filter | B::ZipWith => {
                 let kind = match builtin {
                     B::Map => IterationKind::Map,
@@ -536,6 +601,97 @@ impl Interpreter {
                 self.next_call(iteration, Some(initial))
             }
             _ => prims::pure(builtin, &values, span).map(Control::Return),
+        }
+    }
+
+    // ---- actions ----------------------------------------------------------
+    //
+    // Performing an action returns its result to the frame below. `bind` and
+    // `then` push a frame for what comes next, then perform their first
+    // action; the next action is performed in place of that frame, so a
+    // recursive loop of actions runs in constant space.
+
+    fn start_action(&mut self, action: Rc<Action>) -> Result<Control, RuntimeError> {
+        // An action that nobody else holds gives up its arguments, so they
+        // are not kept alive (and memoized) while the program runs on.
+        let mut action = Rc::try_unwrap(action).unwrap_or_else(|shared| (*shared).clone());
+        let mut args = std::mem::take(&mut action.args);
+        let span = action.span;
+        match action.builtin {
+            Builtin::Pure => {
+                let result = args.swap_remove(0);
+                // Hand the result on unevaluated when something is waiting for it.
+                match self.stack.pop() {
+                    Some(Frame::Bind { func, span }) => self.bind_next(func, result, span),
+                    Some(Frame::Then { next }) => self.then_next(next),
+                    frame => {
+                        self.stack.extend(frame);
+                        self.tail(result)
+                    }
+                }
+            }
+            Builtin::Bind | Builtin::Then => {
+                let second = args.pop().expect("`bind` and `then` take two arguments");
+                let first = args.pop().expect("`bind` and `then` take two arguments");
+                self.stack.push(if action.builtin == Builtin::Bind {
+                    Frame::Bind {
+                        func: second,
+                        span: span.expect("`bind` is applied at a call site"),
+                    }
+                } else {
+                    Frame::Then { next: second }
+                });
+                self.stack.push(Frame::Perform);
+                self.tail(first)
+            }
+            builtin => self.continue_builtin(BuiltinCall {
+                builtin,
+                values: Vec::with_capacity(args.len()),
+                args,
+                span,
+            }),
+        }
+    }
+
+    /// Applies `bind`'s function to the result, then performs what it returns.
+    fn bind_next(
+        &mut self,
+        func: Thunk,
+        result: Thunk,
+        span: Span,
+    ) -> Result<Control, RuntimeError> {
+        self.stack.push(Frame::Perform);
+        match func.value() {
+            Some(func) => self.apply(func, vec![result], span),
+            None => {
+                self.stack.push(Frame::Apply {
+                    args: vec![result],
+                    span,
+                });
+                self.tail(func)
+            }
+        }
+    }
+
+    /// Performs the action after a `then`.
+    fn then_next(&mut self, next: Thunk) -> Result<Control, RuntimeError> {
+        self.stack.push(Frame::Perform);
+        self.tail(next)
+    }
+
+    /// Performs the first of `actions`, or returns the results when none are left.
+    fn next_in_sequence(
+        &mut self,
+        mut actions: Vector<Value>,
+        results: Vector<Value>,
+    ) -> Result<Control, RuntimeError> {
+        match actions.pop_front() {
+            None => Ok(Control::Return(Value::List(results))),
+            Some(action) => {
+                self.stack.push(Frame::Sequence { actions, results });
+                self.stack.push(Frame::Perform);
+                Ok(Control::Return(action))
+            }
         }
     }
 
@@ -617,13 +773,16 @@ impl Backend for Interpreter {
     type Output = Vec<Value>;
 
     /// Defines the module's globals, then evaluates its top-level
-    /// expressions in order, returning their values.
+    /// expressions in order, performing the ones that are actions. Returns
+    /// each expression's value, or for an action, its result.
     fn run(&mut self, module: &Module) -> Result<Vec<Value>, RuntimeError> {
         self.define(module);
         let mut values = Vec::with_capacity(module.entries.len());
         for entry in &module.entries {
             let env = Env::new(entry.frame_size);
-            let value = self.eval(entry.expr.clone(), env);
+            let value = self
+                .eval(entry.expr.clone(), env)
+                .and_then(|value| self.perform(value));
             self.flush();
             values.push(value?);
         }

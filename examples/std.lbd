@@ -20,3 +20,7 @@ any : (a -> Bool) -> List<a> -> Bool = \predicate. \xs. (foldr \x. \rest. (or (p
 product : List<Number> -> Number = (foldl mul 1)
 maximum : List<Number> -> Number = \xs. (foldl max (head xs) xs)
 minimum : List<Number> -> Number = \xs. (foldl min (head xs) xs)
+
+-- Actions
+-- Performs `action` on every element in order: `(forEach \x. (println x) xs)`.
+forEach : (a -> IO<b>) -> List<a> -> IO<Unit> = \action. \xs. (foldr \x. \rest. (then (action x) rest) (pure ()) xs)

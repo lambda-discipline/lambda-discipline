@@ -87,6 +87,8 @@ pub struct GlobalBody {
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Module {
     pub globals: Vec<GlobalBody>,
+    /// Top-level expressions, in source order. A backend performs the ones
+    /// that are `IO` actions, in this order; in a program they all are.
     pub entries: Vec<Body>,
 }
 

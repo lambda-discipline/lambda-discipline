@@ -223,22 +223,99 @@ fn deep_non_tail_recursion_does_not_overflow() {
 }
 
 #[test]
-fn arguments_are_lazy_and_shared() {
+fn arguments_are_lazy() {
     // The unused argument would fail if evaluated.
     assert_eq!(eval(r#"const = \x. \y. x  (const 1 (error "boom"))"#), "1");
-    // A thunk is evaluated once even when used twice.
+}
+
+#[test]
+fn effects_run_only_when_performed() {
+    // Neither the definition nor the unused binding is ever performed.
     assert_eq!(
-        output(r#"twice = \x. [x, x]  (twice (println "once"))"#),
-        "once\n"
+        output(
+            r#"x = (print "never")
+               (let unused = (println "never either") in (println "only this"))"#
+        ),
+        "only this\n"
+    );
+    // Building a list of actions performs none of them.
+    assert_eq!(eval(r#"(length [(println "a"), (println "b")])"#), "2");
+    assert_eq!(
+        output(r#"x = (readFile "/definitely/missing")  (println "ok")"#),
+        "ok\n"
     );
 }
 
 #[test]
-fn globals_are_evaluated_once_and_on_demand() {
+fn an_action_runs_each_time_it_is_performed() {
     assert_eq!(
-        output(r#"x = (println "x")  y = (println "never")  [x, x]"#),
-        "x\n"
+        output(r#"x = (println "x")  y = (println "never")  (then x x)"#),
+        "x\nx\n"
     );
+}
+
+#[test]
+fn let_binds_the_results_of_actions() {
+    assert_eq!(
+        output(
+            r#"let a <- (pure 2) in
+               let b = (mul a 10) in
+               let _ <- (print "a = " a ", ") in
+               (println "b = " b)"#
+        ),
+        "a = 2, b = 20\n"
+    );
+    // The action is not in scope of its own binder.
+    assert_eq!(
+        output(r#"x = 1  (let x <- (pure (add x 1)) in (println x))"#),
+        "2\n"
+    );
+    // The result of `pure` is passed on without being evaluated.
+    assert_eq!(
+        output(r#"let x <- (pure (error "boom")) in (println "fine")"#),
+        "fine\n"
+    );
+}
+
+#[test]
+fn sequence_runs_a_list_of_actions_in_order() {
+    assert_eq!(
+        output(r#"(sequence [(print "a"), (print "b"), (println "c")])"#),
+        "abc\n"
+    );
+    assert_eq!(
+        eval(r#"(sequence [(pure 1), (pure 2), (bind (pure 3) \x. (pure (mul x 10)))])"#),
+        "[1, 2, 30]"
+    );
+    assert_eq!(eval("(sequence [])"), "[]");
+}
+
+#[test]
+fn performed_results_are_returned_with_their_types() {
+    let (mut session, _) = session();
+    let evaluated = session
+        .eval("<test>", r"(bind (pure 20) \x. (pure (add x 1)))")
+        .unwrap();
+    assert_eq!(evaluated.values[0].0.show(), "21");
+    assert_eq!(evaluated.values[0].1.to_string(), "Number");
+    assert_eq!(eval("[(pure 1)]"), "[<action>]");
+}
+
+#[test]
+fn recursive_action_loops_run_in_constant_space() {
+    let (mut session, out) = session();
+    session.set_max_frames(100);
+    let program = r#"
+        loop = \n. (if (eq n 0) (pure 0) (then (print "") (loop (sub n 1))))
+        count = \n. (if (eq n 0) (pure ()) (let x <- (pure n) in (count (sub x 1))))
+        (then (loop 100000) (count 100000))
+        (sequence (map \x. (print "") (range 0 100000)))
+        (println "done")
+    "#;
+    if let Err(diagnostics) = session.eval("<test>", program) {
+        panic!("{}", render(&session, &diagnostics));
+    }
+    assert_eq!(out.contents(), "done\n");
 }
 
 #[test]
@@ -271,6 +348,10 @@ fn runtime_errors_point_at_the_call() {
     assert_eq!(
         runtime_error(r"(eq \x. x \y. y)").message,
         "functions cannot be compared"
+    );
+    assert_eq!(
+        runtime_error("(eq (pure 1) (pure 1))").message,
+        "actions cannot be compared"
     );
     assert!(
         runtime_error("(readFile \"/definitely/missing\")")

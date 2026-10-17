@@ -3,5 +3,5 @@
 pub mod infer;
 pub mod ty;
 
-pub use infer::{Typed, builtin_scheme, check_expr, check_unit};
+pub use infer::{TopLevel, Typed, builtin_scheme, check_expr, check_unit};
 pub use ty::{Scheme, Type};

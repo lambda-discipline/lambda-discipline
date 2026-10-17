@@ -223,6 +223,10 @@ pub(super) fn pure(builtin: Builtin, args: &[Value], span: Option<Span>) -> Resu
         B::If
         | B::And
         | B::Or
+        | B::Pure
+        | B::Bind
+        | B::Then
+        | B::Sequence
         | B::Print
         | B::Println
         | B::Map

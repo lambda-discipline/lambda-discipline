@@ -283,6 +283,7 @@ pub fn is_complete(text: &str) -> bool {
                 | TokenKind::In
                 | TokenKind::Use
                 | TokenKind::LAngle
+                | TokenKind::LeftArrow
         )
     )
 }
@@ -660,6 +661,7 @@ true : Bool
         assert!(!is_complete("f ="));
         assert!(!is_complete("f : a ->"));
         assert!(!is_complete("x = let y = 1 in"));
+        assert!(!is_complete("x = let y <-"));
         assert!(!is_complete("\"unterminated"));
         assert!(is_complete(":type (add"));
         assert!(is_complete("x = 1 -- comment ("));

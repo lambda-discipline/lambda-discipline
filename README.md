@@ -83,14 +83,15 @@ Error: mismatched types
 ```text
 item  = "use" STRING                         include another file (path relative to this file)
       | IDENT [":" type] "=" expr            definition; the annotation is optional
-      | expr                                 evaluated in order when the program runs
+      | expr                                 an action, performed in order when the program runs
 expr  = "\" IDENT [":" type] "." expr        lambda (also `λ`)
       | "let" IDENT [":" type] "=" expr "in" expr
+      | "let" IDENT [":" type] "<-" expr "in" expr   perform an action and name its result
       | "(" expr expr+ ")"                   application; any expression can be called
       | "(" expr ")" | "(" ")"               grouping, unit
       | "[" expr, ... "]"                    list
       | NUMBER | STRING | IDENT
-type  = Number | String | Bool | Unit | List<type> | lowercase-variable | type -> type | (type)
+type  = Number | String | Bool | Unit | List<type> | IO<type> | lowercase-variable | type -> type | (type)
 ```
 
 * Numbers are 64-bit floats and print the way most languages print them: `42`,
@@ -110,7 +111,7 @@ Full Hindley-Milner inference with let-polymorphism:
   `apply : (a -> b) -> a -> b = \f: (a -> b). \x: a. (f x)` works.
 * Mutually recursive definitions are inferred together, then generalized.
 * `print` and `println` take any number of arguments of any types and must be
-  called directly.
+  called directly. They return `IO<Unit>`.
 
 ### Evaluation
 
@@ -125,6 +126,34 @@ Lists are immutable persistent vectors: `push`, `remove`, `get` and friends
 return new lists in `O(log n)` and never change their argument. Their elements
 are evaluated when the list is.
 
+### Input and output
+
+Evaluating an expression never has an effect. `print`, `println` and
+`readFile` return *actions* of type `IO<a>`: values that describe an effect
+and produce an `a` when they are performed. `let x <- action in body` performs
+an action and names its result, the way `let x = value in body` names a value:
+
+```haskell
+shout : String -> IO<Unit> = \path.
+    let text <- (readFile path) in      -- perform an action, name its result
+    let loud = (concat text "!") in     -- name a value, as always
+    (println loud)                      -- the last action gives the result
+
+(sequence [(println "a"), (shout "input.txt")])   -- perform a list of actions in order
+```
+
+`sequence` performs a list of actions and collects their results. `then`
+performs one action after another, `bind` is the function behind `<-`, and
+`pure` makes an action that just returns a value.
+
+`lbd run` performs the program's top-level expressions in source order, and
+nothing else: a definition such as `greeting = (println "hi")` only runs when a
+top-level action uses it, and a top-level expression that is not an action is
+a type error, because its value would be discarded. The REPL performs an
+action it is given and shows its result; any other expression is evaluated
+and shown. `error` is not an action: it stops the program when it is
+evaluated, wherever that happens.
+
 ### Builtins
 
 `lbd docs` prints the full reference. Every builtin is lowerCamelCase and
@@ -138,10 +167,10 @@ takes the data it works on last, so partial application reads well:
 | Booleans | `true false not and or if` |
 | Strings | `concat show parseNumber stringLength chars split lines join trim` |
 | Lists | `length isEmpty head tail get cons push remove append map filter foldl foldr reverse sort range zipWith transpose sum take drop` |
-| Input/output | `print println readFile error` |
+| Input/output | `pure bind then sequence print println readFile error` |
 
 [`examples/std.lbd`](examples/std.lbd) is a small library written in the
-language itself (`compose`, `flip`, Church pairs, `count`, `all`, `any`, ...).
+language itself (`compose`, `flip`, Church pairs, `count`, `all`, `any`, `forEach`, ...).
 
 ## Architecture
 
