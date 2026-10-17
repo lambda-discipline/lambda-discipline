@@ -1,0 +1,12 @@
+file = "lazy_lists.lbd"
+
+[expect]
+exit_code = 0
+stdout = """
+1
+2
+2
+3
+true
+abc
+"""
