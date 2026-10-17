@@ -1,0 +1,11 @@
+-- Polymorphic recursion builds values nested 200,000 levels deep; showing,
+-- comparing and freeing them must not overflow the native stack.
+equal : Number -> a -> Bool = \n. \x. (if (eq n 0) (eq x x) (equal (sub n 1) [x]))
+compared : Number -> a -> Number = \n. \x. (if (eq n 0) (compare x x) (compared (sub n 1) [x]))
+shown : Number -> a -> Number = \n. \x. (if (eq n 0) (length (chars (show x))) (shown (sub n 1) [x]))
+-- Here the `[x]` thunks are never forced and form a 200,000-long chain.
+unused : Number -> a -> Bool = \n. \x. (if (eq n 0) true (unused (sub n 1) [x]))
+(println (equal 200000 1))
+(println (compared 200000 1))
+(println (shown 200000 1))
+(println (unused 200000 1))

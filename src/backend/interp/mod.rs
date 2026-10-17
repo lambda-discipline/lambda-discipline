@@ -376,11 +376,11 @@ impl Interpreter {
         mut args: Vec<Thunk>,
         span: Span,
     ) -> Result<Control, RuntimeError> {
-        match func {
+        match &func {
             Value::Closure(closure) => {
                 let arity = closure.lambda.arity as usize;
                 if args.len() < arity {
-                    return Ok(partial(Value::Closure(closure), args));
+                    return Ok(partial(func.clone(), args));
                 }
                 let rest = args.split_off(arity);
                 if !rest.is_empty() {
@@ -397,7 +397,7 @@ impl Interpreter {
                 all.append(&mut args);
                 self.apply(applied.func.clone(), all, span)
             }
-            Value::Builtin(builtin) => {
+            &Value::Builtin(builtin) => {
                 let arity = if builtin.is_variadic() {
                     args.len()
                 } else {

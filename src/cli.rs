@@ -54,7 +54,8 @@ pub enum Command {
 
 /// The compiler front end recurses over expression nesting, so it runs on a
 /// thread with a generous stack (reserved address space, not committed memory).
-/// The interpreter itself does not use the native stack for recursion.
+/// The parser bounds that nesting (`syntax::parser::MAX_NESTING`) well within
+/// this stack. The interpreter itself does not use the native stack for recursion.
 const STACK_SIZE: usize = 256 * 1024 * 1024;
 
 pub fn main() -> ExitCode {
