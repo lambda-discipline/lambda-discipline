@@ -64,6 +64,12 @@ unit tests next to the code you changed, plus a golden test for anything a
 user can observe. Add a line to [CHANGELOG.md](CHANGELOG.md) under
 "Unreleased" for user-facing changes.
 
+Pull requests may be reviewed with Claude Code, which follows the project
+skill in `.claude/skills/pr-review/SKILL.md`: it checks whether the change
+is safe to run, runs the checks above, reviews commits, tests, the
+changelog and language-design consistency, and posts its findings as a
+comment on the pull request.
+
 ## Code layout
 
 The compiler is a pipeline; each stage lives in its own module with its own
