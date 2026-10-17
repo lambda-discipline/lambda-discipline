@@ -108,5 +108,33 @@ byte, so keep them LF-terminated (`.gitattributes` does this for you).
 
 ## Commit messages
 
-Write a short imperative summary ("Add `:info` to the REPL"), then explain
-why in the body if it is not obvious.
+Write the subject as `prefix: message (#N)`, where `#N` is the issue the
+commit addresses:
+
+* Prefixes: `feat`, `fix`, `docs`, `test`, `ci`, `build`, `refactor`,
+  `perf`, `chore`, `deps`.
+* The message is imperative and starts with a lowercase letter, unless it
+  starts with an abbreviation or a proper name (`REPL`, `JSON`). No trailing
+  period and no backticks.
+* Leave out `(#N)` only when there is no related issue.
+
+Optionally, add a body after a blank line, wrapped at 72 columns, that
+explains what changes and why. Don't repeat the issue reference
+(`Closes #N`) in the body: the pull request description closes the issue.
+
+If you used AI to write the change, end the message with a
+`Co-Authored-By` trailer naming the model. This is required.
+
+```text
+fix: report deeply nested programs instead of overflowing the stack (#31)
+
+The parser now rejects expressions and types nested more than 10,000
+levels with a diagnostic, which bounds the recursion of every later
+stage well within the front end's stack.
+
+Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
+```
+
+Pull request and issue titles use the same `prefix: message` style.
+Claude Code follows these rules through the project skill in
+`.claude/skills/git-commit/SKILL.md`.
