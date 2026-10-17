@@ -267,6 +267,9 @@ struct Mismatch {
 
 enum MismatchReason {
     Different,
+    /// A variable occurs in the type it would be bound to. `expected` holds
+    /// the variable and `found` that type, whichever side of the
+    /// unification the variable was on.
     Infinite,
     Escape(Rc<str>),
 }
@@ -389,8 +392,8 @@ impl<'a> Checker<'a> {
         }
         if self.occurs_and_adjust(var, level, ty) {
             return Err(Mismatch {
-                expected: expected.clone(),
-                found: found.clone(),
+                expected: Type::Var(var),
+                found: ty.clone(),
                 reason: MismatchReason::Infinite,
             });
         }
@@ -1140,6 +1143,22 @@ mod tests {
     fn occurs_check() {
         let errors = errors_of(r"f = \x. (x x)");
         assert_eq!(errors[0].message, "cannot construct an infinite type");
+        assert_eq!(
+            errors[0].label.as_deref(),
+            Some("`a` would have to contain itself: `a -> b`")
+        );
+    }
+
+    #[test]
+    fn occurs_check_names_the_variable_first_when_it_is_found() {
+        // The variable is on the found side here, unlike in `occurs_check`.
+        let errors =
+            errors_of(r"build = \n. \acc. (if (eq n 0) acc (build (sub n 1) (cons acc [])))");
+        assert_eq!(errors[0].message, "cannot construct an infinite type");
+        assert_eq!(
+            errors[0].label.as_deref(),
+            Some("`a` would have to contain itself: `List<a>`")
+        );
     }
 
     #[test]

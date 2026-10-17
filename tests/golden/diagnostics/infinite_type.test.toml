@@ -6,4 +6,5 @@ stdout = ""
 stderr_contains = [
     "Error: cannot construct an infinite type",
     "infinite_type.lbd:1:20",
+    "`a` would have to contain itself: `a -> b`",
 ]

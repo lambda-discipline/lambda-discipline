@@ -38,6 +38,10 @@ All notable changes to this project are documented here. The format follows
   an annotation's: checking `f : a -> Number = \x. (length x)` now reports
   that the definition has type `List<b> -> Number`, not `List<a> -> Number`
   (#16).
+- The infinite-type error always names the variable first: building
+  `(cons acc [])` from `acc` now says "`a` would have to contain itself:
+  `List<a>`" instead of the reversed "`List<a>` would have to contain
+  itself: `a`" (#17).
 - List elements are evaluated only when used, like arguments: `head`, `get`,
   `map`, `zipWith` and `foldr` no longer evaluate elements nobody needs, so
   `(foldr f z xs)` stops as soon as `f` ignores its second argument (#7).
