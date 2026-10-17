@@ -1,6 +1,6 @@
 //! Type representation shared by the checker and later stages.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::rc::Rc;
 
@@ -110,21 +110,42 @@ impl Scheme {
 
 /// Assigns readable names (`a`, `b`, ..., `z`, `t26`, ...) to variables in
 /// order of first appearance, so the same type always prints the same way.
-#[derive(Default)]
+/// Names that rigid variables already use are skipped, so an inferred
+/// variable never prints like an annotation's `a`.
 struct Namer {
     vars: HashMap<TyVar, String>,
     gens: HashMap<u32, String>,
+    reserved: HashSet<Rc<str>>,
     next: usize,
 }
 
 impl Namer {
+    /// A namer for printing `types` together, reserving their rigid names.
+    fn new(types: &[&Type]) -> Self {
+        let mut reserved = HashSet::new();
+        for ty in types {
+            ty.collect_rigid(&mut reserved);
+        }
+        Namer {
+            vars: HashMap::new(),
+            gens: HashMap::new(),
+            reserved,
+            next: 0,
+        }
+    }
+
     fn fresh(&mut self) -> String {
-        let n = self.next;
-        self.next += 1;
-        if n < 26 {
-            ((b'a' + n as u8) as char).to_string()
-        } else {
-            format!("t{n}")
+        loop {
+            let n = self.next;
+            self.next += 1;
+            let name = if n < 26 {
+                ((b'a' + n as u8) as char).to_string()
+            } else {
+                format!("t{n}")
+            };
+            if !self.reserved.contains(name.as_str()) {
+                return name;
+            }
         }
     }
 
@@ -173,10 +194,26 @@ impl Namer {
     }
 }
 
+impl Type {
+    fn collect_rigid(&self, names: &mut HashSet<Rc<str>>) {
+        match self {
+            Type::Rigid(name) => {
+                names.insert(name.clone());
+            }
+            Type::Con(_, args) => args.iter().for_each(|arg| arg.collect_rigid(names)),
+            Type::Fun(from, to) => {
+                from.collect_rigid(names);
+                to.collect_rigid(names);
+            }
+            Type::Var(_) | Type::Gen(_) => {}
+        }
+    }
+}
+
 impl fmt::Display for Type {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut out = String::new();
-        Namer::default().write(self, &mut out, false);
+        Namer::new(&[self]).write(self, &mut out, false);
         f.write_str(&out)
     }
 }
@@ -190,7 +227,7 @@ impl fmt::Display for Scheme {
 /// Prints several types with one consistent variable naming, so `a` means
 /// the same variable in "expected `a`, found `List<a>`".
 pub fn display_together(types: &[&Type]) -> Vec<String> {
-    let mut namer = Namer::default();
+    let mut namer = Namer::new(types);
     types
         .iter()
         .map(|ty| {
@@ -222,6 +259,17 @@ mod tests {
         assert_eq!(ty.to_string(), "a -> b");
         let rigid = Type::fun(Type::Rigid("x".into()), Type::number());
         assert_eq!(rigid.to_string(), "x -> Number");
+    }
+
+    #[test]
+    fn inferred_variables_skip_rigid_names() {
+        let annotation = Type::fun(Type::Rigid("a".into()), Type::number());
+        let found = Type::fun(Type::list(Type::Var(TyVar(0))), Type::number());
+        let shown = display_together(&[&annotation, &found]);
+        assert_eq!(shown, ["a -> Number", "List<b> -> Number"]);
+        // A rigid name that appears after the variable is reserved too.
+        let ty = Type::fun(Type::Var(TyVar(0)), Type::Rigid("a".into()));
+        assert_eq!(ty.to_string(), "b -> a");
     }
 
     #[test]
