@@ -141,10 +141,14 @@ builtins! {
     Take => "take" : "Number -> List<a> -> List<a>", List, "The first `n` elements.";
     Drop => "drop" : "Number -> List<a> -> List<a>", List, "All but the first `n` elements.";
 
-    Print => "print" : "a -> Unit", Io, "Prints its arguments without separators. Takes any number of arguments of any types.";
-    Println => "println" : "a -> Unit", Io, "Like `print`, followed by a newline.";
-    ReadFile => "readFile" : "String -> String", Io, "Reads a whole file, relative to the working directory.";
-    Error => "error" : "String -> a", Io, "Stops the program with an error message.";
+    Pure => "pure" : "a -> IO<a>", Io, "An action that does nothing and produces its argument.";
+    Bind => "bind" : "IO<a> -> (a -> IO<b>) -> IO<b>", Io, "`(bind action f)` runs `action`, then the action `f` returns for its result. `let x <- action in body` is `(bind action \\x. body)`.";
+    Then => "then" : "IO<a> -> IO<b> -> IO<b>", Io, "`(then first second)` runs `first`, discards its result, then runs `second`.";
+    Sequence => "sequence" : "List<IO<a>> -> IO<List<a>>", Io, "Runs a list of actions in order and collects their results.";
+    Print => "print" : "a -> IO<Unit>", Io, "An action that prints its arguments without separators. Takes any number of arguments of any types.";
+    Println => "println" : "a -> IO<Unit>", Io, "Like `print`, followed by a newline.";
+    ReadFile => "readFile" : "String -> IO<String>", Io, "An action that reads a whole file, relative to the working directory.";
+    Error => "error" : "String -> a", Io, "Stops the program with an error message when it is evaluated. Not an action: it can occur anywhere.";
 }
 
 impl Builtin {
@@ -158,10 +162,25 @@ impl Builtin {
         matches!(self, Builtin::Print | Builtin::Println)
     }
 
+    /// Builtins that build an `IO` action. Applying one only describes the
+    /// action; it runs when the program performs it.
+    pub fn is_action(self) -> bool {
+        matches!(
+            self,
+            Builtin::Pure
+                | Builtin::Bind
+                | Builtin::Then
+                | Builtin::Sequence
+                | Builtin::Print
+                | Builtin::Println
+                | Builtin::ReadFile
+        )
+    }
+
     /// How the signature is shown to users.
     pub fn display_signature(self) -> String {
         if self.is_variadic() {
-            "a... -> Unit".to_owned()
+            "a... -> IO<Unit>".to_owned()
         } else {
             self.signature().to_owned()
         }
@@ -306,6 +325,8 @@ mod tests {
         assert_eq!(Builtin::Foldr.arity(), 3);
         assert_eq!(Builtin::ZipWith.arity(), 3);
         assert_eq!(Builtin::Transpose.arity(), 1);
+        assert_eq!(Builtin::Bind.arity(), 2);
+        assert_eq!(Builtin::ReadFile.arity(), 1);
     }
 
     #[test]
@@ -332,7 +353,7 @@ mod tests {
             );
         }
         assert!(text.contains("-- Lists\n"));
-        assert!(text.contains("print : a... -> Unit"));
+        assert!(text.contains("print : a... -> IO<Unit>"));
     }
 
     #[test]
@@ -343,6 +364,6 @@ mod tests {
             assert!(json.contains(&builtin.to_json()), "{builtin}");
         }
         assert!(json.contains(r#""title": "Lists""#));
-        assert!(json.contains(r#""signature": "a... -> Unit", "arity": 1, "variadic": true"#));
+        assert!(json.contains(r#""signature": "a... -> IO<Unit>", "arity": 1, "variadic": true"#));
     }
 }

@@ -23,7 +23,7 @@ use crate::loader::{self, Loaded};
 use crate::resolve::{GlobalScope, resolve};
 use crate::source::{SourceMap, Span};
 use crate::syntax::{parse_module, token};
-use crate::types::{Scheme, check_expr, check_unit};
+use crate::types::{Scheme, TopLevel, check_expr, check_unit};
 
 /// A global known to the session.
 #[derive(Debug, Clone)]
@@ -108,13 +108,17 @@ impl Session {
     }
 
     /// Runs the pipeline up to Core and records the unit's globals.
-    pub fn compile(&mut self, loaded: Loaded) -> Result<Compiled, Diagnostics> {
+    pub fn compile(
+        &mut self,
+        loaded: Loaded,
+        top_level: TopLevel,
+    ) -> Result<Compiled, Diagnostics> {
         if !loaded.diagnostics.is_empty() {
             return Err(loaded.diagnostics);
         }
         let resolved = resolve(loaded.items, self);
         let prior: Vec<Scheme> = self.globals.iter().map(|g| g.scheme.clone()).collect();
-        let typed = check_unit(&resolved.unit, &prior);
+        let typed = check_unit(&resolved.unit, &prior, top_level);
         let mut diagnostics = resolved.diagnostics;
         diagnostics.extend(typed.diagnostics);
         if !diagnostics.is_empty() {
@@ -138,9 +142,14 @@ impl Session {
         })
     }
 
-    /// Compiles and runs a unit, returning the values of its top-level expressions.
-    pub fn execute(&mut self, loaded: Loaded) -> Result<(Compiled, Vec<Value>), Diagnostics> {
-        let compiled = self.compile(loaded)?;
+    /// Compiles and runs a unit, returning the values of its top-level
+    /// expressions; for an action, the value is what performing it produced.
+    pub fn execute(
+        &mut self,
+        loaded: Loaded,
+        top_level: TopLevel,
+    ) -> Result<(Compiled, Vec<Value>), Diagnostics> {
+        let compiled = self.compile(loaded, top_level)?;
         let values = self
             .interpreter
             .run(&compiled.module)
@@ -148,33 +157,35 @@ impl Session {
         Ok((compiled, values))
     }
 
-    /// Runs a program file.
+    /// Runs a program file: performs its top-level actions in source order.
     pub fn run_file(&mut self, path: &Path) -> Result<Vec<Value>, Diagnostics> {
         let loaded = loader::load_file(&mut self.sources, path);
-        self.execute(loaded).map(|(_, values)| values)
+        self.execute(loaded, TopLevel::Actions)
+            .map(|(_, values)| values)
     }
 
     /// Type-checks a program file without running it.
     pub fn check_file(&mut self, path: &Path) -> Result<Compiled, Diagnostics> {
         let loaded = loader::load_file(&mut self.sources, path);
-        self.compile(loaded)
+        self.compile(loaded, TopLevel::Actions)
     }
 
     /// Evaluates source text as a new unit (REPL input). `use` paths are
     /// relative to the working directory.
     pub fn eval(&mut self, name: &str, text: &str) -> Result<Evaluated, Diagnostics> {
         let loaded = loader::load_text(&mut self.sources, name, text);
-        self.evaluated(loaded)
+        self.evaluated(loaded, TopLevel::Any)
     }
 
-    /// Loads a file into the session (REPL `:load`), running its top-level expressions.
+    /// Loads a program file into the session (REPL `:load`), performing its
+    /// top-level actions.
     pub fn load(&mut self, path: &Path) -> Result<Evaluated, Diagnostics> {
         let loaded = loader::load_file(&mut self.sources, path);
-        self.evaluated(loaded)
+        self.evaluated(loaded, TopLevel::Actions)
     }
 
-    fn evaluated(&mut self, loaded: Loaded) -> Result<Evaluated, Diagnostics> {
-        let (compiled, values) = self.execute(loaded)?;
+    fn evaluated(&mut self, loaded: Loaded, top_level: TopLevel) -> Result<Evaluated, Diagnostics> {
+        let (compiled, values) = self.execute(loaded, top_level)?;
         Ok(Evaluated {
             definitions: compiled
                 .unit
@@ -183,7 +194,10 @@ impl Session {
                 .map(|def| def.name.clone())
                 .zip(compiled.def_schemes)
                 .collect(),
-            values: values.into_iter().zip(compiled.entry_schemes).collect(),
+            values: values
+                .into_iter()
+                .zip(compiled.entry_schemes.into_iter().map(performed))
+                .collect(),
         })
     }
 
@@ -301,5 +315,17 @@ impl fmt::Debug for Session {
         f.debug_struct("Session")
             .field("globals", &self.globals.len())
             .finish_non_exhaustive()
+    }
+}
+
+/// The type of what running a top-level expression produced: an action's
+/// result, or the expression's own value.
+fn performed(scheme: Scheme) -> Scheme {
+    match scheme.ty.io_result() {
+        Some(result) => Scheme {
+            arity: scheme.arity,
+            ty: result.clone(),
+        },
+        None => scheme,
     }
 }

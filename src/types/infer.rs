@@ -33,9 +33,20 @@ pub struct Typed {
     pub diagnostics: Vec<Diagnostic>,
 }
 
+/// What the top-level expressions of a unit may be.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TopLevel {
+    /// A program: every top-level expression is an `IO` action. Running the
+    /// program performs them in source order.
+    Actions,
+    /// REPL input: any expression. Actions are performed and other values
+    /// are shown.
+    Any,
+}
+
 /// Type-checks a unit. `prior` holds the schemes of globals from earlier
 /// units, indexed by [`GlobalId`]; the unit's own ids start at `prior.len()`.
-pub fn check_unit(unit: &Unit, prior: &[Scheme]) -> Typed {
+pub fn check_unit(unit: &Unit, prior: &[Scheme], top_level: TopLevel) -> Typed {
     let mut checker = Checker::new(prior);
     let first = prior.len();
 
@@ -75,7 +86,7 @@ pub fn check_unit(unit: &Unit, prior: &[Scheme]) -> Typed {
     let entry_schemes = unit
         .entries
         .iter()
-        .map(|body| checker.check_entry(body))
+        .map(|body| checker.check_entry(body, top_level))
         .collect();
 
     Typed {
@@ -88,7 +99,7 @@ pub fn check_unit(unit: &Unit, prior: &[Scheme]) -> Typed {
 /// Infers the type of a single expression body (the REPL's `:type`).
 pub fn check_expr(body: &Body, prior: &[Scheme]) -> (Scheme, Vec<Diagnostic>) {
     let mut checker = Checker::new(prior);
-    let scheme = checker.check_entry(body);
+    let scheme = checker.check_entry(body, TopLevel::Any);
     (scheme, checker.diagnostics)
 }
 
@@ -624,10 +635,24 @@ impl<'a> Checker<'a> {
         }
     }
 
-    fn check_entry(&mut self, body: &Body) -> Scheme {
+    fn check_entry(&mut self, body: &Body, top_level: TopLevel) -> Scheme {
         self.enter();
         let mut ctx = BodyCtx::default();
         let ty = self.infer(&body.expr, &mut ctx);
+        if top_level == TopLevel::Actions {
+            let action = Type::io(self.fresh());
+            if self.unify(&action, &ty).is_err() {
+                let found = self.zonk(&ty);
+                self.error(
+                    &mut ctx,
+                    Diagnostic::error("a top-level expression must be an `IO` action")
+                        .at(body.expr.span)
+                        .with_label(format!("this has type `{found}`"))
+                        .with_note("a program runs its top-level actions in source order; any other value would be discarded")
+                        .with_help("print it with `(println ...)`, or name it with a definition"),
+                );
+            }
+        }
         self.exit();
         self.generalize(&ty)
     }
@@ -793,7 +818,7 @@ impl<'a> Checker<'a> {
             for arg in args {
                 self.infer(arg, ctx);
             }
-            return Type::unit();
+            return Type::io(Type::unit());
         }
         let mut current = self.infer(func, ctx);
         for (index, arg) in args.iter().enumerate() {
@@ -939,7 +964,7 @@ mod tests {
             "{:?}",
             resolved.diagnostics
         );
-        let typed = check_unit(&resolved.unit, &[]);
+        let typed = check_unit(&resolved.unit, &[], TopLevel::Any);
         (resolved.unit, typed)
     }
 
@@ -1146,9 +1171,67 @@ mod tests {
 
     #[test]
     fn variadic_builtins() {
-        assert_eq!(type_of_entry(r#"(print 1 "a" [true])"#), "Unit");
+        assert_eq!(type_of_entry(r#"(print 1 "a" [true])"#), "IO<Unit>");
         let errors = errors_of("(map print [1])");
         assert_eq!(errors[0].message, "`print` must be called directly");
+    }
+
+    #[test]
+    fn actions_and_do_blocks() {
+        assert_eq!(type_of_entry(r#"(readFile "f")"#), "IO<String>");
+        assert_eq!(
+            type_of_entry(
+                r#"let s <- (readFile "f") in let _ <- (println s) in (pure (length (lines s)))"#
+            ),
+            "IO<Number>"
+        );
+        assert_eq!(
+            types_of(r"twice = \action. (then action action)"),
+            ["twice : IO<a> -> IO<a>"]
+        );
+        assert_eq!(
+            type_of_entry("(sequence [(pure 1), (pure 2)])"),
+            "IO<List<Number>>"
+        );
+        assert_eq!(
+            type_of_entry(r#"let n: Number <- (pure 1) in (pure n)"#),
+            "IO<Number>"
+        );
+        let errors = errors_of(r#"let x <- (add 1 2) in (println x)"#);
+        assert_eq!(errors[0].message, "mismatched types");
+        let errors = errors_of(r#"let x <- (pure 1) in x"#);
+        assert_eq!(errors[0].message, "mismatched types");
+    }
+
+    /// Checks `text` as a program, whose top-level expressions are actions.
+    fn program_errors(text: &str) -> Vec<Diagnostic> {
+        let mut sources = SourceMap::new();
+        let loaded = load_text(&mut sources, "<test>", text);
+        let resolved = resolve(loaded.items, &EmptyScope);
+        check_unit(&resolved.unit, &[], TopLevel::Actions).diagnostics
+    }
+
+    #[test]
+    fn program_top_level_expressions_must_be_actions() {
+        assert!(
+            program_errors(r#"x = 1  (println x)  (pure ())  (bind (pure 1) pure)"#).is_empty()
+        );
+        let errors = program_errors(r#"(add 1 2)  [(println "a")]"#);
+        let messages: Vec<_> = errors.iter().map(|e| e.message.as_str()).collect();
+        assert_eq!(
+            messages,
+            ["a top-level expression must be an `IO` action"; 2]
+        );
+        assert_eq!(
+            errors[1].label.as_deref(),
+            Some("this has type `List<IO<Unit>>`")
+        );
+        // An expression that is already wrong is reported once.
+        assert_eq!(
+            program_errors(r#"(add "a" 1)"#)[0].message,
+            "mismatched types"
+        );
+        assert_eq!(program_errors(r#"(add "a" 1)"#).len(), 1);
     }
 
     #[test]
@@ -1190,7 +1273,7 @@ mod tests {
             arity: 1,
             ty: Type::fun(Type::Gen(0), Type::list(Type::Gen(0))),
         }];
-        let typed = check_unit(&resolved.unit, &prior);
+        let typed = check_unit(&resolved.unit, &prior, TopLevel::Any);
         assert_eq!(typed.entry_schemes[0].to_string(), "List<Number>");
     }
 }

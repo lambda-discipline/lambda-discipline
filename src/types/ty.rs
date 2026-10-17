@@ -30,6 +30,7 @@ pub const CONSTRUCTORS: &[(&str, usize)] = &[
     ("Bool", 0),
     ("Unit", 0),
     ("List", 1),
+    ("IO", 1),
 ];
 
 pub fn constructor_arity(name: &str) -> Option<usize> {
@@ -62,6 +63,19 @@ impl Type {
 
     pub fn list(element: Type) -> Type {
         Type::Con(Rc::from("List"), vec![element])
+    }
+
+    /// `IO<result>`: an action producing a `result` when it runs.
+    pub fn io(result: Type) -> Type {
+        Type::Con(Rc::from("IO"), vec![result])
+    }
+
+    /// The result type, if this is `IO<result>`.
+    pub fn io_result(&self) -> Option<&Type> {
+        match self {
+            Type::Con(name, args) if name.as_ref() == "IO" => args.first(),
+            _ => None,
+        }
     }
 
     pub fn fun(from: Type, to: Type) -> Type {
@@ -220,6 +234,7 @@ mod tests {
     #[test]
     fn constructor_arities() {
         assert_eq!(constructor_arity("List"), Some(1));
+        assert_eq!(constructor_arity("IO"), Some(1));
         assert_eq!(constructor_arity("Number"), Some(0));
         assert_eq!(constructor_arity("Map"), None);
     }

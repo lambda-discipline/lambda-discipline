@@ -5,6 +5,7 @@ use lambda_discipline::backend::{Backend, RuntimeError};
 use lambda_discipline::core::{Expr, Module};
 use lambda_discipline::loader::load_text;
 use lambda_discipline::output::SharedBuffer;
+use lambda_discipline::types::TopLevel;
 
 #[test]
 fn session_evaluates_and_reports_types() {
@@ -83,7 +84,7 @@ fn core_ir_can_feed_another_backend() {
         "k = \\x. \\y. x\napplyAll = \\fs. (map \\f. (f 1) fs)",
     );
     // Compile with the session's front end, run with a different backend.
-    let compiled = session.compile(loaded).unwrap();
+    let compiled = session.compile(loaded, TopLevel::Actions).unwrap();
     let mut backend = Inventory {
         globals: Vec::new(),
         lambdas: 0,

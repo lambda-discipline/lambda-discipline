@@ -26,7 +26,8 @@ pub enum Item {
     Use { path: String, span: Span },
     /// `name : Type = expr` (the annotation is optional)
     Def(Def),
-    /// A top-level expression, evaluated in order when the program runs.
+    /// A top-level expression. In a program it is an action, and running the
+    /// program performs these in order.
     Expr(Expr),
 }
 
@@ -69,6 +70,14 @@ pub enum ExprKind {
         name: Ident,
         ann: Option<TypeExpr>,
         value: Box<Expr>,
+        body: Box<Expr>,
+    },
+    /// `let x: T <- action in body`: performs `action` and binds its result
+    /// to `x` in `body`, which is an action too.
+    Bind {
+        name: Ident,
+        ann: Option<TypeExpr>,
+        action: Box<Expr>,
         body: Box<Expr>,
     },
     /// Placeholder produced after a syntax error so parsing can continue.
@@ -155,6 +164,15 @@ impl fmt::Display for Expr {
             } => match ann {
                 Some(t) => write!(f, "(let {}: {} = {} in {})", name.name, t, value, body),
                 None => write!(f, "(let {} = {} in {})", name.name, value, body),
+            },
+            ExprKind::Bind {
+                name,
+                ann,
+                action,
+                body,
+            } => match ann {
+                Some(t) => write!(f, "(let {}: {} <- {} in {})", name.name, t, action, body),
+                None => write!(f, "(let {} <- {} in {})", name.name, action, body),
             },
             ExprKind::Error => f.write_str("<error>"),
         }
