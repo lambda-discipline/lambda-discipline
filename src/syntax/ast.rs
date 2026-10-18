@@ -37,7 +37,7 @@ pub enum Item {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Def {
     pub name: Ident,
-    pub ann: Option<TypeExpr>,
+    pub ann: Option<TypeScheme>,
     pub value: Expr,
     pub span: Span,
 }
@@ -88,7 +88,7 @@ pub enum ExprKind {
     /// `let x: T = value in body`
     Let {
         name: Ident,
-        ann: Option<TypeExpr>,
+        ann: Option<TypeScheme>,
         value: Box<Expr>,
         body: Box<Expr>,
     },
@@ -137,6 +137,38 @@ pub enum PatternKind {
     String(Rc<str>),
     /// `()`
     Unit,
+}
+
+/// The annotation of a definition or `let`: a type with an optional
+/// context, `(Eq<a>, Show<b>) => a -> b -> String`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TypeScheme {
+    pub context: Vec<Constraint>,
+    pub ty: TypeExpr,
+}
+
+/// `Eq<a>`: the type argument must belong to the class. Only a type
+/// variable is valid as the argument, which the type checker enforces.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Constraint {
+    pub class: Ident,
+    pub arg: TypeExpr,
+    pub span: Span,
+}
+
+impl fmt::Display for TypeScheme {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let context: Vec<String> = self
+            .context
+            .iter()
+            .map(|c| format!("{}<{}>", c.class.name, c.arg))
+            .collect();
+        match context.len() {
+            0 => write!(f, "{}", self.ty),
+            1 => write!(f, "{} => {}", context[0], self.ty),
+            _ => write!(f, "({}) => {}", context.join(", "), self.ty),
+        }
+    }
 }
 
 /// A type as written in an annotation.

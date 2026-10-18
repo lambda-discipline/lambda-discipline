@@ -1,0 +1,9 @@
+file = "unknown_class.lbd"
+
+[expect]
+exit_code = 1
+stdout = ""
+stderr_contains = [
+    "Error: unknown class `Num`",
+    "the classes are `Eq`, `Ord` and `Show`",
+]

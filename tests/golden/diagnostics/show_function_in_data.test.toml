@@ -1,0 +1,9 @@
+file = "show_function_in_data.lbd"
+
+[expect]
+exit_code = 1
+stdout = ""
+stderr_contains = [
+    "Error: values of type `Handler` cannot be shown",
+    "which contains `Handler`",
+]

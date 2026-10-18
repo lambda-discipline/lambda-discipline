@@ -42,6 +42,8 @@ pub enum TokenKind {
     Equals,
     #[token("->")]
     Arrow,
+    #[token("=>")]
+    FatArrow,
     #[token("<-")]
     LeftArrow,
     #[token("|")]
@@ -81,6 +83,7 @@ impl TokenKind {
             TokenKind::Comma => "`,`",
             TokenKind::Equals => "`=`",
             TokenKind::Arrow => "`->`",
+            TokenKind::FatArrow => "`=>`",
             TokenKind::LeftArrow => "`<-`",
             TokenKind::Bar => "`|`",
             TokenKind::LAngle => "`<`",

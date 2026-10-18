@@ -32,7 +32,7 @@ withDefault : a -> Option<a> -> a = \fallback. \o. match o
     | Some x -> x
     | None -> fallback
 
-insert : a -> Tree<a> -> Tree<a> = \x. \t. match t
+insert : Ord<a> => a -> Tree<a> -> Tree<a> = \x. \t. match t
     | Leaf -> (Node Leaf x Leaf)
     | Node l v r -> (if (lt x v) (Node (insert x l) v r) (Node l v (insert x r)))
 

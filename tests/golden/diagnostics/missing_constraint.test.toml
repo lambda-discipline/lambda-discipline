@@ -1,0 +1,10 @@
+file = "missing_constraint.lbd"
+
+[expect]
+exit_code = 1
+stdout = ""
+stderr_contains = [
+    "Error: `a` cannot be compared here",
+    "this needs `Eq<a>`",
+    "add `Eq<a> =>` in front of the annotation that introduces `a`",
+]

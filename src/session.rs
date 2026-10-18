@@ -357,6 +357,7 @@ fn performed(scheme: Scheme) -> Scheme {
     match scheme.ty.io_result() {
         Some(result) => Scheme {
             arity: scheme.arity,
+            bounds: scheme.bounds.clone(),
             ty: result.clone(),
         },
         None => scheme,

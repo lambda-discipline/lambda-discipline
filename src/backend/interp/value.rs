@@ -112,6 +112,8 @@ impl Value {
                     pending.push((a.clone(), b.clone(), 0));
                     c.id == d.id
                 }
+                // Actions and functions are in no class, so the type checker
+                // rejects comparing them; these arms are a safety net.
                 (Value::Io(_), _) | (_, Value::Io(_)) => {
                     return Err("actions cannot be compared".to_owned());
                 }
@@ -162,6 +164,8 @@ impl Value {
                     pending.push((a.clone(), b.clone(), 0, Ordering::Equal));
                     c.id.cmp(&d.id)
                 }
+                // Actions and functions are in no class, so the type checker
+                // rejects comparing them; these arms are a safety net.
                 (Value::Io(_), _) | (_, Value::Io(_)) => {
                     return Err("actions cannot be compared".to_owned());
                 }

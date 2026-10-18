@@ -1,0 +1,2 @@
+type Handler = Handler (Number -> Number)
+(println (show [(Handler \x. x)]))

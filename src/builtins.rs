@@ -67,8 +67,9 @@ macro_rules! builtins {
                 match self { $( Builtin::$variant => $name, )* }
             }
 
-            /// The type signature in source syntax. Lowercase names are
-            /// type variables, implicitly quantified.
+            /// The type signature in source syntax, with an optional context
+            /// (`Eq<a> => ...`). Lowercase names are type variables,
+            /// implicitly quantified.
             pub fn signature(self) -> &'static str {
                 match self { $( Builtin::$variant => $sig, )* }
             }
@@ -97,16 +98,16 @@ builtins! {
     Ceil => "ceil" : "Number -> Number", Number, "Smallest integer not less than the argument.";
     Round => "round" : "Number -> Number", Number, "Nearest integer, halves away from zero.";
     Sqrt => "sqrt" : "Number -> Number", Number, "Square root.";
-    Min => "min" : "Number -> Number -> Number", Number, "Smaller of two numbers.";
-    Max => "max" : "Number -> Number -> Number", Number, "Larger of two numbers.";
+    Min => "min" : "Ord<a> => a -> a -> a", Number, "The smaller of two values; the first if they are equal.";
+    Max => "max" : "Ord<a> => a -> a -> a", Number, "The larger of two values; the second if they are equal.";
 
-    Eq => "eq" : "a -> a -> Bool", Compare, "Structural equality. Comparing functions is a runtime error.";
-    Neq => "neq" : "a -> a -> Bool", Compare, "Structural inequality.";
-    Lt => "lt" : "a -> a -> Bool", Compare, "`(lt a b)` is `a < b`. Numbers, strings, booleans and lists are ordered.";
-    Le => "le" : "a -> a -> Bool", Compare, "`(le a b)` is `a <= b`.";
-    Gt => "gt" : "a -> a -> Bool", Compare, "`(gt a b)` is `a > b`.";
-    Ge => "ge" : "a -> a -> Bool", Compare, "`(ge a b)` is `a >= b`.";
-    Compare => "compare" : "a -> a -> Number", Compare, "`-1`, `0` or `1` as `a` is less than, equal to or greater than `b`.";
+    Eq => "eq" : "Eq<a> => a -> a -> Bool", Compare, "Structural equality. Every type without functions or `IO` actions in it belongs to `Eq`.";
+    Neq => "neq" : "Eq<a> => a -> a -> Bool", Compare, "Structural inequality.";
+    Lt => "lt" : "Ord<a> => a -> a -> Bool", Compare, "`(lt a b)` is `a < b`. Every type in `Eq` is also in `Ord`: data is ordered by constructor, in declaration order, then field by field, and lists element by element.";
+    Le => "le" : "Ord<a> => a -> a -> Bool", Compare, "`(le a b)` is `a <= b`.";
+    Gt => "gt" : "Ord<a> => a -> a -> Bool", Compare, "`(gt a b)` is `a > b`.";
+    Ge => "ge" : "Ord<a> => a -> a -> Bool", Compare, "`(ge a b)` is `a >= b`.";
+    Compare => "compare" : "Ord<a> => a -> a -> Number", Compare, "`-1`, `0` or `1` as `a` is less than, equal to or greater than `b`.";
 
     Not => "not" : "Bool -> Bool", Bool, "Boolean negation.";
     And => "and" : "Bool -> Bool -> Bool", Bool, "Conjunction; the second argument is only evaluated when needed.";
@@ -114,7 +115,7 @@ builtins! {
     If => "if" : "Bool -> a -> a -> a", Bool, "`(if c t e)` evaluates only the chosen branch.";
 
     Concat => "concat" : "String -> String -> String", String, "Joins two strings.";
-    Show => "show" : "a -> String", String, "Renders any value as source-like text (strings are quoted).";
+    Show => "show" : "Show<a> => a -> String", String, "Renders a value as source-like text (strings are quoted). Every type without functions or `IO` actions in it belongs to `Show`.";
     ParseNumber => "parseNumber" : "String -> Number", String, "Parses a number, ignoring surrounding whitespace.";
     StringLength => "stringLength" : "String -> Number", String, "Number of characters in a string.";
     Chars => "chars" : "String -> List<String>", String, "Splits a string into its characters.";
@@ -137,7 +138,7 @@ builtins! {
     Foldl => "foldl" : "(b -> a -> b) -> b -> List<a> -> b", List, "Left fold: `(foldl f z [x, y])` is `(f (f z x) y)`.";
     Foldr => "foldr" : "(a -> b -> b) -> b -> List<a> -> b", List, "Right fold: `(foldr f z [x, y])` is `(f x (f y z))`, where each inner fold is evaluated only if `f` uses it.";
     Reverse => "reverse" : "List<a> -> List<a>", List, "Reverses a list.";
-    Sort => "sort" : "List<a> -> List<a>", List, "Stable ascending sort using the same ordering as `lt`.";
+    Sort => "sort" : "Ord<a> => List<a> -> List<a>", List, "Stable ascending sort using the same ordering as `lt`.";
     Range => "range" : "Number -> Number -> List<Number>", List, "`(range from to)` counts from `from` up to, not including, `to`.";
     ZipWith => "zipWith" : "(a -> b -> c) -> List<a> -> List<b> -> List<c>", List, "Combines two lists element-wise, stopping at the shorter.";
     Transpose => "transpose" : "List<List<a>> -> List<List<a>>", List, "Turns rows into columns, truncated to the shortest row.";
@@ -149,8 +150,8 @@ builtins! {
     Bind => "bind" : "IO<a> -> (a -> IO<b>) -> IO<b>", Io, "`(bind action f)` runs `action`, then the action `f` returns for its result. `let x <- action in body` is `(bind action \\x. body)`.";
     Then => "then" : "IO<a> -> IO<b> -> IO<b>", Io, "`(then first second)` runs `first`, discards its result, then runs `second`.";
     Sequence => "sequence" : "List<IO<a>> -> IO<List<a>>", Io, "Runs a list of actions in order and collects their results.";
-    Print => "print" : "a -> IO<Unit>", Io, "An action that prints its arguments without separators. Takes any number of arguments of any types.";
-    Println => "println" : "a -> IO<Unit>", Io, "Like `print`, followed by a newline.";
+    Print => "print" : "Show<a> => a -> IO<Unit>", Io, "An action that prints its arguments without separators. Takes any number of arguments, of any types in `Show`; strings are printed without quotes.";
+    Println => "println" : "Show<a> => a -> IO<Unit>", Io, "Like `print`, followed by a newline.";
     ReadFile => "readFile" : "String -> IO<String>", Io, "An action that reads a whole file. A relative path is relative to the working directory, like a path typed on the command line; start it with `__DIR__` to read a file that sits next to the program.";
     Error => "error" : "String -> a", Io, "Stops the program with an error message when it is evaluated. Not an action: it can occur anywhere.";
 
@@ -188,7 +189,7 @@ impl Builtin {
     /// How the signature is shown to users.
     pub fn display_signature(self) -> String {
         if self.is_variadic() {
-            "a... -> IO<Unit>".to_owned()
+            "Show<a> => a... -> IO<Unit>".to_owned()
         } else {
             self.signature().to_owned()
         }
@@ -203,10 +204,13 @@ impl Builtin {
     }
 
     fn count_arrows(self) -> usize {
-        // Count top-level arrows in the signature, ignoring parenthesized ones.
+        // Count top-level arrows in the signature after its context,
+        // ignoring parenthesized ones.
+        let signature = self.signature();
+        let ty = signature.split_once("=>").map_or(signature, |(_, ty)| ty);
         let mut depth = 0i32;
         let mut arrows = 0;
-        let bytes = self.signature().as_bytes();
+        let bytes = ty.as_bytes();
         for (i, &b) in bytes.iter().enumerate() {
             match b {
                 b'(' | b'<' => depth += 1,
@@ -333,6 +337,8 @@ mod tests {
         assert_eq!(Builtin::Add.arity(), 2);
         assert_eq!(Builtin::If.arity(), 3);
         assert_eq!(Builtin::Map.arity(), 2);
+        assert_eq!(Builtin::Eq.arity(), 2);
+        assert_eq!(Builtin::Show.arity(), 1);
         assert_eq!(Builtin::Foldr.arity(), 3);
         assert_eq!(Builtin::ZipWith.arity(), 3);
         assert_eq!(Builtin::Transpose.arity(), 1);
@@ -347,7 +353,7 @@ mod tests {
         let file = map.add_virtual("<builtins>", "");
         for builtin in Builtin::ALL {
             assert!(
-                crate::syntax::parse_type(file, builtin.signature()).is_ok(),
+                crate::syntax::parse_scheme(file, builtin.signature()).is_ok(),
                 "{builtin}: {}",
                 builtin.signature()
             );
@@ -364,7 +370,8 @@ mod tests {
             );
         }
         assert!(text.contains("-- Lists\n"));
-        assert!(text.contains("print : a... -> IO<Unit>"));
+        assert!(text.contains("print : Show<a> => a... -> IO<Unit>"));
+        assert!(text.contains("eq : Eq<a> => a -> a -> Bool"));
     }
 
     #[test]
@@ -375,6 +382,8 @@ mod tests {
             assert!(json.contains(&builtin.to_json()), "{builtin}");
         }
         assert!(json.contains(r#""title": "Lists""#));
-        assert!(json.contains(r#""signature": "a... -> IO<Unit>", "arity": 1, "variadic": true"#));
+        assert!(json.contains(
+            r#""signature": "Show<a> => a... -> IO<Unit>", "arity": 1, "variadic": true"#
+        ));
     }
 }
