@@ -1,0 +1,26 @@
+-- `eq`, `lt`, `compare`, `sort` and `show` work on every type without
+-- functions or actions in it, including data types.
+type Suit = Clubs | Diamonds | Hearts | Spades
+type Card = Card Number Suit
+type Tree<a> = Leaf | Node Tree<a> a Tree<a>
+
+member : Eq<a> => a -> List<a> -> Bool = \x. \xs. (foldr \y. \found. (or (eq x y) found) False xs)
+
+-- The context is inferred when there is no annotation.
+largest = \xs. (foldl max (head xs) xs)
+
+describe : (Ord<a>, Show<a>) => a -> a -> String = \x. \y.
+    (concat (show (min x y)) (concat " <= " (show (max x y))))
+
+insert : Ord<a> => a -> Tree<a> -> Tree<a> = \x. \t. match t
+    | Leaf -> (Node Leaf x Leaf)
+    | Node l v r -> (if (lt x v) (Node (insert x l) v r) (Node l v (insert x r)))
+
+(println (member (Card 3 Hearts) [(Card 2 Clubs), (Card 3 Hearts)]))
+(println (sort [(Card 10 Spades), (Card 2 Hearts), (Card 2 Clubs)]))
+(println (largest [Diamonds, Spades, Clubs]))
+(println (largest ["pear", "apple", "fig"]))
+(println (describe [2, 1] [1, 5]))
+(println (eq (insert 2 (insert 1 Leaf)) (insert 2 (insert 1 Leaf))))
+(println (compare (Node Leaf "b" Leaf) Leaf))
+(println (show []))

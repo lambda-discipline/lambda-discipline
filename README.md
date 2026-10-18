@@ -91,10 +91,10 @@ Error: mismatched types
 item  = "use" STRING                         include another file (path relative to this file)
       | "type" UPPER ["<" LOWER, ... ">"] "=" ["|"] UPPER type* ("|" UPPER type*)*
                                              data type; see "Data types"
-      | LOWER [":" type] "=" expr            definition; the annotation is optional
+      | LOWER [":" scheme] "=" expr          definition; the annotation is optional
       | expr                                 an action, performed in order when the program runs
 expr  = "\" LOWER [":" type] "." expr        lambda (also `λ`)
-      | "let" LOWER [":" type] "=" expr "in" expr
+      | "let" LOWER [":" scheme] "=" expr "in" expr
       | "let" LOWER [":" type] "<-" expr "in" expr   perform an action and name its result
       | "match" expr ("|" pattern "->" expr)+
       | "(" expr expr+ ")"                   application; any expression can be called
@@ -104,6 +104,8 @@ expr  = "\" LOWER [":" type] "." expr        lambda (also `λ`)
 pattern = UPPER pattern* | "_" | LOWER | NUMBER | STRING | "(" ")" | "(" pattern ")"
 type  = Number | String | Bool | Unit | List<type> | IO<type> | Declared<type, ...>
       | lowercase-variable | type -> type | (type)
+scheme = [context "=>"] type                 see "Type classes"
+context = CLASS "<" LOWER ">" | "(" CLASS "<" LOWER ">", ... ")"
 ```
 
 Names that start with a lowercase letter (or `_`) are values; names that
@@ -125,8 +127,8 @@ Full Hindley-Milner inference with let-polymorphism:
 * Type variables in lambda annotations scope over the whole definition, so
   `apply : (a -> b) -> a -> b = \f: (a -> b). \x: a. (f x)` works.
 * Mutually recursive definitions are inferred together, then generalized.
-* `print` and `println` take any number of arguments of any types and must be
-  called directly. They return `IO<Unit>`.
+* `print` and `println` take any number of arguments of any types in `Show`
+  and must be called directly. They return `IO<Unit>`.
 * Numbers print as JavaScript prints them: `42`, `0.000001`, and with an
   exponent below `1e-6` or from `1e21` up (`1e-7`, `1e+300`). `-0` prints
   as `0`.
@@ -172,13 +174,49 @@ depth : Tree<a> -> Number = \t. match t
 * Fields are lazy, like list elements, and `match` evaluates only what it
   needs to choose an arm: `(match (Some (error "x")) | Some _ -> 1 | None -> 0)`
   is `1`.
-* `eq`, `lt`, `compare`, `sort` and `show` work on data structurally. Values
-  are ordered by constructor, in declaration order, then by their fields.
-  `show` and `print` write them as code: `(Some (Node Leaf 1 Leaf))`.
+* `eq`, `lt`, `compare`, `sort` and `show` work on data structurally (see
+  "Type classes"). Values are ordered by constructor, in declaration order,
+  then by their fields. `show` and `print` write them as code:
+  `(Some (Node Leaf 1 Leaf))`.
 * `Bool` is the built-in data type `type Bool = False | True`, so booleans
   can be matched too.
 * In the REPL, declaring a type again makes a new type; values of the old one
   keep the old type.
+
+### Type classes
+
+Comparing and showing work on every value except functions and `IO` actions.
+Three built-in classes say which types support them, so a mistake such as
+`(eq \x. x \y. y)` is a type error rather than a runtime error:
+
+| Class | Builtins | Types in it |
+| --- | --- | --- |
+| `Eq` | `eq neq` | numbers, strings, `Unit`, `Bool`, and lists and data types whose elements and fields are in it |
+| `Ord` | `lt le gt ge compare sort min max` | the same as `Eq`; `Ord<a>` implies `Eq<a>` |
+| `Show` | `show`, and the arguments of `print` and `println` | the same as `Eq` |
+
+```haskell
+member : Eq<a> => a -> List<a> -> Bool =
+    \x. \xs. (foldr \y. \found. (or (eq x y) found) False xs)
+
+largest = \xs. (foldl max (head xs) xs)   -- inferred: Ord<a> => List<a> -> a
+
+(println (sort [(Some 3), None, (Some 1)]))   -- [None, (Some 1), (Some 3)]
+```
+
+* Types get these classes automatically: there is no `deriving` clause, and
+  a data type is in a class when all its fields are. `Option<a>` is in `Eq`
+  when `a` is; `type Handler = Handler (String -> IO<Unit>)` is in none.
+* Contexts are inferred, like the rest of a type, and `:type` shows them.
+  An annotation must list the classes its type variables need, written in
+  front of the type: `Eq<a> => ...`, or `(Ord<k>, Show<v>) => ...` for
+  several.
+* The classes only restrict which types are accepted; the builtins work
+  structurally at run time, so there are no defaulting rules and a constraint
+  on a type that is never fixed is harmless: `(show [])` is `"[]"`.
+* There are no user-defined classes or instances yet.
+* The REPL shows any value, functions included (`<function>`), because
+  displaying a result is not the same as `show`.
 
 ### Evaluation
 
@@ -245,7 +283,7 @@ takes the data it works on last, so partial application reads well:
 | Group | Builtins |
 | --- | --- |
 | Numbers | `add sub mul div mod pow neg abs floor ceil round sqrt min max` |
-| Comparison | `eq neq lt le gt ge compare` (structural, like OCaml; comparing functions is a runtime error) |
+| Comparison | `eq neq lt le gt ge compare` (structural, for types in `Eq` and `Ord`; see "Type classes") |
 | Booleans | `not and or if`, and the constructors `True` and `False` |
 | Strings | `concat show parseNumber stringLength chars split lines join trim` |
 | Lists | `length isEmpty head tail get cons push remove append map filter foldl foldr reverse sort range zipWith transpose sum take drop` |

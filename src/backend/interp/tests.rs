@@ -394,14 +394,6 @@ fn runtime_errors_point_at_the_call() {
         "the delimiter given to `split` must not be empty"
     );
     assert_eq!(runtime_error("(error \"custom\")").message, "custom");
-    assert_eq!(
-        runtime_error(r"(eq \x. x \y. y)").message,
-        "functions cannot be compared"
-    );
-    assert_eq!(
-        runtime_error("(eq (pure 1) (pure 1))").message,
-        "actions cannot be compared"
-    );
     assert!(
         runtime_error("(readFile \"/definitely/missing\")")
             .message

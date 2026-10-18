@@ -32,9 +32,17 @@ All notable changes to this project are documented here. The format follows
   with nested patterns. A `match` that misses a case is an error naming the
   missing case. Fields are lazy, data is compared and shown structurally,
   and `:info` shows a type's declaration (#5).
+- Type classes `Eq`, `Ord` and `Show`: comparing or showing a function or
+  an `IO` action is now a type error instead of a runtime error. Every
+  other type, data types included, belongs to the classes automatically.
+  Contexts are inferred and shown by `:type`
+  (`eq : Eq<a> => a -> a -> Bool`), and annotations write them in front of
+  the type: `member : Eq<a> => a -> List<a> -> Bool` (#19).
 
 ### Changed
 
+- `min` and `max` work on any type in `Ord`, not only numbers, so
+  `maximum` and `minimum` in `examples/std.lbd` do too (#19).
 - `Bool` is now the data type `False | True`: write `True` and `False`
   instead of `true` and `false`. Names that start with an uppercase letter
   are reserved for types and constructors (#5).

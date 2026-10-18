@@ -41,6 +41,7 @@ pub(super) fn strictness(builtin: Builtin, index: usize) -> Strictness {
         // the mapped function.
         B::Cons | B::Push | B::Map | B::ZipWith if index == 0 => Lazy,
         B::Eq | B::Neq | B::Lt | B::Le | B::Gt | B::Ge | B::Compare | B::Sort => Deep,
+        B::Min | B::Max => Deep,
         B::Show | B::Print | B::Println => Deep,
         B::Join | B::Sum | B::Transpose => Elements,
         _ => Shallow,
@@ -108,8 +109,14 @@ pub(super) fn pure(
         B::Ceil => Value::Number(num(0)?.ceil()),
         B::Round => Value::Number(num(0)?.round()),
         B::Sqrt => Value::Number(num(0)?.sqrt()),
-        B::Min => Value::Number(num(0)?.min(num(1)?)),
-        B::Max => Value::Number(num(0)?.max(num(1)?)),
+        B::Min | B::Max => {
+            let ordering = args[0].compare(&args[1]).map_err(fail)?;
+            let first = match builtin {
+                B::Min => ordering.is_le(),
+                _ => ordering.is_gt(),
+            };
+            args[if first { 0 } else { 1 }].clone()
+        }
 
         B::Eq | B::Neq => {
             let equal = args[0].equals(&args[1]).map_err(fail)?;

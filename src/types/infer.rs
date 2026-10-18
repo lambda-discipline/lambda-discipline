@@ -17,19 +17,28 @@
 //! * Pattern variables are monomorphic, like lambda parameters, and every
 //!   `match` must cover all values of its scrutinee's type
 //!   (see [`super::exhaustive`]).
+//! * Type classes (`Eq`, `Ord`, `Show`) are sets of classes on type
+//!   variables. Binding a variable to a type requires the type to belong to
+//!   the variable's classes, which reduces to requirements on the type's
+//!   arguments or fails for functions and actions. Generalization keeps the
+//!   classes of quantified variables; classes on a variable that does not
+//!   appear in the type are dropped, since the builtins work structurally
+//!   and the choice of type cannot change what they do.
 
 use std::collections::HashMap;
 use std::rc::Rc;
 
 use crate::builtins::Builtin;
 use crate::diagnostics::Diagnostic;
-use crate::hir::{self, Body, ExprKind, GlobalDef, GlobalId, LocalId, PatternKind, TypeDef, Unit};
+use crate::hir::{
+    self, Body, ExprKind, GlobalDef, GlobalId, LocalId, PatternKind, TyConId, TypeDef, Unit,
+};
 use crate::source::{SourceMap, Span};
-use crate::syntax::ast::{TypeExpr, TypeExprKind};
+use crate::syntax::ast::{Constraint, TypeExpr, TypeExprKind, TypeScheme};
 
 use super::env::{ConInfo, TypeEnv, TypeInfo};
 use super::exhaustive;
-use super::ty::{Scheme, TyCon, TyVar, Type, display_together};
+use super::ty::{Class, Classes, Scheme, TyCon, TyVar, Type, display_together};
 
 /// The result of checking one unit.
 #[derive(Debug, Default)]
@@ -88,10 +97,7 @@ pub fn check_unit(unit: &Unit, prior: &[Scheme], types: &TypeEnv, top_level: Top
         .iter()
         .map(|def| match checker.globals.get(&def.id) {
             Some(GlobalType::Known(scheme)) => scheme.clone(),
-            _ => Scheme {
-                arity: 1,
-                ty: Type::Gen(0),
-            },
+            _ => Scheme::poly(1, Type::Gen(0)),
         })
         .collect();
 
@@ -134,7 +140,7 @@ pub fn builtin_scheme(builtin: Builtin) -> Scheme {
 fn parse_builtin_scheme(builtin: Builtin) -> Scheme {
     let mut sources = SourceMap::new();
     let file = sources.add_virtual("<builtin>", builtin.signature());
-    let ann = crate::syntax::parse_type(file, builtin.signature())
+    let ann = crate::syntax::parse_scheme(file, builtin.signature())
         .unwrap_or_else(|_| panic!("malformed signature for `{builtin}`"));
     let mut checker = Checker::new(&[], TypeEnv::new());
     checker
@@ -238,6 +244,8 @@ struct Rigid {
     /// The annotation with its variables as [`Type::Rigid`].
     ty: Type,
     names: Vec<Rc<str>>,
+    /// The classes the context gives each of `names`.
+    classes: Vec<Classes>,
 }
 
 #[derive(Debug, Clone)]
@@ -250,7 +258,7 @@ enum GlobalType {
 
 #[derive(Debug, Clone)]
 enum VarState {
-    Unbound { level: u32 },
+    Unbound { level: u32, classes: Classes },
     Link(Type),
 }
 
@@ -270,6 +278,11 @@ struct Checker<'a> {
     vars: Vec<VarState>,
     level: u32,
     rigid_levels: HashMap<Rc<str>, u32>,
+    /// The classes each rigid variable's annotation declares.
+    rigid_classes: HashMap<Rc<str>, Classes>,
+    /// Where the classes of a variable were first required (the use of
+    /// `eq` that made a variable need `Eq`), for error messages.
+    class_origins: HashMap<TyVar, Span>,
     diagnostics: Vec<Diagnostic>,
 }
 
@@ -286,6 +299,9 @@ enum MismatchReason {
     /// unification the variable was on.
     Infinite,
     Escape(Rc<str>),
+    /// `found` (part of `expected`) does not belong to the class, which was
+    /// required at the span, if known.
+    NoInstance(Class, Option<Span>),
 }
 
 impl<'a> Checker<'a> {
@@ -297,6 +313,8 @@ impl<'a> Checker<'a> {
             vars: Vec::new(),
             level: 0,
             rigid_levels: HashMap::new(),
+            rigid_classes: HashMap::new(),
+            class_origins: HashMap::new(),
             diagnostics: Vec::new(),
         }
     }
@@ -304,8 +322,16 @@ impl<'a> Checker<'a> {
     // ---- variables, levels and unification -------------------------------
 
     fn fresh(&mut self) -> Type {
+        self.fresh_in(Classes::NONE)
+    }
+
+    /// A fresh variable that must belong to `classes`.
+    fn fresh_in(&mut self, classes: Classes) -> Type {
         let var = TyVar(self.vars.len() as u32);
-        self.vars.push(VarState::Unbound { level: self.level });
+        self.vars.push(VarState::Unbound {
+            level: self.level,
+            classes,
+        });
         Type::Var(var)
     }
 
@@ -388,7 +414,7 @@ impl<'a> Checker<'a> {
         expected: &Type,
         found: &Type,
     ) -> Result<(), Mismatch> {
-        let VarState::Unbound { level } = self.vars[var.0 as usize] else {
+        let VarState::Unbound { level, classes } = self.vars[var.0 as usize] else {
             unreachable!("bind is only called on unbound variables");
         };
         let escapes = match ty {
@@ -413,7 +439,69 @@ impl<'a> Checker<'a> {
             });
         }
         self.vars[var.0 as usize] = VarState::Link(ty.clone());
-        Ok(())
+        let origin = self.class_origins.get(&var).copied();
+        self.require(classes, ty, origin)
+            .map_err(|(class, culprit)| Mismatch {
+                expected: ty.clone(),
+                found: culprit,
+                reason: MismatchReason::NoInstance(class, origin),
+            })
+    }
+
+    /// Requires `ty` to belong to `classes`. On failure, returns a class and
+    /// the part of `ty` that does not belong to it.
+    /// The error names the most specific class missing (`Ord` rather than
+    /// `Eq`). `origin` is where the classes were required.
+    fn require(
+        &mut self,
+        classes: Classes,
+        ty: &Type,
+        origin: Option<Span>,
+    ) -> Result<(), (Class, Type)> {
+        let Some(first) = classes.shown().next() else {
+            return Ok(());
+        };
+        match self.shallow(ty) {
+            Type::Var(v) => {
+                if let VarState::Unbound {
+                    level,
+                    classes: own,
+                } = self.vars[v.0 as usize]
+                {
+                    self.vars[v.0 as usize] = VarState::Unbound {
+                        level,
+                        classes: own.union(classes),
+                    };
+                    if let Some(origin) = origin {
+                        self.class_origins.entry(v).or_insert(origin);
+                    }
+                }
+                Ok(())
+            }
+            Type::Rigid(name) => {
+                let declared = self.rigid_classes.get(&name).copied().unwrap_or_default();
+                match classes.minus(declared).shown().next() {
+                    Some(class) => Err((class, Type::Rigid(name))),
+                    None => Ok(()),
+                }
+            }
+            Type::Con(con, args) => {
+                // `Ord` implies `Eq`, and a type's `Ord` instance needs the
+                // same parameters as its `Eq` instance.
+                for class in classes.shown() {
+                    let Some(params) = self.env.instance(con.id, class).map(<[usize]>::to_vec)
+                    else {
+                        return Err((class, Type::Con(con, args)));
+                    };
+                    for index in params {
+                        self.require(Classes::of(class), &args[index], origin)?;
+                    }
+                }
+                Ok(())
+            }
+            fun @ Type::Fun(..) => Err((first, fun)),
+            Type::Gen(_) => Ok(()),
+        }
     }
 
     /// Occurs check; also lowers the levels of variables in `ty` to `level`
@@ -422,9 +510,13 @@ impl<'a> Checker<'a> {
         match self.shallow(ty) {
             Type::Var(v) if v == var => true,
             Type::Var(v) => {
-                if let VarState::Unbound { level: other } = self.vars[v.0 as usize] {
+                if let VarState::Unbound {
+                    level: other,
+                    classes,
+                } = self.vars[v.0 as usize]
+                {
                     if other > level {
-                        self.vars[v.0 as usize] = VarState::Unbound { level };
+                        self.vars[v.0 as usize] = VarState::Unbound { level, classes };
                     }
                 }
                 false
@@ -437,13 +529,21 @@ impl<'a> Checker<'a> {
         }
     }
 
-    /// Quantifies over variables created at a deeper level than the current one.
+    /// Quantifies over variables created at a deeper level than the current
+    /// one, keeping their classes.
     fn generalize(&mut self, ty: &Type) -> Scheme {
         let ty = self.zonk(ty);
         let mut mapping: HashMap<TyVar, u32> = HashMap::new();
         let ty = self.generalize_in(&ty, &mut mapping, &HashMap::new());
+        let mut bounds = vec![Classes::NONE; mapping.len()];
+        for (var, index) in mapping {
+            if let VarState::Unbound { classes, .. } = self.vars[var.0 as usize] {
+                bounds[index as usize] = classes;
+            }
+        }
         Scheme {
-            arity: mapping.len() as u32,
+            arity: bounds.len() as u32,
+            bounds,
             ty,
         }
     }
@@ -456,7 +556,7 @@ impl<'a> Checker<'a> {
     ) -> Type {
         match ty {
             Type::Var(v) => match self.vars[v.0 as usize] {
-                VarState::Unbound { level } if level > self.level => {
+                VarState::Unbound { level, .. } if level > self.level => {
                     let next = (vars.len() + rigids.len()) as u32;
                     Type::Gen(*vars.entry(*v).or_insert(next))
                 }
@@ -480,7 +580,25 @@ impl<'a> Checker<'a> {
     }
 
     fn instantiate(&mut self, scheme: &Scheme) -> Type {
-        let fresh: Vec<Type> = (0..scheme.arity).map(|_| self.fresh()).collect();
+        let fresh: Vec<Type> = (0..scheme.arity)
+            .map(|index| self.fresh_in(scheme.bound(index)))
+            .collect();
+        substitute_gens(&scheme.ty, &fresh)
+    }
+
+    /// Instantiates the scheme of a name used at `span`, which is where its
+    /// variables' classes are required.
+    fn instantiate_at(&mut self, scheme: &Scheme, span: Span) -> Type {
+        let fresh: Vec<Type> = (0..scheme.arity)
+            .map(|index| {
+                let classes = scheme.bound(index);
+                let var = self.fresh_in(classes);
+                if let (false, Type::Var(v)) = (classes.is_empty(), &var) {
+                    self.class_origins.insert(*v, span);
+                }
+                var
+            })
+            .collect();
         substitute_gens(&scheme.ty, &fresh)
     }
 
@@ -488,11 +606,11 @@ impl<'a> Checker<'a> {
 
     /// Converts an annotation whose free variables are all quantified.
     /// Reports ill-formed types and returns `None` for them.
-    fn annotation_scheme(&mut self, ann: &TypeExpr) -> Option<Rigid> {
+    fn annotation_scheme(&mut self, ann: &TypeScheme) -> Option<Rigid> {
         let mut names: Vec<Rc<str>> = Vec::new();
         let mut ok = true;
         let ty = self.convert(
-            ann,
+            &ann.ty,
             &mut |name, _| {
                 let index = names.iter().position(|n| n == name).unwrap_or_else(|| {
                     names.push(name.clone());
@@ -505,6 +623,7 @@ impl<'a> Checker<'a> {
         if !ok {
             return None;
         }
+        let classes = self.context(&ann.context, &names, |_| false)?;
         let rigids: HashMap<Rc<str>, u32> = names
             .iter()
             .enumerate()
@@ -512,9 +631,85 @@ impl<'a> Checker<'a> {
             .collect();
         let scheme = Scheme {
             arity: names.len() as u32,
+            bounds: classes.clone(),
             ty: self.generalize_in(&ty, &mut HashMap::new(), &rigids),
         };
-        Some(Rigid { scheme, ty, names })
+        Some(Rigid {
+            scheme,
+            ty,
+            names,
+            classes,
+        })
+    }
+
+    /// Converts a context to the classes of each of `names`, the variables
+    /// the annotation quantifies. `outer` says whether a name belongs to an
+    /// enclosing annotation instead. Reports errors and returns `None`.
+    fn context(
+        &mut self,
+        context: &[Constraint],
+        names: &[Rc<str>],
+        outer: impl Fn(&str) -> bool,
+    ) -> Option<Vec<Classes>> {
+        let mut classes = vec![Classes::NONE; names.len()];
+        let mut ok = true;
+        for constraint in context {
+            let Some(class) = Class::lookup(&constraint.class.name) else {
+                ok = false;
+                self.diagnostics.push(
+                    Diagnostic::error(format!("unknown class `{}`", constraint.class.name))
+                        .at(constraint.class.span)
+                        .with_label("not a known class")
+                        .with_note("the classes are `Eq`, `Ord` and `Show`"),
+                );
+                continue;
+            };
+            let TypeExprKind::Var(var) = &constraint.arg.kind else {
+                ok = false;
+                self.diagnostics.push(
+                    Diagnostic::error("a constraint applies to a type variable")
+                        .at(constraint.arg.span)
+                        .with_label("not a type variable")
+                        .with_help(format!(
+                            "constrain the variables inside it instead, e.g. `{class}<a>`"
+                        )),
+                );
+                continue;
+            };
+            match names.iter().position(|name| *name == var.name) {
+                Some(index) => classes[index] = classes[index].with(class),
+                None if outer(&var.name) => {
+                    ok = false;
+                    self.diagnostics.push(
+                        Diagnostic::error(format!(
+                            "`{}` belongs to an enclosing annotation",
+                            var.name
+                        ))
+                        .at(constraint.span)
+                        .with_label("cannot be constrained here")
+                        .with_help(format!(
+                            "add `{class}<{}>` to the annotation that introduces `{}`",
+                            var.name, var.name
+                        )),
+                    );
+                }
+                None => {
+                    ok = false;
+                    self.diagnostics.push(
+                        Diagnostic::error(format!(
+                            "the type variable `{}` is constrained but not used",
+                            var.name
+                        ))
+                        .at(constraint.span)
+                        .with_label("does not appear in the type")
+                        .with_note(
+                            "a constraint must apply to a variable of the type it qualifies",
+                        ),
+                    );
+                }
+            }
+        }
+        ok.then_some(classes)
     }
 
     /// Converts a type expression; `var` maps a type variable name to a type.
@@ -619,10 +814,83 @@ impl<'a> Checker<'a> {
                 params: def.params.iter().map(|p| p.name.clone()).collect(),
                 constructors: def.constructors.iter().map(|c| c.id).collect(),
                 span: Some(def.name.span),
+                // Filled in by `derive_instances`.
+                instances: Default::default(),
             });
         }
         for def in types {
             self.declare_constructors(def);
+        }
+        self.derive_instances(types);
+    }
+
+    /// Works out which classes each declared type belongs to: a type
+    /// belongs to a class when all its fields do, which for a field of a
+    /// parameter's type means the parameter must too. Types may be
+    /// recursive, so this is a greatest fixed point: every type starts in
+    /// every class with no requirements, and classes are removed and
+    /// requirements added until nothing changes.
+    fn derive_instances(&mut self, types: &[TypeDef]) {
+        for def in types {
+            self.env.set_instances(
+                def.id,
+                [Some(Vec::new()), Some(Vec::new()), Some(Vec::new())],
+            );
+        }
+        loop {
+            let mut changed = false;
+            for def in types {
+                let info = self.env.ty(def.id).clone();
+                let mut instances = info.instances.clone();
+                for class in Class::ALL {
+                    let Some(current) = &instances[class.index()] else {
+                        continue;
+                    };
+                    let mut needed = vec![false; info.arity()];
+                    for &param in current {
+                        needed[param] = true;
+                    }
+                    let mut ok = true;
+                    for &con in &info.constructors {
+                        let mut ty = &self.env.constructor(con).scheme.ty;
+                        while let Type::Fun(field, rest) = ty {
+                            ok &= self.field_requires(class, field, &mut needed);
+                            ty = rest;
+                        }
+                    }
+                    let derived = ok.then(|| (0..needed.len()).filter(|&i| needed[i]).collect());
+                    if derived != instances[class.index()] {
+                        instances[class.index()] = derived;
+                        changed = true;
+                    }
+                }
+                self.env.set_instances(def.id, instances);
+            }
+            if !changed {
+                break;
+            }
+        }
+    }
+
+    /// Whether a field of type `ty` can belong to `class`, marking the
+    /// parameters (quantified variables below `needed.len()`) it needs.
+    fn field_requires(&self, class: Class, ty: &Type, needed: &mut [bool]) -> bool {
+        match ty {
+            Type::Gen(index) => {
+                // Higher indices stand in for fields that failed to convert.
+                if let Some(slot) = needed.get_mut(*index as usize) {
+                    *slot = true;
+                }
+                true
+            }
+            Type::Con(con, args) => match self.env.instance(con.id, class) {
+                None => false,
+                Some(params) => params
+                    .iter()
+                    .all(|&param| self.field_requires(class, &args[param], needed)),
+            },
+            Type::Fun(..) => false,
+            Type::Var(_) | Type::Rigid(_) => true,
         }
     }
 
@@ -689,10 +957,10 @@ impl<'a> Checker<'a> {
                 id: ctor.id,
                 name: ctor.name.name.clone(),
                 ty: def.id,
-                scheme: Scheme {
-                    arity: (params.len() + extra) as u32,
-                    ty: Type::curried(fields, result.clone()),
-                },
+                scheme: Scheme::poly(
+                    (params.len() + extra) as u32,
+                    Type::curried(fields, result.clone()),
+                ),
                 arity: ctor.fields.len(),
                 span: Some(ctor.name.span),
             });
@@ -717,8 +985,9 @@ impl<'a> Checker<'a> {
             let mut ctx = BodyCtx::default();
             let expected = match annotations.get(&def.id) {
                 Some(Some(rigid)) => {
-                    for name in &rigid.names {
+                    for (name, &classes) in rigid.names.iter().zip(&rigid.classes) {
                         self.rigid_levels.insert(name.clone(), self.level);
+                        self.rigid_classes.insert(name.clone(), classes);
                         ctx.type_vars
                             .insert(name.clone(), Type::Rigid(name.clone()));
                     }
@@ -786,11 +1055,11 @@ impl<'a> Checker<'a> {
             ExprKind::Unit => Type::unit(),
             ExprKind::Error => self.fresh(),
             ExprKind::Local(id) => match ctx.locals.get(id).cloned() {
-                Some(scheme) => self.instantiate(&scheme),
+                Some(scheme) => self.instantiate_at(&scheme, expr.span),
                 None => self.fresh(),
             },
             ExprKind::Global(id) => match self.global_type(*id) {
-                GlobalType::Known(scheme) => self.instantiate(&scheme),
+                GlobalType::Known(scheme) => self.instantiate_at(&scheme, expr.span),
                 GlobalType::Pending(ty) => ty,
             },
             ExprKind::Builtin(builtin) => {
@@ -806,7 +1075,7 @@ impl<'a> Checker<'a> {
                     return self.fresh();
                 }
                 let scheme = builtin_scheme(*builtin);
-                self.instantiate(&scheme)
+                self.instantiate_at(&scheme, expr.span)
             }
             ExprKind::Lambda { param, ann, body } => {
                 let param_ty = match ann {
@@ -886,14 +1155,14 @@ impl<'a> Checker<'a> {
     /// A `let` annotation quantifies its own new type variables.
     fn let_annotation(
         &mut self,
-        ann: &TypeExpr,
+        ann: &TypeScheme,
         ctx: &mut BodyCtx,
     ) -> Option<(Scheme, Type, Vec<Rc<str>>)> {
         let mut ok = true;
         let mut new_names: Vec<Rc<str>> = Vec::new();
         let level = self.level;
         let ty = self.convert(
-            ann,
+            &ann.ty,
             &mut |name, _| {
                 Some(ctx.type_vars.get(name).cloned().unwrap_or_else(|| {
                     if !new_names.contains(name) {
@@ -904,15 +1173,19 @@ impl<'a> Checker<'a> {
             },
             &mut ok,
         );
-        let ty = match ty {
-            Some(ty) if ok => ty,
-            _ => {
-                ctx.failed = true;
-                return None;
-            }
+        let classes = match ty {
+            Some(_) if ok => self.context(&ann.context, &new_names, |name| {
+                ctx.type_vars.contains_key(name)
+            }),
+            _ => None,
         };
-        for name in &new_names {
+        let (Some(ty), Some(classes)) = (ty, classes) else {
+            ctx.failed = true;
+            return None;
+        };
+        for (name, &classes) in new_names.iter().zip(&classes) {
             self.rigid_levels.insert(name.clone(), level);
+            self.rigid_classes.insert(name.clone(), classes);
         }
         let rigids: HashMap<Rc<str>, u32> = new_names
             .iter()
@@ -922,6 +1195,7 @@ impl<'a> Checker<'a> {
         let zonked = self.zonk(&ty);
         let scheme = Scheme {
             arity: new_names.len() as u32,
+            bounds: classes,
             ty: self.generalize_in(&zonked, &mut HashMap::new(), &rigids),
         };
         Some((scheme, ty, new_names))
@@ -941,7 +1215,16 @@ impl<'a> Checker<'a> {
     fn infer_app(&mut self, func: &hir::Expr, args: &[hir::Expr], ctx: &mut BodyCtx) -> Type {
         if matches!(&func.kind, ExprKind::Builtin(builtin) if builtin.is_variadic()) {
             for arg in args {
-                self.infer(arg, ctx);
+                let ty = self.infer(arg, ctx);
+                let origin = Some(func.span);
+                if let Err((class, culprit)) = self.require(Classes::of(Class::Show), &ty, origin) {
+                    let mismatch = Mismatch {
+                        expected: ty,
+                        found: culprit,
+                        reason: MismatchReason::NoInstance(class, origin),
+                    };
+                    self.report(ctx, mismatch, arg.span, |_, _| String::new());
+                }
             }
             return Type::io(Type::unit());
         }
@@ -952,10 +1235,16 @@ impl<'a> Checker<'a> {
                 Type::Var(_) => {
                     let param = self.fresh();
                     let result = self.fresh();
-                    self.unify(&current, &Type::fun(param.clone(), result.clone()))
-                        .unwrap_or_else(|_| {
-                            unreachable!("a fresh variable unifies with a function type")
-                        });
+                    // Fails only if the variable must belong to a class.
+                    if let Err(mismatch) =
+                        self.unify(&current, &Type::fun(param.clone(), result.clone()))
+                    {
+                        self.report(ctx, mismatch, func.span, |_, _| String::new());
+                        for rest in &args[index..] {
+                            self.infer(rest, ctx);
+                        }
+                        return self.fresh();
+                    }
                     (param, result)
                 }
                 other => {
@@ -1148,9 +1437,66 @@ impl<'a> Checker<'a> {
             .at(span)
             .with_label(label(&shown[0], &shown[1]))
             .with_note("an annotated `let` is generic in its own type variables, so they cannot be tied to outer types"),
+            MismatchReason::NoInstance(class, origin) => {
+                no_instance(class, &found, &shown[0], &shown[1], span, origin)
+            }
         };
         self.error(ctx, diagnostic);
     }
+}
+
+/// The error for a type that does not belong to `class`: `whole` is the
+/// type that had to, and `part` (`culprit`) the piece of it that does not.
+/// `span` is where the types met and `origin` where the class was required.
+fn no_instance(
+    class: Class,
+    culprit: &Type,
+    whole: &str,
+    part: &str,
+    span: Span,
+    origin: Option<Span>,
+) -> Diagnostic {
+    let verb = class.verb();
+    if let Type::Rigid(name) = culprit {
+        // The use that needs the class is more useful than where the
+        // annotation's variable met it, which may be the whole definition.
+        return Diagnostic::error(format!("`{name}` cannot be {verb} here"))
+            .at(origin.unwrap_or(span))
+            .with_label(format!("this needs `{class}<{name}>`"))
+            .with_note(format!(
+                "`{name}` comes from an annotation, which does not say that it belongs to `{class}`"
+            ))
+            .with_help(format!(
+                "add `{class}<{name}> =>` in front of the annotation that introduces `{name}`"
+            ));
+    }
+    let label = if whole == part {
+        format!("this has type `{whole}`")
+    } else {
+        format!("this has type `{whole}`, which contains `{part}`")
+    };
+    let (message, note) = match culprit {
+        Type::Fun(..) => (format!("functions cannot be {verb}"), None),
+        Type::Con(con, _) if con.id == TyConId::IO => {
+            (format!("`IO` actions cannot be {verb}"), None)
+        }
+        _ => (
+            format!("values of type `{part}` cannot be {verb}"),
+            Some(format!(
+                "a data type can be {verb} only if all its fields can; functions and `IO` actions cannot"
+            )),
+        ),
+    };
+    let mut diagnostic = Diagnostic::error(message)
+        .at(span)
+        .with_label(label)
+        .with_note(note.unwrap_or_else(|| format!(
+            "numbers, strings, `Unit`, lists and data types can be {verb}; functions and `IO` actions cannot"
+        )));
+    if let Some(origin) = origin.filter(|&origin| origin != span) {
+        diagnostic = diagnostic.with_secondary(origin, format!("this needs `{class}<{whole}>`"));
+    }
+    diagnostic
 }
 
 fn substitute_gens(ty: &Type, with: &[Type]) -> Type {
@@ -1178,6 +1524,9 @@ fn type_hint(name: &str) -> Option<String> {
         "Any" => Some("there is no `Any` type; use a type variable such as `a`".into()),
         "Str" => Some("strings have type `String`".into()),
         "Boolean" => Some("booleans have type `Bool`".into()),
+        "Eq" | "Ord" | "Show" => Some(format!(
+            "`{name}` is a class, not a type: write `{name}<a> =>` in front of the type"
+        )),
         _ => None,
     }
 }
@@ -1424,6 +1773,164 @@ mod tests {
         assert_eq!(type_of_entry(r#"(print 1 "a" [True])"#), "IO<Unit>");
         let errors = errors_of("(map print [1])");
         assert_eq!(errors[0].message, "`print` must be called directly");
+        let errors = errors_of(r"(print 1 \x. x)");
+        assert_eq!(errors[0].message, "functions cannot be shown");
+    }
+
+    #[test]
+    fn contexts_are_inferred_and_generalized() {
+        assert_eq!(
+            types_of(r"member = \x. \xs. (foldr \y. \found. (or (eq x y) found) False xs)"),
+            ["member : Eq<a> => a -> List<a> -> Bool"]
+        );
+        assert_eq!(
+            types_of(r"f = \x. \y. (concat (show x) (show (sort y)))"),
+            ["f : (Ord<b>, Show<a>, Show<b>) => a -> List<b> -> String"]
+        );
+        // `Ord` implies `Eq`.
+        assert_eq!(
+            types_of(r"f = \x. (and (eq x x) (lt x x))"),
+            ["f : Ord<a> => a -> Bool"]
+        );
+        // No monomorphism restriction: a partial application generalizes.
+        assert_eq!(
+            types_of("isZero = (eq 0)\nsame = eq"),
+            ["isZero : Number -> Bool", "same : Eq<a> => a -> a -> Bool"]
+        );
+        // A constraint on a variable that does not appear is dropped.
+        assert_eq!(type_of_entry("(show [])"), "String");
+        // Lambda-bound variables collect their constraints.
+        assert_eq!(
+            type_of_entry(r"\f. (eq (f 1) (f 2))"),
+            "Eq<a> => (Number -> a) -> Bool"
+        );
+    }
+
+    #[test]
+    fn instances_reduce_to_their_arguments() {
+        assert_eq!(type_of_entry("(eq [[1]] [])"), "Bool");
+        assert_eq!(type_of_entry(r"\x. (show [x])"), "Show<a> => a -> String");
+        assert_eq!(
+            type_of_entry(&format!(r"{OPTION}\x. (lt (Some x) None)")),
+            "Ord<a> => a -> Bool"
+        );
+        let errors = errors_of(r"(eq [\x. x] [])");
+        assert_eq!(errors[0].message, "functions cannot be compared");
+        assert_eq!(
+            errors[0].label.as_deref(),
+            Some("this has type `List<a -> a>`, which contains `a -> a`")
+        );
+        let errors = errors_of("(show (pure 1))");
+        assert_eq!(errors[0].message, "`IO` actions cannot be shown");
+        let errors = errors_of(r"(lt \x. x \x. x)");
+        assert_eq!(errors[0].message, "functions cannot be ordered");
+        // A constraint found later in the body still reports the use.
+        let errors = errors_of(r"f = \x. (and (eq x x) (x 1))");
+        assert_eq!(errors[0].message, "functions cannot be compared");
+    }
+
+    #[test]
+    fn data_types_derive_instances_from_their_fields() {
+        let ok = format!(
+            "{OPTION}type Tree<a> = Leaf | Node Tree<a> a Tree<a>\n\
+             type Phantom<a> = Phantom\n\
+             type Even<a> = Zero | Even (Odd<a>)\n\
+             type Odd<a> = Odd a (Even<a>)\n\
+             a = \\x. (eq (Some x) None)\n\
+             b = \\x. (sort [(Node Leaf x Leaf)])\n\
+             tag : a -> Phantom<a> = \\x. Phantom\n\
+             c = \\f. (eq (tag f) (tag f))\n\
+             d = \\x. (show (Odd x Zero))"
+        );
+        let (_, typed) = check(&ok);
+        let shown: Vec<String> = typed.def_schemes.iter().map(|s| s.to_string()).collect();
+        assert_eq!(
+            shown,
+            [
+                "Eq<a> => a -> Bool",
+                "Ord<a> => a -> List<Tree<a>>",
+                "a -> Phantom<a>",
+                "a -> Bool",
+                "Show<a> => a -> String"
+            ],
+            "{:#?}",
+            typed.diagnostics
+        );
+        let errors = errors_of(
+            "type Handler = Handler (Number -> Number)\n\
+             type Wrap = Wrap Handler\n\
+             x = (eq (Wrap (Handler neg)) (Wrap (Handler neg)))",
+        );
+        assert_eq!(
+            errors[0].message,
+            "values of type `Wrap` cannot be compared"
+        );
+        let errors = errors_of("type Job = Job (IO<Unit>)\nx = (show (Job (pure ())))");
+        assert_eq!(errors[0].message, "values of type `Job` cannot be shown");
+    }
+
+    #[test]
+    fn annotations_declare_contexts() {
+        assert_eq!(
+            types_of(
+                r"member : Eq<a> => a -> List<a> -> Bool = \x. \xs. (foldr \y. \r. (or (eq x y) r) False xs)"
+            ),
+            ["member : Eq<a> => a -> List<a> -> Bool"]
+        );
+        // `Ord` in the annotation allows `eq` in the body.
+        assert_eq!(
+            types_of(r"f : Ord<a> => a -> Bool = \x. (eq x x)"),
+            ["f : Ord<a> => a -> Bool"]
+        );
+        // A context may be wider than the body needs.
+        assert_eq!(
+            types_of(r"f : (Eq<a>, Show<b>) => a -> b -> a = \x. \y. x"),
+            ["f : (Eq<a>, Show<b>) => a -> b -> a"]
+        );
+        // Polymorphic recursion at a type that needs the class.
+        assert_eq!(
+            types_of(
+                r"f : Eq<a> => Number -> a -> Bool = \n. \x. (if (eq n 0) (eq x x) (f (sub n 1) [x]))"
+            ),
+            ["f : Eq<a> => Number -> a -> Bool"]
+        );
+        // Annotated `let`.
+        assert_eq!(
+            type_of_entry(r"let same : Eq<a> => a -> a -> Bool = eq in (same 1 2)"),
+            "Bool"
+        );
+        let errors = errors_of(r"f : a -> Bool = \x. (lt x x)");
+        assert_eq!(errors[0].message, "`a` cannot be ordered here");
+        assert_eq!(errors[0].label.as_deref(), Some("this needs `Ord<a>`"));
+        assert_eq!(
+            errors[0].help.as_deref(),
+            Some("add `Ord<a> =>` in front of the annotation that introduces `a`")
+        );
+        let errors = errors_of(r"f : Eq<a> => a -> String = \x. (show x)");
+        assert_eq!(errors[0].message, "`a` cannot be shown here");
+        // Callers must satisfy the annotation's context.
+        let errors = errors_of("f : Eq<a> => a -> Bool = \\x. (eq x x)\ny = (f \\z. z)");
+        assert_eq!(errors[0].message, "functions cannot be compared");
+    }
+
+    #[test]
+    fn malformed_contexts_are_reported() {
+        let errors = errors_of(r"f : Num<a> => a -> a = \x. x");
+        assert_eq!(errors[0].message, "unknown class `Num`");
+        let errors = errors_of(r"f : Eq<List<a>> => a -> a = \x. x");
+        assert_eq!(errors[0].message, "a constraint applies to a type variable");
+        let errors = errors_of(r"f : Eq<b> => a -> a = \x. x");
+        assert_eq!(
+            errors[0].message,
+            "the type variable `b` is constrained but not used"
+        );
+        let errors = errors_of(r"f : a -> a = \x. let g : Eq<a> => a -> Bool = \y. (eq x y) in x");
+        assert_eq!(errors[0].message, "`a` belongs to an enclosing annotation");
+        let errors = errors_of(r"f : Eq -> Bool = \x. True");
+        assert_eq!(
+            errors[0].help.as_deref(),
+            Some("`Eq` is a class, not a type: write `Eq<a> =>` in front of the type")
+        );
     }
 
     #[test]
@@ -1519,10 +2026,10 @@ mod tests {
             }
         }
         let resolved = resolve(loaded.items, &Scope);
-        let prior = [Scheme {
-            arity: 1,
-            ty: Type::fun(Type::Gen(0), Type::list(Type::Gen(0))),
-        }];
+        let prior = [Scheme::poly(
+            1,
+            Type::fun(Type::Gen(0), Type::list(Type::Gen(0))),
+        )];
         let typed = check_unit(&resolved.unit, &prior, &TypeEnv::new(), TopLevel::Any);
         assert_eq!(typed.entry_schemes[0].to_string(), "List<Number>");
     }

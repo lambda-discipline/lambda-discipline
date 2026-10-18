@@ -7,7 +7,12 @@ use std::rc::Rc;
 use crate::hir::{ConId, TyConId};
 use crate::source::Span;
 
-use super::ty::{Scheme, TyCon, Type};
+use super::ty::{Class, Scheme, TyCon, Type};
+
+/// A type's instance of one class: `None` when the type does not belong to
+/// it, otherwise the indices of the parameters that must belong to it too
+/// (`List<a>` is in `Eq` when `a` is, so its `Eq` instance is `Some([0])`).
+pub type Instance = Option<Vec<usize>>;
 
 /// A type that exists without a declaration.
 pub struct BuiltinType {
@@ -15,6 +20,9 @@ pub struct BuiltinType {
     pub arity: usize,
     /// Its constructors, in order; empty for primitive types.
     pub constructors: &'static [&'static str],
+    /// Whether it belongs to every class when its parameters do. Only `IO`
+    /// does not: actions cannot be compared or shown.
+    pub structural: bool,
 }
 
 /// The built-in types, indexed by [`TyConId`]. Their constructors take the
@@ -24,31 +32,37 @@ pub const BUILTIN_TYPES: &[BuiltinType] = &[
         name: "Number",
         arity: 0,
         constructors: &[],
+        structural: true,
     },
     BuiltinType {
         name: "String",
         arity: 0,
         constructors: &[],
+        structural: true,
     },
     BuiltinType {
         name: "Bool",
         arity: 0,
         constructors: &["False", "True"],
+        structural: true,
     },
     BuiltinType {
         name: "Unit",
         arity: 0,
         constructors: &[],
+        structural: true,
     },
     BuiltinType {
         name: "List",
         arity: 1,
         constructors: &[],
+        structural: true,
     },
     BuiltinType {
         name: "IO",
         arity: 1,
         constructors: &[],
+        structural: false,
     },
 ];
 
@@ -70,6 +84,8 @@ pub struct TypeInfo {
     pub constructors: Vec<ConId>,
     /// Where it was declared; `None` for built-in types.
     pub span: Option<Span>,
+    /// Its instance of each class, indexed by [`Class::index`].
+    pub instances: [Instance; 3],
 }
 
 impl TypeInfo {
@@ -136,11 +152,15 @@ impl TypeEnv {
                     span: None,
                 });
             }
+            let instance = builtin
+                .structural
+                .then(|| (0..builtin.arity).collect::<Vec<_>>());
             env.add_type(TypeInfo {
                 con,
                 params,
                 constructors,
                 span: None,
+                instances: [instance.clone(), instance.clone(), instance],
             });
         }
         env
@@ -170,6 +190,16 @@ impl TypeEnv {
 
     pub fn ty(&self, id: TyConId) -> &TypeInfo {
         &self.types[id.index()]
+    }
+
+    /// The parameters of `id` that must belong to `class` for `id` to, or
+    /// `None` if `id` never belongs to it.
+    pub fn instance(&self, id: TyConId, class: Class) -> Option<&[usize]> {
+        self.ty(id).instances[class.index()].as_deref()
+    }
+
+    pub fn set_instances(&mut self, id: TyConId, instances: [Instance; 3]) {
+        self.types[id.index()].instances = instances;
     }
 
     pub fn constructor(&self, id: ConId) -> &ConInfo {
@@ -274,6 +304,9 @@ mod tests {
         }
         assert_eq!(env.describe(TyConId::BOOL), "type Bool = False | True");
         assert_eq!(env.describe(TyConId::LIST), "type List<a>");
+        assert_eq!(env.instance(TyConId::LIST, Class::Eq), Some(&[0][..]));
+        assert_eq!(env.instance(TyConId::NUMBER, Class::Ord), Some(&[][..]));
+        assert_eq!(env.instance(TyConId::IO, Class::Show), None);
         assert_eq!(
             builtin_constructors().collect::<Vec<_>>(),
             [(ConId::FALSE, "False"), (ConId::TRUE, "True")]

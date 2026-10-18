@@ -1,0 +1,10 @@
+file = "compare_functions.lbd"
+
+[expect]
+exit_code = 1
+stdout = ""
+stderr_contains = [
+    "Error: functions cannot be compared",
+    "this needs `Eq<a -> a>`",
+    "this has type `a -> a`",
+]

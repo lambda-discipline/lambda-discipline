@@ -40,8 +40,8 @@ use crate::diagnostics::Diagnostic;
 use crate::source::{FileId, Span};
 
 use super::ast::{
-    Arm, CtorDecl, Def, Expr, ExprKind, Ident, Item, Module, Pattern, PatternKind, TypeDecl,
-    TypeExpr, TypeExprKind,
+    Arm, Constraint, CtorDecl, Def, Expr, ExprKind, Ident, Item, Module, Pattern, PatternKind,
+    TypeDecl, TypeExpr, TypeExprKind, TypeScheme,
 };
 use super::token::{Token, TokenKind, lex, unescape};
 
@@ -68,8 +68,22 @@ pub fn parse_module(file: FileId, text: &str) -> (Module, Vec<Diagnostic>) {
     (module, diagnostics)
 }
 
-/// Parses a single type (used for builtin signatures and the REPL).
+/// Parses a single type (used for the REPL).
 pub fn parse_type(file: FileId, text: &str) -> Result<TypeExpr, Vec<Diagnostic>> {
+    parse_whole(file, text, Parser::ty)
+}
+
+/// Parses a type with an optional context, `Eq<a> => a -> a -> Bool` (used
+/// for builtin signatures).
+pub fn parse_scheme(file: FileId, text: &str) -> Result<TypeScheme, Vec<Diagnostic>> {
+    parse_whole(file, text, Parser::scheme)
+}
+
+fn parse_whole<'t, T>(
+    file: FileId,
+    text: &'t str,
+    parse: impl FnOnce(&mut Parser<'t>) -> PResult<T>,
+) -> Result<T, Vec<Diagnostic>> {
     let (tokens, mut diagnostics) = lex(file, text);
     let mut parser = Parser {
         text,
@@ -78,9 +92,7 @@ pub fn parse_type(file: FileId, text: &str) -> Result<TypeExpr, Vec<Diagnostic>>
         depth: 0,
         diagnostics: Vec::new(),
     };
-    let result = parser
-        .ty()
-        .and_then(|t| parser.expect(TokenKind::Eof).map(|_| t));
+    let result = parse(&mut parser).and_then(|t| parser.expect(TokenKind::Eof).map(|_| t));
     diagnostics.append(&mut parser.diagnostics);
     match result {
         Ok(t) if diagnostics.is_empty() => Ok(t),
@@ -223,7 +235,7 @@ impl Parser<'_> {
             {
                 let name = self.ident()?;
                 let ann = match self.eat(TokenKind::Colon) {
-                    Some(_) => Some(self.ty()?),
+                    Some(_) => Some(self.scheme()?),
                     None => None,
                 };
                 self.expect(TokenKind::Equals)?;
@@ -314,7 +326,7 @@ impl Parser<'_> {
         let start = self.bump().span;
         let name = self.ident()?;
         let ann = match self.eat(TokenKind::Colon) {
-            Some(_) => Some(self.ty()?),
+            Some(_) => Some(self.scheme()?),
             None => None,
         };
         let binds = match self.eat(TokenKind::LeftArrow) {
@@ -338,9 +350,17 @@ impl Parser<'_> {
         let body = Box::new(self.expr()?);
         let span = start.to(body.span);
         let kind = if binds {
+            if let Some(first) = ann.as_ref().and_then(|ann| ann.context.first()) {
+                return Err(self.error(
+                    Diagnostic::error("the result of an action cannot have a context")
+                        .at(first.span)
+                        .with_label("not allowed in `let ... <-`")
+                        .with_note("an action's result is a single value, so it cannot be generic"),
+                ));
+            }
             ExprKind::Bind {
                 name,
-                ann,
+                ann: ann.map(|ann| ann.ty),
                 action: value,
                 body,
             }
@@ -605,6 +625,73 @@ impl Parser<'_> {
         ))
     }
 
+    /// A type with an optional context: `Eq<a> => ...` or
+    /// `(Eq<a>, Show<b>) => ...`.
+    fn scheme(&mut self) -> PResult<TypeScheme> {
+        let mut context = Vec::new();
+        if self.at_context() {
+            if let Some(open) = self.eat(TokenKind::LParen) {
+                loop {
+                    context.push(self.constraint()?);
+                    if self.eat(TokenKind::Comma).is_none() {
+                        break;
+                    }
+                }
+                self.expect_closing(TokenKind::RParen, open.span)?;
+            } else {
+                context.push(self.constraint()?);
+            }
+            self.expect(TokenKind::FatArrow)?;
+        }
+        let ty = self.ty()?;
+        Ok(TypeScheme { context, ty })
+    }
+
+    /// Whether a context starts here: a `=>` follows before anything that
+    /// cannot be part of a type.
+    fn at_context(&self) -> bool {
+        self.tokens[self.pos..]
+            .iter()
+            .map(|token| token.kind)
+            .find(|kind| {
+                !matches!(
+                    kind,
+                    TokenKind::Ident
+                        | TokenKind::LAngle
+                        | TokenKind::RAngle
+                        | TokenKind::Comma
+                        | TokenKind::LParen
+                        | TokenKind::RParen
+                        | TokenKind::Arrow
+                )
+            })
+            == Some(TokenKind::FatArrow)
+    }
+
+    /// `Eq<a>`
+    fn constraint(&mut self) -> PResult<Constraint> {
+        let class = self.ident()?;
+        let Some(open) = self.eat(TokenKind::LAngle) else {
+            let found = self.peek();
+            return Err(self.error(
+                Diagnostic::error(format!("expected `<`, found {}", found.kind))
+                    .at(found.span)
+                    .with_label("expected `<`")
+                    .with_help(format!(
+                        "a constraint is written like a type: `{}<a>`",
+                        class.name
+                    )),
+            ));
+        };
+        let arg = self.ty()?;
+        let close = self.expect_closing(TokenKind::RAngle, open.span)?;
+        Ok(Constraint {
+            span: class.span.to(close.span),
+            class,
+            arg,
+        })
+    }
+
     fn ty(&mut self) -> PResult<TypeExpr> {
         self.nested("type", Self::ty_inner)
     }
@@ -704,6 +791,42 @@ mod tests {
         assert_eq!(
             roundtrip(r"apply : (a -> b) -> a -> b = \f. \x. (f x)"),
             "apply : (a -> b) -> a -> b = (\\f. (\\x. (f x)))\n"
+        );
+    }
+
+    #[test]
+    fn annotations_with_contexts() {
+        assert_eq!(
+            roundtrip(r"member : Eq<a> => a -> List<a> -> Bool = \x. \xs. x"),
+            "member : Eq<a> => a -> List<a> -> Bool = (\\x. (\\xs. x))\n"
+        );
+        assert_eq!(
+            roundtrip("f : (Ord<k>, Show<v>) => k -> v -> String = g"),
+            "f : (Ord<k>, Show<v>) => k -> v -> String = g\n"
+        );
+        // A parenthesized type is not mistaken for a context.
+        assert_eq!(
+            roundtrip("f : (List<a>) -> a = head"),
+            "f : List<a> -> a = head\n"
+        );
+        assert_eq!(
+            roundtrip(r"x = let f : Eq<a> => a -> Bool = \y. (eq y y) in f"),
+            "x = (let f: Eq<a> => a -> Bool = (\\y. (eq y y)) in f)\n"
+        );
+    }
+
+    #[test]
+    fn malformed_contexts() {
+        let (_, diagnostics) = parse("f : Eq a => a = x");
+        assert_eq!(diagnostics[0].message, "expected `<`, found an identifier");
+        assert_eq!(
+            diagnostics[0].help.as_deref(),
+            Some("a constraint is written like a type: `Eq<a>`")
+        );
+        let (_, diagnostics) = parse("x = let y : Show<a> => a <- (pure 1) in (pure y)");
+        assert_eq!(
+            diagnostics[0].message,
+            "the result of an action cannot have a context"
         );
     }
 

@@ -106,17 +106,135 @@ impl Type {
     }
 }
 
-/// A polymorphic type `forall a b. t`; quantified variables appear as
-/// [`Type::Gen`] indices `0..arity`.
+/// One of the built-in type classes. A type belongs to a class when the
+/// class's builtins work on its values; every type built without functions
+/// or `IO` actions belongs to all of them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum Class {
+    /// Equality: `eq`, `neq`.
+    Eq,
+    /// Ordering: `lt`, `compare`, `sort`, ...; implies `Eq`.
+    Ord,
+    /// Conversion to source-like text: `show`, `print`.
+    Show,
+}
+
+impl Class {
+    pub const ALL: [Class; 3] = [Class::Eq, Class::Ord, Class::Show];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Class::Eq => "Eq",
+            Class::Ord => "Ord",
+            Class::Show => "Show",
+        }
+    }
+
+    pub fn lookup(name: &str) -> Option<Class> {
+        Class::ALL.into_iter().find(|class| class.name() == name)
+    }
+
+    pub fn index(self) -> usize {
+        self as usize
+    }
+
+    /// What the class's builtins do, for messages: "functions cannot be
+    /// compared".
+    pub fn verb(self) -> &'static str {
+        match self {
+            Class::Eq => "compared",
+            Class::Ord => "ordered",
+            Class::Show => "shown",
+        }
+    }
+}
+
+impl fmt::Display for Class {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
+/// A set of classes, closed under superclasses (`Ord` implies `Eq`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub struct Classes(u8);
+
+impl Classes {
+    pub const NONE: Classes = Classes(0);
+
+    pub fn of(class: Class) -> Classes {
+        let mut set = Classes(1 << class.index());
+        if class == Class::Ord {
+            set.0 |= 1 << Class::Eq.index();
+        }
+        set
+    }
+
+    pub fn is_empty(self) -> bool {
+        self.0 == 0
+    }
+
+    pub fn contains(self, class: Class) -> bool {
+        self.0 & (1 << class.index()) != 0
+    }
+
+    pub fn union(self, other: Classes) -> Classes {
+        Classes(self.0 | other.0)
+    }
+
+    pub fn with(self, class: Class) -> Classes {
+        self.union(Classes::of(class))
+    }
+
+    /// The classes in `self` that are not in `other`.
+    pub fn minus(self, other: Classes) -> Classes {
+        Classes(self.0 & !other.0)
+    }
+
+    pub fn iter(self) -> impl Iterator<Item = Class> {
+        Class::ALL
+            .into_iter()
+            .filter(move |&class| self.contains(class))
+    }
+
+    /// The classes to write in a context: `Eq` is implied by `Ord`.
+    pub fn shown(self) -> impl Iterator<Item = Class> {
+        self.iter()
+            .filter(move |&class| !(class == Class::Eq && self.contains(Class::Ord)))
+    }
+}
+
+/// A polymorphic type `forall a b. C => t`; quantified variables appear as
+/// [`Type::Gen`] indices `0..arity`, and `bounds[i]` holds the classes
+/// variable `i` must belong to (`bounds` may be shorter than `arity` when
+/// the trailing variables are unconstrained).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Scheme {
     pub arity: u32,
+    pub bounds: Vec<Classes>,
     pub ty: Type,
 }
 
 impl Scheme {
     pub fn mono(ty: Type) -> Self {
-        Scheme { arity: 0, ty }
+        Scheme::poly(0, ty)
+    }
+
+    /// A scheme whose variables are unconstrained.
+    pub fn poly(arity: u32, ty: Type) -> Self {
+        Scheme {
+            arity,
+            bounds: Vec::new(),
+            ty,
+        }
+    }
+
+    /// The classes quantified variable `index` must belong to.
+    pub fn bound(&self, index: u32) -> Classes {
+        self.bounds
+            .get(index as usize)
+            .copied()
+            .unwrap_or(Classes::NONE)
     }
 }
 
@@ -230,9 +348,33 @@ impl fmt::Display for Type {
     }
 }
 
+/// Prints `Eq<a> => a -> a -> Bool`, with several constraints in
+/// parentheses, ordered by class and then by variable name.
 impl fmt::Display for Scheme {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.ty.fmt(f)
+        let mut namer = Namer::new(&[&self.ty]);
+        let mut ty = String::new();
+        namer.write(&self.ty, &mut ty, false);
+        let mut constraints: Vec<(Class, String)> = Vec::new();
+        for index in 0..self.arity {
+            let bound = self.bound(index);
+            if bound.is_empty() {
+                continue;
+            }
+            let mut name = String::new();
+            namer.write(&Type::Gen(index), &mut name, false);
+            constraints.extend(bound.shown().map(|class| (class, name.clone())));
+        }
+        constraints.sort();
+        let context: Vec<String> = constraints
+            .iter()
+            .map(|(class, name)| format!("{class}<{name}>"))
+            .collect();
+        match context.len() {
+            0 => f.write_str(&ty),
+            1 => write!(f, "{} => {ty}", context[0]),
+            _ => write!(f, "({}) => {ty}", context.join(", ")),
+        }
     }
 }
 
@@ -282,6 +424,42 @@ mod tests {
         // A rigid name that appears after the variable is reserved too.
         let ty = Type::fun(Type::Var(TyVar(0)), Type::Rigid("a".into()));
         assert_eq!(ty.to_string(), "b -> a");
+    }
+
+    #[test]
+    fn schemes_show_their_context() {
+        let a = Type::Gen(0);
+        let b = Type::Gen(1);
+        let eq = Scheme {
+            arity: 1,
+            bounds: vec![Classes::of(Class::Eq)],
+            ty: Type::curried([a.clone(), a.clone()], Type::bool()),
+        };
+        assert_eq!(eq.to_string(), "Eq<a> => a -> a -> Bool");
+        // `Ord` implies `Eq`, and constraints are ordered by class.
+        let both = Scheme {
+            arity: 2,
+            bounds: vec![
+                Classes::of(Class::Show),
+                Classes::of(Class::Eq).with(Class::Ord),
+            ],
+            ty: Type::fun(a, b),
+        };
+        assert_eq!(both.to_string(), "(Ord<b>, Show<a>) => a -> b");
+        assert_eq!(Scheme::poly(1, Type::Gen(0)).to_string(), "a");
+    }
+
+    #[test]
+    fn class_sets_include_superclasses() {
+        let ord = Classes::of(Class::Ord);
+        assert!(ord.contains(Class::Eq));
+        assert_eq!(ord.shown().collect::<Vec<_>>(), [Class::Ord]);
+        assert_eq!(
+            ord.with(Class::Show).minus(Classes::of(Class::Eq)),
+            Classes::of(Class::Show).union(Classes(1 << Class::Ord.index()))
+        );
+        assert_eq!(Class::lookup("Show"), Some(Class::Show));
+        assert_eq!(Class::lookup("Num"), None);
     }
 
     #[test]

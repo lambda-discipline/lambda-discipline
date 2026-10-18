@@ -1,0 +1,14 @@
+file = "type_classes.lbd"
+
+[expect]
+exit_code = 0
+stdout = """
+True
+[(Card 2 Clubs), (Card 2 Hearts), (Card 10 Spades)]
+Spades
+pear
+[1, 5] <= [2, 1]
+True
+1
+[]
+"""

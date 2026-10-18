@@ -18,8 +18,8 @@ count : (a -> Bool) -> List<a> -> Number = \predicate. \xs. (length (filter pred
 all : (a -> Bool) -> List<a> -> Bool = \predicate. \xs. (foldr \x. \rest. (and (predicate x) rest) True xs)
 any : (a -> Bool) -> List<a> -> Bool = \predicate. \xs. (foldr \x. \rest. (or (predicate x) rest) False xs)
 product : List<Number> -> Number = (foldl mul 1)
-maximum : List<Number> -> Number = \xs. (foldl max (head xs) xs)
-minimum : List<Number> -> Number = \xs. (foldl min (head xs) xs)
+maximum : Ord<a> => List<a> -> a = \xs. (foldl max (head xs) xs)
+minimum : Ord<a> => List<a> -> a = \xs. (foldl min (head xs) xs)
 
 -- Actions
 -- Performs `action` on every element in order: `(forEach \x. (println x) xs)`.

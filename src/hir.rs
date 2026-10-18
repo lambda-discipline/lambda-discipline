@@ -7,7 +7,7 @@ use std::rc::Rc;
 
 use crate::builtins::Builtin;
 use crate::source::Span;
-use crate::syntax::ast::{Ident, TypeExpr};
+use crate::syntax::ast::{Ident, TypeExpr, TypeScheme};
 
 /// Identifies a global definition for the lifetime of a session. In the
 /// REPL, redefining a name allocates a new id; old references keep theirs.
@@ -94,7 +94,7 @@ pub enum ExprKind {
     /// A recursive `let`: `value` may refer to `local`.
     Let {
         local: LocalId,
-        ann: Option<TypeExpr>,
+        ann: Option<TypeScheme>,
         value: Box<Expr>,
         body: Box<Expr>,
     },
@@ -152,7 +152,7 @@ pub struct GlobalDef {
     pub id: GlobalId,
     pub name: Rc<str>,
     pub name_span: Span,
-    pub ann: Option<TypeExpr>,
+    pub ann: Option<TypeScheme>,
     pub body: Body,
 }
 
