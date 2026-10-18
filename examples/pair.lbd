@@ -1,7 +1,10 @@
 use "std.lbd"
 
-p1 : (Int -> Int -> c) -> c = (pair 1 2)
+p : (Int, String) = (1, "one")
 
-(println (first p1))
-(println (second p1))
-(println (p1 add))
+(println p)
+(println (fst p) " is " (snd p))
+(println (swap p))
+(println ((uncurry add) (2, 3)))
+-- A lambda can take a pair apart in its parameter.
+(println (map \(n, name). (concat name (show n)) [p, (2, "two")]))

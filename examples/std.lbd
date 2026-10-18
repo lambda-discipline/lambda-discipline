@@ -8,10 +8,11 @@ flip : (a -> b -> c) -> b -> a -> c = \f. \x. \y. (f y x)
 compose : (b -> c) -> (a -> b) -> a -> c = \f. \g. \x. (f (g x))
 pipe : (a -> b) -> (b -> c) -> a -> c = \f. \g. \x. (g (f x))
 
--- Church-encoded pairs: a pair is a function that hands both parts to a consumer.
-pair : a -> b -> (a -> b -> c) -> c = \x. \y. \consumer. (consumer x y)
-first : ((a -> b -> a) -> a) -> a = \p. (p \x. \y. x)
-second : ((a -> b -> b) -> b) -> b = \p. (p \x. \y. y)
+-- Pairs (`fst` and `snd` are builtins)
+swap : (a, b) -> (b, a) = \(x, y). (y, x)
+-- `(curry f)` takes the parts of the pair `f` expects one at a time; `uncurry` undoes it.
+curry : ((a, b) -> c) -> a -> b -> c = \f. \x. \y. (f (x, y))
+uncurry : (a -> b -> c) -> (a, b) -> c = \f. \(x, y). (f x y)
 
 -- Lists
 count : (a -> Bool) -> List<a> -> Int = \predicate. \xs. (length (filter predicate xs))

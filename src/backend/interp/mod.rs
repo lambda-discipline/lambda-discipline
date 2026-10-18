@@ -679,6 +679,11 @@ impl Interpreter {
                     "`unwrap` of `None`".into(),
                 )),
             },
+            // The component is entered, so it is evaluated only now.
+            B::Fst | B::Snd => {
+                let index = usize::from(builtin == B::Snd);
+                self.enter(prims::tuple_of(&values[0])?[index].clone())
+            }
             B::UnwrapOk => match prims::result_of(&values[0])? {
                 Ok(value) => self.enter(value),
                 Err(error) => {

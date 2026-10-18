@@ -16,7 +16,8 @@ use std::rc::Rc;
 use crate::builtins::Builtin;
 use crate::diagnostics::Diagnostic;
 use crate::hir::{
-    self, Body, ConId, CtorDef, GlobalDef, GlobalId, LocalId, LocalInfo, TyConId, TypeDef, Unit,
+    self, Body, ConId, CtorDef, GlobalDef, GlobalId, LocalId, LocalInfo, MatchSource, TyConId,
+    TypeDef, Unit,
 };
 use crate::source::Span;
 use crate::syntax::ast::{self, Item};
@@ -36,6 +37,7 @@ pub trait GlobalScope {
     }
     fn constructor_names(&self) -> Vec<Rc<str>> {
         builtin_constructors()
+            .filter(|(id, _)| id.tuple_arity().is_none())
             .map(|(_, con)| Rc::from(con.name))
             .collect()
     }
@@ -277,13 +279,67 @@ impl<'a> BodyResolver<'a> {
         if !is_lower(&ident.name) {
             self.diagnostics.push(uppercase_binder(ident));
         }
-        let id = LocalId(self.locals.len() as u32);
-        self.locals.push(LocalInfo {
-            name: ident.name.clone(),
-            span: ident.span,
-        });
+        let id = self.local(ident.name.clone(), ident.span);
         self.stack.push((ident.name.clone(), id));
         id
+    }
+
+    /// A new local binder, not yet in scope.
+    fn local(&mut self, name: Rc<str>, span: Span) -> LocalId {
+        let id = LocalId(self.locals.len() as u32);
+        self.locals.push(LocalInfo { name, span });
+        id
+    }
+
+    /// Resolves the parameter of a lambda and its body. A pattern other than
+    /// a name becomes a parameter without a name that the body matches
+    /// against the pattern: `\(x, y). body` is
+    /// `\p. match p | (x, y) -> body`, whose `source` says what the lambda
+    /// was written as.
+    fn lambda(
+        &mut self,
+        param: ast::Pattern,
+        body: ast::Expr,
+        source: MatchSource,
+    ) -> (LocalId, hir::Expr) {
+        if let ast::PatternKind::Var(name) = &param.kind {
+            let local = self.bind(name);
+            let body = self.expr(body);
+            self.stack.pop();
+            return (local, body);
+        }
+        let span = param.span;
+        let local = self.local(Rc::from(param.to_string()), span);
+        let scrutinee = hir::Expr {
+            kind: hir::ExprKind::Local(local),
+            span,
+        };
+        let body_span = body.span;
+        let kind = self.single_arm(scrutinee, param, body, source);
+        let body = hir::Expr {
+            kind,
+            span: span.to(body_span),
+        };
+        (local, body)
+    }
+
+    /// `match scrutinee | pattern -> body`.
+    fn single_arm(
+        &mut self,
+        scrutinee: hir::Expr,
+        pattern: ast::Pattern,
+        body: ast::Expr,
+        source: MatchSource,
+    ) -> hir::ExprKind {
+        let depth = self.stack.len();
+        let pattern = self.pattern(pattern, &mut Vec::new());
+        let body = self.expr(body);
+        self.stack.truncate(depth);
+        hir::ExprKind::Match {
+            scrutinee: Box::new(scrutinee),
+            arms: vec![hir::Arm { pattern, body }],
+            source,
+        }
     }
 
     fn lookup(&mut self, ident: &ast::Ident) -> hir::ExprKind {
@@ -368,9 +424,7 @@ impl<'a> BodyResolver<'a> {
             ast::ExprKind::Unit => hir::ExprKind::Unit,
             ast::ExprKind::Var(ident) => self.lookup(&ident),
             ast::ExprKind::Lambda { param, ann, body } => {
-                let param = self.bind(&param);
-                let body = self.expr(*body);
-                self.stack.pop();
+                let (param, body) = self.lambda(param, *body, MatchSource::Lambda);
                 hir::ExprKind::Lambda {
                     param,
                     ann,
@@ -384,6 +438,14 @@ impl<'a> BodyResolver<'a> {
             ast::ExprKind::List(items) => {
                 hir::ExprKind::List(items.into_iter().map(|item| self.expr(item)).collect())
             }
+            // A tuple is its constructor applied to the components.
+            ast::ExprKind::Tuple(items) => hir::ExprKind::App {
+                func: Box::new(hir::Expr {
+                    kind: hir::ExprKind::Con(ConId::tuple(items.len())),
+                    span,
+                }),
+                args: items.into_iter().map(|item| self.expr(item)).collect(),
+            },
             ast::ExprKind::Let {
                 name,
                 ann,
@@ -401,21 +463,30 @@ impl<'a> BodyResolver<'a> {
                     body: Box::new(body),
                 }
             }
+            // Unlike in a plain `let`, the pattern's variables are not in
+            // scope in `value`.
+            ast::ExprKind::LetPattern {
+                pattern,
+                value,
+                body,
+            } => {
+                let value = self.expr(*value);
+                self.single_arm(value, pattern, *body, MatchSource::Let)
+            }
             // `let x <- action in body` is `(bind action \x. body)`. The
             // builtin is used directly, so a definition named `bind` cannot
             // change it. Unlike `let`, `x` is not in scope in `action`.
             ast::ExprKind::Bind {
-                name,
+                pattern,
                 ann,
                 action,
                 body,
             } => {
                 let action = self.expr(*action);
-                let param = self.bind(&name);
-                let body = self.expr(*body);
-                self.stack.pop();
+                let pattern_span = pattern.span;
+                let (param, body) = self.lambda(pattern, *body, MatchSource::Let);
                 let continuation = hir::Expr {
-                    span: name.span.to(body.span),
+                    span: pattern_span.to(body.span),
                     kind: hir::ExprKind::Lambda {
                         param,
                         ann,
@@ -446,6 +517,7 @@ impl<'a> BodyResolver<'a> {
                 hir::ExprKind::Match {
                     scrutinee: Box::new(scrutinee),
                     arms,
+                    source: MatchSource::Match,
                 }
             }
             ast::ExprKind::Error => hir::ExprKind::Error,
@@ -489,6 +561,13 @@ impl<'a> BodyResolver<'a> {
             ast::PatternKind::Float(n) => hir::PatternKind::Float(n),
             ast::PatternKind::String(s) => hir::PatternKind::String(s),
             ast::PatternKind::Unit => hir::PatternKind::Unit,
+            ast::PatternKind::Tuple(items) => hir::PatternKind::Con {
+                con: ConId::tuple(items.len()),
+                args: items
+                    .into_iter()
+                    .map(|item| self.pattern(item, bound))
+                    .collect(),
+            },
         };
         hir::Pattern {
             kind,
@@ -647,17 +726,17 @@ b = True",
             resolved.diagnostics
         );
         let types = &resolved.unit.types;
-        assert_eq!(types[0].id, TyConId(9));
-        assert_eq!(types[1].id, TyConId(10));
+        assert_eq!(types[0].id, TyConId(15));
+        assert_eq!(types[1].id, TyConId(16));
         let ids: Vec<ConId> = types
             .iter()
             .flat_map(|t| t.constructors.iter().map(|c| c.id))
             .collect();
-        assert_eq!(ids, [ConId(6), ConId(7), ConId(8)]);
+        assert_eq!(ids, [ConId(12), ConId(13), ConId(14)]);
         let ExprKind::App { func, .. } = &resolved.unit.defs[0].body.expr.kind else {
             panic!()
         };
-        assert_eq!(func.kind, ExprKind::Con(ConId(6)));
+        assert_eq!(func.kind, ExprKind::Con(ConId(12)));
         assert_eq!(
             resolved.unit.defs[1].body.expr.kind,
             ExprKind::Con(ConId::TRUE)

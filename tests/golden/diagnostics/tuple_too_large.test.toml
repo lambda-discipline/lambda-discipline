@@ -1,0 +1,10 @@
+file = "tuple_too_large.lbd"
+
+[expect]
+exit_code = 1
+stdout = ""
+stderr_contains = [
+    "Error: a tuple can have at most 7 components, but this one has 8",
+    "tuple_too_large.lbd:1:7",
+    "declare a data type with a constructor for the values",
+]

@@ -49,7 +49,10 @@ fn math_demos() {
 
 #[test]
 fn pair() {
-    assert_eq!(run("pair.lbd"), "1\n2\n3\n");
+    assert_eq!(
+        run("pair.lbd"),
+        "(1, \"one\")\n1 is one\n(\"one\", 1)\n5\n[\"one1\", \"two2\"]\n"
+    );
 }
 
 #[test]

@@ -212,9 +212,19 @@ impl Value {
     }
 
     fn write_shown(&self, out: &mut String) {
-        // Lists and data being rendered, innermost last, with the index of
-        // the next element or field to write and whether it is a list.
-        let mut open: Vec<(Vector<Thunk>, usize, bool)> = Vec::new();
+        /// How the parts of an open value are written.
+        #[derive(Clone, Copy, PartialEq)]
+        enum Open {
+            /// `[a, b]`
+            List,
+            /// `(a, b)`
+            Tuple,
+            /// `(Con a b)`
+            Data,
+        }
+        // Lists, tuples and data being rendered, innermost last, with the
+        // index of the next element or field to write.
+        let mut open: Vec<(Vector<Thunk>, usize, Open)> = Vec::new();
         let mut value = self.clone();
         loop {
             match &value {
@@ -224,28 +234,32 @@ impl Value {
                 Value::Unit => out.push_str("()"),
                 Value::List(items) => {
                     out.push('[');
-                    open.push((items.clone(), 0, true));
+                    open.push((items.clone(), 0, Open::List));
+                }
+                Value::Data(con, fields) if con.id.tuple_arity().is_some() => {
+                    out.push('(');
+                    open.push((fields.clone(), 0, Open::Tuple));
                 }
                 Value::Data(con, fields) if fields.is_empty() => out.push_str(&con.name),
                 Value::Data(con, fields) => {
                     out.push('(');
                     out.push_str(&con.name);
-                    open.push((fields.clone(), 0, false));
+                    open.push((fields.clone(), 0, Open::Data));
                 }
                 Value::Builtin(b) => out.push_str(&format!("<builtin {b}>")),
                 Value::Closure(_) | Value::Partial(_) => out.push_str("<function>"),
                 Value::Io(_) => out.push_str("<action>"),
             }
             value = loop {
-                let Some((items, index, list)) = open.last_mut() else {
+                let Some((items, index, kind)) = open.last_mut() else {
                     return;
                 };
                 let Some(item) = items.get(*index) else {
-                    out.push(if *list { ']' } else { ')' });
+                    out.push(if *kind == Open::List { ']' } else { ')' });
                     open.pop();
                     continue;
                 };
-                if !*list {
+                if *kind == Open::Data {
                     out.push(' ');
                 } else if *index > 0 {
                     out.push_str(", ");

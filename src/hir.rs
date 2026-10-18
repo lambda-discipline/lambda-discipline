@@ -7,7 +7,7 @@ use std::rc::Rc;
 
 use crate::builtins::Builtin;
 use crate::source::Span;
-use crate::syntax::ast::{Ident, TypeExpr, TypeScheme};
+use crate::syntax::ast::{Ident, MAX_TUPLE_ARITY, TypeExpr, TypeScheme};
 
 /// Identifies a global definition for the lifetime of a session. In the
 /// REPL, redefining a name allocates a new id; old references keep theirs.
@@ -36,9 +36,24 @@ impl TyConId {
     pub const IO: TyConId = TyConId(6);
     pub const OPTION: TyConId = TyConId(7);
     pub const RESULT: TyConId = TyConId(8);
+    /// The pair type; the larger tuple types follow it by arity.
+    const PAIR: TyConId = TyConId(9);
 
     pub fn index(self) -> usize {
         self.0 as usize
+    }
+
+    /// The type of tuples with `arity` components, from 2 to
+    /// [`MAX_TUPLE_ARITY`].
+    pub fn tuple(arity: usize) -> TyConId {
+        assert!((2..=MAX_TUPLE_ARITY).contains(&arity), "no {arity}-tuples");
+        TyConId(Self::PAIR.0 + arity as u32 - 2)
+    }
+
+    /// The number of components, if this is a tuple type.
+    pub fn tuple_arity(self) -> Option<usize> {
+        let arity = self.0.checked_sub(Self::PAIR.0)? as usize + 2;
+        (arity <= MAX_TUPLE_ARITY).then_some(arity)
     }
 }
 
@@ -55,9 +70,24 @@ impl ConId {
     pub const SOME: ConId = ConId(3);
     pub const OK: ConId = ConId(4);
     pub const ERR: ConId = ConId(5);
+    /// The pair constructor; the larger tuple constructors follow it.
+    const PAIR: ConId = ConId(6);
 
     pub fn index(self) -> usize {
         self.0 as usize
+    }
+
+    /// The constructor of tuples with `arity` components, from 2 to
+    /// [`MAX_TUPLE_ARITY`].
+    pub fn tuple(arity: usize) -> ConId {
+        assert!((2..=MAX_TUPLE_ARITY).contains(&arity), "no {arity}-tuples");
+        ConId(Self::PAIR.0 + arity as u32 - 2)
+    }
+
+    /// The number of components, if this is a tuple constructor.
+    pub fn tuple_arity(self) -> Option<usize> {
+        let arity = self.0.checked_sub(Self::PAIR.0)? as usize + 2;
+        (arity <= MAX_TUPLE_ARITY).then_some(arity)
     }
 }
 
@@ -109,9 +139,23 @@ pub enum ExprKind {
     Match {
         scrutinee: Box<Expr>,
         arms: Vec<Arm>,
+        source: MatchSource,
     },
     /// Stands in for an expression that failed to resolve or parse.
     Error,
+}
+
+/// What a [`ExprKind::Match`] was written as, for error messages.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MatchSource {
+    /// `match scrutinee | ...`
+    Match,
+    /// The pattern of a lambda's parameter, `\(x, y). body`, matched
+    /// against the parameter.
+    Lambda,
+    /// The pattern of `let (x, y) = value in body`, or of
+    /// `let (x, y) <- action in body`.
+    Let,
 }
 
 /// `| pattern -> body`; the pattern's variables are in scope in `body`.
@@ -213,7 +257,9 @@ impl Expr {
                 value.for_each_global(f);
                 body.for_each_global(f);
             }
-            ExprKind::Match { scrutinee, arms } => {
+            ExprKind::Match {
+                scrutinee, arms, ..
+            } => {
                 scrutinee.for_each_global(f);
                 for arm in arms {
                     arm.body.for_each_global(f);

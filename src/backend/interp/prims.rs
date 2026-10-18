@@ -360,7 +360,9 @@ pub(super) fn pure(
         | B::MapOption
         | B::Unwrap
         | B::MapResult
-        | B::UnwrapOk => {
+        | B::UnwrapOk
+        | B::Fst
+        | B::Snd => {
             unreachable!("`{builtin}` is implemented by the machine")
         }
         B::File | B::Dir | B::Line => unreachable!("`{builtin}` is lowered to a literal"),
@@ -419,6 +421,14 @@ pub(super) fn result_of(value: &Value) -> Result<std::result::Result<Thunk, Thun
         Value::Data(con, fields) if con.id == ConId::OK => Ok(Ok(field(fields)?)),
         Value::Data(con, fields) if con.id == ConId::ERR => Ok(Err(field(fields)?)),
         other => Err(internal("Result", other)),
+    }
+}
+
+/// The components of a tuple.
+pub(super) fn tuple_of(value: &Value) -> Result<&Vector<Thunk>> {
+    match value {
+        Value::Data(con, fields) if con.id.tuple_arity().is_some() => Ok(fields),
+        other => Err(internal("tuple", other)),
     }
 }
 
