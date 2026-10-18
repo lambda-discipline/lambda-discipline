@@ -1,10 +1,10 @@
 -- List elements are evaluated only when used, like arguments.
-(println (head [1, (error "boom")]))
+(println (unwrap (head [1, (error "boom")])))
 (println (length [(error "a"), (error "b")]))
 
 -- `map` and `zipWith` compute an element only when it is used.
-(println (get 1 (map (div 6) [(error "not needed"), 3])))
-(println (head (zipWith add [1, (error "not needed")] [2, 3])))
+(println (unwrap (get 1 (map (div 6) [(error "not needed"), 3]))))
+(println (unwrap (head (zipWith add [1, (error "not needed")] [2, 3]))))
 
 -- `foldr` stops as soon as its function ignores the rest of the list.
 hasOne : List<Int> -> Bool = \xs.

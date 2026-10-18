@@ -1886,7 +1886,7 @@ mod tests {
         assert_eq!(type_of_entry("(eq [[1]] [])"), "Bool");
         assert_eq!(type_of_entry(r"\x. (show [x])"), "Show<a> => a -> String");
         assert_eq!(
-            type_of_entry(&format!(r"{OPTION}\x. (lt (Some x) None)")),
+            type_of_entry(r"\x. (lt (Some x) None)"),
             "Ord<a> => a -> Bool"
         );
         let errors = errors_of(r"(eq [\x. x] [])");
@@ -1906,8 +1906,7 @@ mod tests {
 
     #[test]
     fn data_types_derive_instances_from_their_fields() {
-        let ok = format!(
-            "{OPTION}type Tree<a> = Leaf | Node Tree<a> a Tree<a>\n\
+        let ok = "type Tree<a> = Leaf | Node Tree<a> a Tree<a>\n\
              type Phantom<a> = Phantom\n\
              type Even<a> = Zero | Even (Odd<a>)\n\
              type Odd<a> = Odd a (Even<a>)\n\
@@ -1915,9 +1914,8 @@ mod tests {
              b = \\x. (sort [(Node Leaf x Leaf)])\n\
              tag : a -> Phantom<a> = \\x. Phantom\n\
              c = \\f. (eq (tag f) (tag f))\n\
-             d = \\x. (show (Odd x Zero))"
-        );
-        let (_, typed) = check(&ok);
+             d = \\x. (show (Odd x Zero))";
+        let (_, typed) = check(ok);
         let shown: Vec<String> = typed.def_schemes.iter().map(|s| s.to_string()).collect();
         assert_eq!(
             shown,
@@ -2109,14 +2107,12 @@ mod tests {
         assert_eq!(typed.entry_schemes[0].to_string(), "List<Int>");
     }
 
-    const OPTION: &str = "type Option<a> = None | Some a\n";
-
     #[test]
     fn constructors_are_curried_polymorphic_functions() {
         assert_eq!(
-            types_of(&format!(
-                "{OPTION}type Pair<a, b> = Pair a b\nsome = Some\nnone = None\npair = Pair\nboxed = (Pair 1)"
-            )),
+            types_of(
+                "type Pair<a, b> = Pair a b\nsome = Some\nnone = None\npair = Pair\nboxed = (Pair 1)"
+            ),
             [
                 "some : a -> Option<a>",
                 "none : Option<a>",
@@ -2124,10 +2120,7 @@ mod tests {
                 "boxed : a -> Pair<Int, a>",
             ]
         );
-        assert_eq!(
-            type_of_entry(&format!("{OPTION}(map Some [1])")),
-            "List<Option<Int>>"
-        );
+        assert_eq!(type_of_entry("(map Some [1])"), "List<Option<Int>>");
         assert_eq!(type_of_entry("[True, False]"), "List<Bool>");
     }
 
@@ -2149,27 +2142,24 @@ mod tests {
     #[test]
     fn match_infers_pattern_and_result_types() {
         assert_eq!(
-            types_of(&format!(
-                "{OPTION}withDefault = \\d. \\o. match o | Some x -> x | None -> d\n\
+            types_of(
+                "withDefault = \\d. \\o. match o | Some x -> x | None -> d\n\
                  isZero = \\n. match n | 0 -> True | _ -> False"
-            )),
+            ),
             ["withDefault : a -> Option<a> -> a", "isZero : Int -> Bool"]
         );
     }
 
     #[test]
     fn pattern_type_errors() {
-        let errors = errors_of(&format!(
-            "{OPTION}type Shape = Circle Int\nf = \\o. match o | Some x -> x | Circle r -> r"
-        ));
+        let errors =
+            errors_of("type Shape = Circle Int\nf = \\o. match o | Some x -> x | Circle r -> r");
         assert_eq!(errors[0].message, "mismatched types");
         assert_eq!(
             errors[0].label.as_deref(),
             Some("this pattern has type `Shape`, but the value matched has type `Option<a>`")
         );
-        let errors = errors_of(&format!(
-            "{OPTION}f = \\o. match o | Some x y -> x | None -> 0"
-        ));
+        let errors = errors_of("f = \\o. match o | Some x y -> x | None -> 0");
         assert_eq!(
             errors[0].message,
             "the constructor `Some` has 1 field, but this pattern has 2"
@@ -2189,7 +2179,7 @@ mod tests {
 
     #[test]
     fn non_exhaustive_matches_are_errors() {
-        let errors = errors_of(&format!("{OPTION}f = \\o. match o | Some x -> x"));
+        let errors = errors_of("f = \\o. match o | Some x -> x");
         assert_eq!(
             errors[0].message,
             "this `match` does not cover every value of type `Option<a>`"
@@ -2219,7 +2209,7 @@ mod tests {
         );
         let errors = errors_of("type T = T Shape");
         assert_eq!(errors[0].message, "unknown type `Shape`");
-        let errors = errors_of(&format!("{OPTION}type T = T Option"));
+        let errors = errors_of("type T = T Option");
         assert_eq!(
             errors[0].message,
             "`Option` takes 1 type argument, but 0 were given"

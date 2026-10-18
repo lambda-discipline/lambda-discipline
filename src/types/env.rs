@@ -17,12 +17,25 @@ pub type Instance = Option<Vec<usize>>;
 /// A type that exists without a declaration.
 pub struct BuiltinType {
     pub name: &'static str,
-    pub arity: usize,
+    /// Names of its type parameters.
+    pub params: &'static [&'static str],
     /// Its constructors, in order; empty for primitive types.
-    pub constructors: &'static [&'static str],
+    pub constructors: &'static [BuiltinConstructor],
     /// The classes it belongs to when its parameters do. `IO` belongs to
     /// none: actions cannot be compared or shown.
     pub classes: &'static [Class],
+}
+
+/// A constructor of a built-in type.
+pub struct BuiltinConstructor {
+    pub name: &'static str,
+    /// The type of each field, as an index into the type's parameters
+    /// (`Some a` has the field `[0]`).
+    pub fields: &'static [u32],
+}
+
+const fn nullary(name: &'static str) -> BuiltinConstructor {
+    BuiltinConstructor { name, fields: &[] }
 }
 
 const NUMERIC: &[Class] = &[Class::Eq, Class::Ord, Class::Num, Class::Show];
@@ -32,55 +45,83 @@ const NUMERIC: &[Class] = &[Class::Eq, Class::Ord, Class::Num, Class::Show];
 pub const BUILTIN_TYPES: &[BuiltinType] = &[
     BuiltinType {
         name: "Int",
-        arity: 0,
+        params: &[],
         constructors: &[],
         classes: NUMERIC,
     },
     BuiltinType {
         name: "Float",
-        arity: 0,
+        params: &[],
         constructors: &[],
         classes: NUMERIC,
     },
     BuiltinType {
         name: "String",
-        arity: 0,
+        params: &[],
         constructors: &[],
         classes: &Class::STRUCTURAL,
     },
     BuiltinType {
         name: "Bool",
-        arity: 0,
-        constructors: &["False", "True"],
+        params: &[],
+        constructors: &[nullary("False"), nullary("True")],
         classes: &Class::STRUCTURAL,
     },
     BuiltinType {
         name: "Unit",
-        arity: 0,
+        params: &[],
         constructors: &[],
         classes: &Class::STRUCTURAL,
     },
     BuiltinType {
         name: "List",
-        arity: 1,
+        params: &["a"],
         constructors: &[],
         classes: &Class::STRUCTURAL,
     },
     BuiltinType {
         name: "IO",
-        arity: 1,
+        params: &["a"],
         constructors: &[],
         classes: &[],
+    },
+    BuiltinType {
+        name: "Option",
+        params: &["a"],
+        constructors: &[
+            nullary("None"),
+            BuiltinConstructor {
+                name: "Some",
+                fields: &[0],
+            },
+        ],
+        classes: &Class::STRUCTURAL,
+    },
+    BuiltinType {
+        name: "Result",
+        params: &["e", "a"],
+        // The error type comes first, as in Elm.
+        constructors: &[
+            BuiltinConstructor {
+                name: "Ok",
+                fields: &[1],
+            },
+            BuiltinConstructor {
+                name: "Err",
+                fields: &[0],
+            },
+        ],
+        classes: &Class::STRUCTURAL,
     },
 ];
 
 /// The constructors of the built-in types, in [`ConId`] order.
-pub fn builtin_constructors() -> impl Iterator<Item = (ConId, &'static str)> {
+pub fn builtin_constructors() -> impl Iterator<Item = (ConId, &'static BuiltinConstructor)> {
     BUILTIN_TYPES
         .iter()
-        .flat_map(|ty| ty.constructors.iter().copied())
+        .flat_map(|ty| ty.constructors)
         .enumerate()
-        .map(|(i, name)| (ConId(i as u32), name))
+        .map(|(i, con)| (ConId(i as u32), con))
 }
 
 #[derive(Debug, Clone)]
@@ -143,20 +184,25 @@ impl TypeEnv {
         let mut next_con = 0;
         for (index, builtin) in BUILTIN_TYPES.iter().enumerate() {
             let con = TyCon::builtin(TyConId(index as u32));
-            let params: Vec<Rc<str>> = (0..builtin.arity)
-                .map(|i| Rc::from(((b'a' + i as u8) as char).to_string()))
-                .collect();
+            let arity = builtin.params.len();
+            let params: Vec<Rc<str>> = builtin.params.iter().map(|&p| Rc::from(p)).collect();
             let constructors: Vec<ConId> = (0..builtin.constructors.len())
                 .map(|i| ConId(next_con + i as u32))
                 .collect();
             next_con += constructors.len() as u32;
-            for (&id, &name) in constructors.iter().zip(builtin.constructors) {
+            let result = Type::Con(con.clone(), (0..arity as u32).map(Type::Gen).collect());
+            for (&id, constructor) in constructors.iter().zip(builtin.constructors) {
+                let ty = constructor
+                    .fields
+                    .iter()
+                    .rev()
+                    .fold(result.clone(), |ty, &field| Type::fun(Type::Gen(field), ty));
                 env.add_constructor(ConInfo {
                     id,
-                    name: Rc::from(name),
+                    name: Rc::from(constructor.name),
                     ty: con.id,
-                    scheme: Scheme::mono(Type::Con(con.clone(), Vec::new())),
-                    arity: 0,
+                    scheme: Scheme::poly(arity as u32, ty),
+                    arity: constructor.fields.len(),
                     span: None,
                 });
             }
@@ -164,7 +210,7 @@ impl TypeEnv {
                 builtin
                     .classes
                     .contains(&class)
-                    .then(|| (0..builtin.arity).collect())
+                    .then(|| (0..arity).collect())
             });
             env.add_type(TypeInfo {
                 con,
@@ -321,9 +367,32 @@ mod tests {
         assert_eq!(env.instance(TyConId::FLOAT, Class::Num), Some(&[][..]));
         assert_eq!(env.instance(TyConId::LIST, Class::Num), None);
         assert_eq!(env.instance(TyConId::IO, Class::Show), None);
+        assert_eq!(env.instance(TyConId::RESULT, Class::Ord), Some(&[0, 1][..]));
         assert_eq!(
-            builtin_constructors().collect::<Vec<_>>(),
-            [(ConId::FALSE, "False"), (ConId::TRUE, "True")]
+            builtin_constructors()
+                .map(|(id, con)| (id, con.name))
+                .collect::<Vec<_>>(),
+            [
+                (ConId::FALSE, "False"),
+                (ConId::TRUE, "True"),
+                (ConId::NONE, "None"),
+                (ConId::SOME, "Some"),
+                (ConId::OK, "Ok"),
+                (ConId::ERR, "Err"),
+            ]
+        );
+        assert_eq!(
+            env.describe(TyConId::OPTION),
+            "type Option<a> = None | Some a"
+        );
+        assert_eq!(
+            env.describe(TyConId::RESULT),
+            "type Result<e, a> = Ok a | Err e"
+        );
+        assert_eq!(env.constructor(ConId::SOME).arity, 1);
+        assert_eq!(
+            env.constructor(ConId::ERR).scheme.to_string(),
+            "a -> Result<a, b>"
         );
     }
 }

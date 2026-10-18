@@ -14,7 +14,7 @@ greetings : List<IO<Unit>> = [(println "a"), (println "b")]
 
 -- Performing one action twice runs it twice.
 twice : IO<a> -> IO<a> = \action. (then action action)
-(twice (get 1 greetings))
+(twice (unwrap (get 1 greetings)))
 
 -- `let x <- action in` performs an action and names its result.
 countdown : Int -> IO<Int> = \n.

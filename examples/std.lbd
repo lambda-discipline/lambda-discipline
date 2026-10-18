@@ -18,8 +18,9 @@ count : (a -> Bool) -> List<a> -> Int = \predicate. \xs. (length (filter predica
 all : (a -> Bool) -> List<a> -> Bool = \predicate. \xs. (foldr \x. \rest. (and (predicate x) rest) True xs)
 any : (a -> Bool) -> List<a> -> Bool = \predicate. \xs. (foldr \x. \rest. (or (predicate x) rest) False xs)
 product : List<Int> -> Int = (foldl mul 1)
-maximum : Ord<a> => List<a> -> a = \xs. (foldl max (head xs) xs)
-minimum : Ord<a> => List<a> -> a = \xs. (foldl min (head xs) xs)
+-- The largest element, or `None` for an empty list.
+maximum : Ord<a> => List<a> -> Option<a> = \xs. (mapOption \first. (foldl max first xs) (head xs))
+minimum : Ord<a> => List<a> -> Option<a> = \xs. (mapOption \first. (foldl min first xs) (head xs))
 
 -- Actions
 -- Performs `action` on every element in order: `(forEach \x. (println x) xs)`.

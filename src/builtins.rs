@@ -22,17 +22,19 @@ pub enum Module {
     Bool,
     String,
     List,
+    Option,
     Io,
     Source,
 }
 
 impl Module {
-    pub const ALL: [Module; 7] = [
+    pub const ALL: [Module; 8] = [
         Module::Number,
         Module::Compare,
         Module::Bool,
         Module::String,
         Module::List,
+        Module::Option,
         Module::Io,
         Module::Source,
     ];
@@ -44,6 +46,7 @@ impl Module {
             Module::Bool => "Booleans",
             Module::String => "Strings",
             Module::List => "Lists",
+            Module::Option => "Options and results",
             Module::Io => "Input/output",
             Module::Source => "Source location",
         }
@@ -118,8 +121,8 @@ builtins! {
 
     Concat => "concat" : "String -> String -> String", String, "Joins two strings.";
     Show => "show" : "Show<a> => a -> String", String, "Renders a value as source-like text (strings are quoted). Every type without functions or `IO` actions in it belongs to `Show`.";
-    ParseInt => "parseInt" : "String -> Int", String, "Parses an integer such as `-42`, ignoring surrounding whitespace.";
-    ParseFloat => "parseFloat" : "String -> Float", String, "Parses a number such as `3.5`, `2` or `1e-3`, ignoring surrounding whitespace.";
+    ParseInt => "parseInt" : "String -> Result<String, Int>", String, "Parses an integer such as `-42`, ignoring surrounding whitespace; `Err` with a message when the text is not one.";
+    ParseFloat => "parseFloat" : "String -> Result<String, Float>", String, "Parses a number such as `3.5`, `2` or `1e-3`, ignoring surrounding whitespace; `Err` with a message when the text is not one.";
     StringLength => "stringLength" : "String -> Int", String, "Number of characters in a string.";
     Chars => "chars" : "String -> List<String>", String, "Splits a string into its characters.";
     Split => "split" : "String -> String -> List<String>", String, "`(split delimiter text)`; the delimiter must not be empty.";
@@ -129,12 +132,12 @@ builtins! {
 
     Length => "length" : "List<a> -> Int", List, "Number of elements.";
     IsEmpty => "isEmpty" : "List<a> -> Bool", List, "Whether the list has no elements.";
-    Head => "head" : "List<a> -> a", List, "First element; an error on an empty list.";
-    Tail => "tail" : "List<a> -> List<a>", List, "Everything but the first element; an error on an empty list.";
-    Get => "get" : "Int -> List<a> -> a", List, "`(get index list)`, zero-based; an error when out of bounds.";
+    Head => "head" : "List<a> -> Option<a>", List, "First element, or `None` for an empty list.";
+    Tail => "tail" : "List<a> -> Option<List<a>>", List, "Everything but the first element, or `None` for an empty list. `(drop 1 xs)` gives the empty list instead.";
+    Get => "get" : "Int -> List<a> -> Option<a>", List, "`(get index list)`, zero-based, or `None` when the index is out of bounds.";
     Cons => "cons" : "a -> List<a> -> List<a>", List, "Prepends an element.";
     Push => "push" : "a -> List<a> -> List<a>", List, "Appends an element at the end.";
-    Remove => "remove" : "Int -> List<a> -> List<a>", List, "`(remove index list)` without the element at `index`.";
+    Remove => "remove" : "Int -> List<a> -> List<a>", List, "`(remove index list)` without the element at `index`; the list unchanged when the index is out of bounds, like `take` and `drop`.";
     Append => "append" : "List<a> -> List<a> -> List<a>", List, "Concatenates two lists.";
     Map => "map" : "(a -> b) -> List<a> -> List<b>", List, "Applies a function to every element.";
     Filter => "filter" : "(a -> Bool) -> List<a> -> List<a>", List, "Keeps the elements satisfying a predicate.";
@@ -148,6 +151,13 @@ builtins! {
     Sum => "sum" : "List<Int> -> Int", List, "Sum of all elements. For floats, use `(foldl add 0.0 xs)`.";
     Take => "take" : "Int -> List<a> -> List<a>", List, "The first `n` elements.";
     Drop => "drop" : "Int -> List<a> -> List<a>", List, "All but the first `n` elements.";
+
+    WithDefault => "withDefault" : "a -> Option<a> -> a", Option, "`(withDefault fallback option)` is the value in `Some`, or `fallback` for `None`; `fallback` is only evaluated when needed.";
+    MapOption => "mapOption" : "(a -> b) -> Option<a> -> Option<b>", Option, "Applies a function to the value in `Some`; `None` stays `None`.";
+    Unwrap => "unwrap" : "Option<a> -> a", Option, "The value in `Some`; an error for `None`. For scripts that know the value is there.";
+    MapResult => "mapResult" : "(a -> b) -> Result<e, a> -> Result<e, b>", Option, "Applies a function to the value in `Ok`; an `Err` stays as it is.";
+    ToOption => "toOption" : "Result<e, a> -> Option<a>", Option, "`Some` of the value in `Ok`, or `None` for an `Err`, dropping the error.";
+    UnwrapOk => "unwrapOk" : "Show<e> => Result<e, a> -> a", Option, "The value in `Ok`; for an `Err`, an error that shows it (a string without quotes). For scripts that know the value is there.";
 
     Pure => "pure" : "a -> IO<a>", Io, "An action that does nothing and produces its argument.";
     Bind => "bind" : "IO<a> -> (a -> IO<b>) -> IO<b>", Io, "`(bind action f)` runs `action`, then the action `f` returns for its result. `let x <- action in body` is `(bind action \\x. body)`.";
@@ -244,6 +254,10 @@ pub fn reference() -> String {
         out.push_str(&format!("-- {}\n", module.title()));
         if module == Module::Bool {
             out.push_str("type Bool = False | True\n    Booleans are data: `match` on `True` and `False`, or use `if`.\n");
+        }
+        if module == Module::Option {
+            out.push_str("type Option<a> = None | Some a\n    A value that may be missing, such as the `head` of a list.\n");
+            out.push_str("type Result<e, a> = Ok a | Err e\n    The value of a computation that can fail with an error of type `e`, such as `parseInt`.\n");
         }
         for builtin in Builtin::ALL.iter().filter(|b| b.module() == module) {
             out.push_str(&format!(
@@ -347,6 +361,8 @@ mod tests {
         assert_eq!(Builtin::Transpose.arity(), 1);
         assert_eq!(Builtin::Bind.arity(), 2);
         assert_eq!(Builtin::ReadFile.arity(), 1);
+        assert_eq!(Builtin::Head.arity(), 1);
+        assert_eq!(Builtin::MapResult.arity(), 2);
     }
 
     #[test]
@@ -373,6 +389,7 @@ mod tests {
             );
         }
         assert!(text.contains("-- Lists\n"));
+        assert!(text.contains("type Result<e, a> = Ok a | Err e\n"));
         assert!(text.contains("print : Show<a> => a... -> IO<Unit>"));
         assert!(text.contains("eq : Eq<a> => a -> a -> Bool"));
     }

@@ -6,7 +6,7 @@ stdout = """
 empty: []
 one: ["Hello"]
 two: ["Hello", "World"], size 2
-second: World
+second: (Some "World")
 without first: ["World"]
 two is unchanged: ["Hello", "World"]
 """

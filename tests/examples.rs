@@ -56,8 +56,10 @@ fn pair() {
 fn list() {
     assert_eq!(
         run("list.lbd"),
-        "list: []\nlist: [\"Hello\"]\nlist size: 1\nlist: [\"Hello\", \"World\"]\nlist[1]: World\n\
+        "list: []\nlist: [\"Hello\"]\nlist size: 1\nlist: [\"Hello\", \"World\"]\nlist[1]: (Some \"World\")\n\
+         list[5]: None\nlist[5] or a default: none\n\
          list: [\"Hello\", \"World\", \"Foo\"]\nwithout index 2: [\"Hello\", \"World\"]\n\
+         without index 5: [\"Hello\", \"World\", \"Foo\"]\n\
          unchanged: [\"Hello\", \"World\", \"Foo\"]\n"
     );
 }

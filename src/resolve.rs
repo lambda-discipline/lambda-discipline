@@ -32,10 +32,12 @@ pub trait GlobalScope {
 
     /// The current constructor with this name, including built-in ones.
     fn lookup_constructor(&self, name: &str) -> Option<ConId> {
-        builtin_constructors().find_map(|(id, n)| (n == name).then_some(id))
+        builtin_constructors().find_map(|(id, con)| (con.name == name).then_some(id))
     }
     fn constructor_names(&self) -> Vec<Rc<str>> {
-        builtin_constructors().map(|(_, n)| Rc::from(n)).collect()
+        builtin_constructors()
+            .map(|(_, con)| Rc::from(con.name))
+            .collect()
     }
     /// The id the next new type will receive.
     fn next_type_id(&self) -> u32 {
@@ -190,9 +192,11 @@ fn declare_types(
                 );
                 continue;
             }
-            if let Some((_, builtin)) = builtin_constructors().find(|(_, n)| **n == *name.name) {
+            if let Some((_, builtin)) =
+                builtin_constructors().find(|(_, con)| con.name == &*name.name)
+            {
                 diagnostics.push(
-                    Diagnostic::error(format!("`{builtin}` is a built-in constructor"))
+                    Diagnostic::error(format!("`{}` is a built-in constructor", builtin.name))
                         .at(name.span)
                         .with_label("cannot be redefined"),
                 );
@@ -643,17 +647,17 @@ b = True",
             resolved.diagnostics
         );
         let types = &resolved.unit.types;
-        assert_eq!(types[0].id, TyConId(7));
-        assert_eq!(types[1].id, TyConId(8));
+        assert_eq!(types[0].id, TyConId(9));
+        assert_eq!(types[1].id, TyConId(10));
         let ids: Vec<ConId> = types
             .iter()
             .flat_map(|t| t.constructors.iter().map(|c| c.id))
             .collect();
-        assert_eq!(ids, [ConId(2), ConId(3), ConId(4)]);
+        assert_eq!(ids, [ConId(6), ConId(7), ConId(8)]);
         let ExprKind::App { func, .. } = &resolved.unit.defs[0].body.expr.kind else {
             panic!()
         };
-        assert_eq!(func.kind, ExprKind::Con(ConId(2)));
+        assert_eq!(func.kind, ExprKind::Con(ConId(6)));
         assert_eq!(
             resolved.unit.defs[1].body.expr.kind,
             ExprKind::Con(ConId::TRUE)

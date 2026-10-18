@@ -592,7 +592,7 @@ mod tests {
         h.repl.handle("x");
         assert!(h.err.take().contains("cannot find `x`"));
         h.repl.handle(":docs head");
-        assert!(h.out.take().starts_with("head : List<a> -> a\n"));
+        assert!(h.out.take().starts_with("head : List<a> -> Option<a>\n"));
         h.repl.handle(":docs nope");
         assert_eq!(h.err.take(), "no builtin named `nope`\n");
     }
@@ -675,8 +675,10 @@ True : Bool
     defined at <repl>:2:7
 "
         );
-        h.repl.handle(":info Option");
-        assert!(h.err.take().contains("`Option` is not defined"));
+        h.repl.handle(":info Result");
+        assert_eq!(h.out.take(), "type Result<e, a> = Ok a | Err e\n");
+        h.repl.handle(":info Maybe");
+        assert!(h.err.take().contains("`Maybe` is not defined"));
         h.repl.handle(":info True");
         assert_eq!(h.out.take(), "True : Bool\n    a constructor of `Bool`\n");
         h.repl.handle(":info nothing");

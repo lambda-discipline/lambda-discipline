@@ -100,8 +100,12 @@ fn booleans_are_lazy() {
 fn strings() {
     assert_eq!(eval("(concat \"ab\" \"cd\")"), "\"abcd\"");
     assert_eq!(eval("(show [\"a\", \"b\"])"), r#""[\"a\", \"b\"]""#);
-    assert_eq!(eval("(parseInt \" 42 \")"), "42");
-    assert_eq!(eval("(parseFloat \" 42.5 \")"), "42.5");
+    assert_eq!(eval("(parseInt \" 42 \")"), "(Ok 42)");
+    assert_eq!(eval("(parseFloat \" 42.5 \")"), "(Ok 42.5)");
+    assert_eq!(
+        eval("(parseInt \"abc\")"),
+        r#"(Err "cannot parse \"abc\" as an `Int`")"#
+    );
     assert_eq!(eval("(stringLength \"λx\")"), "2");
     assert_eq!(eval("(chars \"ab\")"), "[\"a\", \"b\"]");
     assert_eq!(
@@ -129,8 +133,18 @@ fn lists_are_immutable() {
 fn list_operations() {
     assert_eq!(eval("[(length [1, 2]), (length [])]"), "[2, 0]");
     assert_eq!(eval("[(isEmpty []), (isEmpty [1])]"), "[True, False]");
-    assert_eq!(eval("[(head [1, 2]), (get 1 [1, 2])]"), "[1, 2]");
-    assert_eq!(eval("(tail [1, 2, 3])"), "[2, 3]");
+    assert_eq!(
+        eval("[(head [1, 2]), (get 1 [1, 2]), (head []), (get 2 [1, 2])]"),
+        "[(Some 1), (Some 2), None, None]"
+    );
+    assert_eq!(
+        eval("[(tail [1, 2, 3]), (tail [])]"),
+        "[(Some [2, 3]), None]"
+    );
+    assert_eq!(
+        eval("[(remove 0 [1, 2]), (remove -1 [1]), (remove 1 [1])]"),
+        "[[2], [1], [1]]"
+    );
     assert_eq!(eval("(cons 0 [1])"), "[0, 1]");
     assert_eq!(eval("(append [1] [2, 3])"), "[1, 2, 3]");
     assert_eq!(eval("(map (mul 2) [1, 2, 3])"), "[2, 4, 6]");
@@ -242,17 +256,23 @@ fn arguments_are_lazy() {
 #[test]
 fn list_elements_are_lazy() {
     // Each unused element would fail if evaluated.
-    assert_eq!(eval(r#"(head [1, (error "boom")])"#), "1");
+    assert_eq!(eval(r#"(unwrap (head [1, (error "boom")]))"#), "1");
     assert_eq!(eval(r#"(length [(error "a"), (error "b")])"#), "2");
-    assert_eq!(eval(r#"(get 1 (cons (error "a") [2]))"#), "2");
-    assert_eq!(eval(r#"(head (push (error "a") [1]))"#), "1");
-    assert_eq!(eval(r#"(head (reverse [(error "a"), 2]))"#), "2");
+    assert_eq!(eval(r#"(unwrap (get 1 (cons (error "a") [2])))"#), "2");
+    assert_eq!(eval(r#"(unwrap (head (push (error "a") [1])))"#), "1");
+    assert_eq!(eval(r#"(unwrap (head (reverse [(error "a"), 2])))"#), "2");
     assert_eq!(eval(r#"(length (map (error "a") [1, 2]))"#), "2");
-    assert_eq!(eval(r#"(get 1 (map (div 6) [(error "a"), 3]))"#), "2");
-    assert_eq!(eval(r#"(head (zipWith add [1, (error "a")] [2, 3]))"#), "3");
+    assert_eq!(
+        eval(r#"(unwrap (get 1 (map (div 6) [(error "a"), 3])))"#),
+        "2"
+    );
+    assert_eq!(
+        eval(r#"(unwrap (head (zipWith add [1, (error "a")] [2, 3])))"#),
+        "3"
+    );
     assert_eq!(eval(r#"(length (filter (\x. True) [(error "a")]))"#), "1");
     assert_eq!(
-        eval(r#"(head (transpose [[1, (error "a")], [2]]))"#),
+        eval(r#"(unwrap (head (transpose [[1, (error "a")], [2]])))"#),
         "[1, 2]"
     );
 }
@@ -261,7 +281,10 @@ fn list_elements_are_lazy() {
 fn foldr_stops_when_its_function_ignores_the_rest() {
     let program = r#"(foldr \x. \acc. (or (eq x 1) acc) False [1, (error "never needed")])"#;
     assert_eq!(eval(program), "True");
-    assert_eq!(output(r#"(println (head [1, (error "boom")]))"#), "1\n");
+    assert_eq!(
+        output(r#"(println (unwrap (head [1, (error "boom")])))"#),
+        "1\n"
+    );
     // A function that uses the rest still sees every element, in order.
     assert_eq!(
         eval("(foldr (\\x. \\acc. (concat x acc)) \"\" [\"a\", \"b\"])"),
@@ -380,25 +403,21 @@ fn recursive_action_loops_run_in_constant_space() {
 
 #[test]
 fn runtime_errors_point_at_the_call() {
-    let error = runtime_error("x = (head [])\nx");
-    assert_eq!(error.message, "`head` of an empty list");
-    assert_eq!(error.span.unwrap().range(), 4..13);
+    let error = runtime_error("x = (unwrap (head []))\nx");
+    assert_eq!(error.message, "`unwrap` of `None`");
+    assert_eq!(error.span.unwrap().range(), 4..22);
 
     assert_eq!(
-        runtime_error("(get 5 [1])").message,
-        "index 5 is out of bounds for a list of length 1"
-    );
-    assert_eq!(
-        runtime_error("(get -1 [1])").message,
+        runtime_error("(take -1 [1])").message,
         "-1 is not a valid index (expected a number >= 0)"
     );
     assert_eq!(
-        runtime_error("(remove 1 [1])").message,
-        "index 1 is out of bounds for a list of length 1"
+        runtime_error("(unwrapOk (parseInt \"abc\"))").message,
+        "`unwrapOk` of an `Err`: cannot parse \"abc\" as an `Int`"
     );
     assert_eq!(
-        runtime_error("(parseInt \"abc\")").message,
-        "cannot parse \"abc\" as an `Int`"
+        runtime_error("(unwrapOk (Err [\"a\", (concat \"b\" \"c\")]))").message,
+        "`unwrapOk` of an `Err`: [\"a\", \"bc\"]"
     );
     assert_eq!(
         runtime_error("(split \"\" \"abc\")").message,
@@ -457,7 +476,7 @@ fn redefined_types_are_new_types() {
 fn errors_leave_the_session_usable() {
     let (mut session, _) = session();
     session.eval("<1>", "x = 1").unwrap();
-    assert!(session.eval("<2>", "(head [])").is_err());
+    assert!(session.eval("<2>", "(unwrap (head []))").is_err());
     assert!(session.eval("<3>", "y = (add x \"s\")").is_err());
     assert_eq!(session.eval("<4>", "x").unwrap().values[0].0.show(), "1");
     assert!(
@@ -467,7 +486,6 @@ fn errors_leave_the_session_usable() {
 }
 
 const SHAPES: &str = "type Shape = Circle Int | Rect Int Int\n";
-const OPTION: &str = "type Option<a> = None | Some a\n";
 
 #[test]
 fn constructors_build_data_and_match_takes_it_apart() {
@@ -482,22 +500,20 @@ fn constructors_build_data_and_match_takes_it_apart() {
     );
     assert_eq!(eval(&format!("{SHAPES}((Rect 2) 3)")), "(Rect 2 3)");
     assert_eq!(
-        eval(&format!("{OPTION}[None, (Some (Some \"x\"))]")),
+        eval("[None, (Some (Some \"x\"))]"),
         r#"[None, (Some (Some "x"))]"#
     );
 }
 
 #[test]
 fn nested_patterns_and_literals() {
-    let program = format!(
-        "{OPTION}f = \\o. match o\n\
+    let program = "f = \\o. match o\n\
          | Some (Some 0) -> \"zero\"\n\
          | Some (Some n) -> (show n)\n\
          | Some None -> \"inner none\"\n\
          | None -> \"none\"\n\
-         [(f (Some (Some 0))), (f (Some (Some 7))), (f (Some None)), (f None)]"
-    );
-    assert_eq!(eval(&program), r#"["zero", "7", "inner none", "none"]"#);
+         [(f (Some (Some 0))), (f (Some (Some 7))), (f (Some None)), (f None)]";
+    assert_eq!(eval(program), r#"["zero", "7", "inner none", "none"]"#);
     let strings = "f = \\s. match s | \"a\" -> 1 | \"b\" -> 2 | other -> (stringLength other)\n\
                    [(f \"a\"), (f \"b\"), (f \"cde\")]";
     assert_eq!(eval(strings), "[1, 2, 3]");
@@ -506,24 +522,19 @@ fn nested_patterns_and_literals() {
 
 #[test]
 fn the_first_matching_arm_wins() {
-    let program = format!(
-        "{OPTION}f = \\o. match o | Some 1 -> \"one\" | Some _ -> \"some\" | _ -> \"other\"\n\
-         [(f (Some 1)), (f (Some 2)), (f None)]"
-    );
-    assert_eq!(eval(&program), r#"["one", "some", "other"]"#);
+    let program = "f = \\o. match o | Some 1 -> \"one\" | Some _ -> \"some\" | _ -> \"other\"\n\
+         [(f (Some 1)), (f (Some 2)), (f None)]";
+    assert_eq!(eval(program), r#"["one", "some", "other"]"#);
 }
 
 #[test]
 fn fields_are_lazy() {
-    let program = format!(
-        "{OPTION}type Pair<a, b> = Pair a b\n\
+    let program = "type Pair<a, b> = Pair a b\n\
          first = \\p. match p | Pair x _ -> x\n\
-         (first (Pair 1 (error \"never needed\")))"
-    );
-    assert_eq!(eval(&program), "1");
-    let program =
-        format!("{OPTION}match (Some (error \"boom\")) | Some _ -> \"fine\" | None -> \"no\"");
-    assert_eq!(eval(&program), r#""fine""#);
+         (first (Pair 1 (error \"never needed\")))";
+    assert_eq!(eval(program), "1");
+    let program = "match (Some (error \"boom\")) | Some _ -> \"fine\" | None -> \"no\"";
+    assert_eq!(eval(program), r#""fine""#);
 }
 
 #[test]
@@ -538,12 +549,11 @@ fn matching_forces_only_what_the_first_possible_arm_needs() {
 
 #[test]
 fn data_compares_by_constructor_then_fields() {
-    let program = format!(
-        "{OPTION}[(eq (Some 1) (Some 1)), (eq (Some 1) None), (lt None (Some 0)), (lt (Some 1) (Some 2))]"
-    );
-    assert_eq!(eval(&program), "[True, False, True, True]");
+    let program =
+        "[(eq (Some 1) (Some 1)), (eq (Some 1) None), (lt None (Some 0)), (lt (Some 1) (Some 2))]";
+    assert_eq!(eval(program), "[True, False, True, True]");
     assert_eq!(
-        eval(&format!("{OPTION}(sort [(Some 2), None, (Some 1)])")),
+        eval("(sort [(Some 2), None, (Some 1)])"),
         "[None, (Some 1), (Some 2)]"
     );
     assert_eq!(eval("(compare False True)"), "-1");
@@ -573,4 +583,38 @@ fn deep_data_shows_compares_and_drops_without_overflow() {
                    n = (build 200000 Zero)\n\
                    [(eq n n), (gt (Succ n) n), (eq (stringLength (show n)) 1400004)]";
     assert_eq!(eval(program), "[True, True, True]");
+}
+
+#[test]
+fn options_and_results() {
+    assert_eq!(
+        eval("[(withDefault 0 (head [1])), (withDefault 0 (head []))]"),
+        "[1, 0]"
+    );
+    // The fallback is only evaluated for `None`, and the mapped function
+    // only when the new value is used.
+    assert_eq!(eval(r#"(withDefault (error "boom") (Some 1))"#), "1");
+    assert_eq!(
+        eval(r#"[(mapOption (add 1) (Some 1)), (mapOption (add 1) None)]"#),
+        "[(Some 2), None]"
+    );
+    assert_eq!(
+        eval(r#"match (mapOption (error "boom") (Some 1)) | Some _ -> 1 | None -> 0"#),
+        "1"
+    );
+    assert_eq!(
+        eval(r#"[(mapResult (mul 2) (parseInt "21")), (mapResult (mul 2) (parseInt "x"))]"#),
+        r#"[(Ok 42), (Err "cannot parse \"x\" as an `Int`")]"#
+    );
+    assert_eq!(
+        eval(r#"[(toOption (parseInt "1")), (toOption (parseInt "x"))]"#),
+        "[(Some 1), None]"
+    );
+    assert_eq!(eval(r#"(unwrapOk (parseFloat "2.5"))"#), "2.5");
+    assert_eq!(eval("match (head [1, 2]) | Some x -> x | None -> 0"), "1");
+    // Built-in data compares like declared data, constructor by constructor.
+    assert_eq!(
+        eval("[(lt None (Some 0)), (lt (Ok 1) (Err 0)), (eq (Some [1]) (head [[1]]))]"),
+        "[True, True, True]"
+    );
 }

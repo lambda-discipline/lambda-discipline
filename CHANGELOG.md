@@ -48,8 +48,19 @@ All notable changes to this project are documented here. The format follows
   counts are `Int`, so `(get 1.5 xs)` is a type error. `parseInt` and
   `parseFloat` replace `parseNumber`, and a whole `Float` prints as `42.0`
   (#11).
+- Built-in `Option<a> = None | Some a` and `Result<e, a> = Ok a | Err e`
+  types, with `withDefault`, `mapOption`, `mapResult` and `toOption`, and
+  `unwrap` and `unwrapOk` for scripts that know the value is there (#22).
 
 ### Changed
+
+- `head`, `tail` and `get` return an `Option` instead of stopping the
+  program on an empty list or an index out of bounds, and `parseInt` and
+  `parseFloat` return a `Result` with a message instead of failing, so the
+  type checker makes the caller handle the failure. `remove` returns the
+  list unchanged for an index out of bounds, like `take` and `drop`.
+  `maximum` and `minimum` in `examples/std.lbd` return an `Option` too
+  (#22).
 
 - `min` and `max` work on any type in `Ord`, not only numbers, so
   `maximum` and `minimum` in `examples/std.lbd` do too (#19).

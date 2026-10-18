@@ -8,9 +8,13 @@ b : List<String> = (push "Hello" a)
 
 c : List<String> = (push "World" b)
 (println "list: " c)
+-- Reading an index that may be out of bounds gives an `Option`.
 (println "list[1]: " (get 1 c))
+(println "list[5]: " (get 5 c))
+(println "list[5] or a default: " (withDefault "none" (get 5 c)))
 
 d : List<String> = (push "Foo" c)
 (println "list: " d)
 (println "without index 2: " (remove 2 d))
+(println "without index 5: " (remove 5 d))
 (println "unchanged: " d)

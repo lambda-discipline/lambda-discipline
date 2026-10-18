@@ -42,7 +42,7 @@ use imbl::Vector;
 use crate::backend::{Backend, RuntimeError};
 use crate::builtins::Builtin;
 use crate::core::{AltPat, Case, Expr, Lambda, Literal, Module};
-use crate::hir::GlobalId;
+use crate::hir::{ConId, GlobalId};
 use crate::source::Span;
 
 use prims::Strictness;
@@ -81,6 +81,12 @@ enum Frame {
     Walk(Box<Walk>),
     /// A higher-order builtin waiting for one of its calls to return.
     Iterate(Box<Iteration>),
+    /// Report the returned value, which is evaluated completely, as the
+    /// error of a call to `builtin` (`unwrapOk` of an `Err`).
+    Fail {
+        builtin: Builtin,
+        span: Option<Span>,
+    },
     /// Choose the alternative of `case` that matches the returned value.
     Case { case: Rc<Case>, env: Rc<Env> },
     /// Perform the returned action; its result goes to the frame below.
@@ -375,6 +381,11 @@ impl Interpreter {
             }
             Frame::Iterate(iteration) => self.iterate(*iteration, value),
             Frame::Case { case, env } => self.select(&case, env, value),
+            Frame::Fail { builtin, span } => Err(prims::call_error(
+                builtin,
+                span,
+                format!("`{builtin}` of an `Err`: {}", value.display()),
+            )),
             Frame::Perform => match value.into_action() {
                 Ok(action) => self.start_action(action),
                 Err(other) => Err(RuntimeError::new(format!(
@@ -656,7 +667,39 @@ impl Interpreter {
                 })?;
                 Ok(Control::Return(Value::Unit))
             }
-            B::Head | B::Get => self.enter(prims::element(builtin, &values, span)?),
+            B::WithDefault => match prims::option_of(&values[1])? {
+                Some(value) => self.enter(value),
+                None => self.tail(args.swap_remove(0)),
+            },
+            B::Unwrap => match prims::option_of(&values[0])? {
+                Some(value) => self.enter(value),
+                None => Err(prims::call_error(
+                    builtin,
+                    span,
+                    "`unwrap` of `None`".into(),
+                )),
+            },
+            B::UnwrapOk => match prims::result_of(&values[0])? {
+                Ok(value) => self.enter(value),
+                Err(error) => {
+                    self.stack.push(Frame::Fail { builtin, span });
+                    self.stack.push(Frame::Force { deep: true });
+                    self.enter(error)
+                }
+            },
+            B::MapOption | B::MapResult => {
+                let span = span.expect("higher-order builtins are applied at a call site");
+                let mapped = match &values[1] {
+                    // The new field is `(f x)`, evaluated only when used.
+                    Value::Data(con, fields) if matches!(con.id, ConId::SOME | ConId::OK) => {
+                        let env = Env::with(2, [args[0].clone(), fields[0].clone()]);
+                        let call = call_of(Expr::Local(0), 1, 1, span);
+                        Value::Data(con.clone(), Vector::unit(Thunk::delayed(call, env)))
+                    }
+                    other => other.clone(),
+                };
+                Ok(Control::Return(mapped))
+            }
             B::Sequence => self.next_in_sequence(prims::list_of(&values[0])?, Vector::new()),
             B::Map => {
                 let span = span.expect("higher-order builtins are applied at a call site");

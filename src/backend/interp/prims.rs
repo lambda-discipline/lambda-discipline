@@ -8,6 +8,8 @@ use imbl::Vector;
 
 use crate::backend::RuntimeError;
 use crate::builtins::Builtin;
+use crate::core::builtin_constructor;
+use crate::hir::ConId;
 use crate::source::Span;
 use crate::syntax::number::format_float;
 
@@ -39,7 +41,9 @@ pub(super) fn strictness(builtin: Builtin, index: usize) -> Strictness {
         B::Foldl | B::Foldr if index == 1 => Lazy,
         // The new element is stored unevaluated, and so are the calls of
         // the mapped function.
-        B::Cons | B::Push | B::Map | B::ZipWith if index == 0 => Lazy,
+        B::Cons | B::Push | B::Map | B::ZipWith | B::MapOption | B::MapResult if index == 0 => Lazy,
+        // The fallback is only evaluated for `None`.
+        B::WithDefault if index == 0 => Lazy,
         B::Eq | B::Neq | B::Lt | B::Le | B::Gt | B::Ge | B::Compare | B::Sort => Deep,
         B::Min | B::Max => Deep,
         B::Show | B::Print | B::Println => Deep,
@@ -56,26 +60,6 @@ pub(super) fn call_error(builtin: Builtin, span: Option<Span>, message: String) 
             .at(span)
             .with_label(format!("in this call to `{builtin}`")),
         None => error,
-    }
-}
-
-/// The element `head` or `get` selects, still unevaluated.
-pub(super) fn element(builtin: Builtin, args: &[Value], span: Option<Span>) -> Result<Thunk> {
-    let fail = |message: String| call_error(builtin, span, message);
-    match builtin {
-        Builtin::Head => list_of(&args[0])?
-            .front()
-            .cloned()
-            .ok_or_else(|| fail("`head` of an empty list".into())),
-        Builtin::Get => {
-            let i = to_index(int_of(&args[0])?).map_err(fail)?;
-            let items = list_of(&args[1])?;
-            items
-                .get(i)
-                .cloned()
-                .ok_or_else(|| fail(out_of_bounds(i, items.len())))
-        }
-        _ => unreachable!("`{builtin}` does not select an element"),
     }
 }
 
@@ -211,17 +195,17 @@ pub(super) fn pure(
         B::Show => Value::String(Rc::from(args[0].show())),
         B::ParseInt => {
             let input = text(0)?;
-            let number = input
-                .trim()
-                .parse::<i64>()
-                .map_err(|_| fail(format!("cannot parse {:?} as an `Int`", input.as_ref())))?;
-            Value::Int(number)
+            match input.trim().parse::<i64>() {
+                Ok(number) => ok(Value::Int(number)),
+                Err(_) => err(format!("cannot parse {:?} as an `Int`", input.as_ref())),
+            }
         }
         B::ParseFloat => {
             let input = text(0)?;
-            let number = parse_float(input.trim())
-                .ok_or_else(|| fail(format!("cannot parse {:?} as a `Float`", input.as_ref())))?;
-            Value::Float(number)
+            match parse_float(input.trim()) {
+                Some(number) => ok(Value::Float(number)),
+                None => err(format!("cannot parse {:?} as a `Float`", input.as_ref())),
+            }
         }
         B::StringLength => Value::Int(text(0)?.chars().count() as i64),
         B::Chars => strings(text(0)?.chars().map(String::from)),
@@ -247,12 +231,14 @@ pub(super) fn pure(
 
         B::Length => Value::Int(list(0)?.len() as i64),
         B::IsEmpty => Value::bool(list(0)?.is_empty()),
+        B::Head => option(list(0)?.front().cloned()),
         B::Tail => {
             let items = list(0)?;
-            if items.is_empty() {
-                return Err(fail("`tail` of an empty list".into()));
-            }
-            Value::List(items.skip(1))
+            option((!items.is_empty()).then(|| Thunk::done(Value::List(items.skip(1)))))
+        }
+        B::Get => {
+            let items = list(1)?;
+            option(position(int(0)?, items.len()).map(|i| items[i].clone()))
         }
         B::Cons => {
             let mut items = list(1)?;
@@ -265,11 +251,10 @@ pub(super) fn pure(
             Value::List(items)
         }
         B::Remove => {
-            let (i, mut items) = (index(0)?, list(1)?);
-            if i >= items.len() {
-                return Err(fail(out_of_bounds(i, items.len())));
+            let mut items = list(1)?;
+            if let Some(i) = position(int(0)?, items.len()) {
+                items.remove(i);
             }
-            items.remove(i);
             Value::List(items)
         }
         B::Append => {
@@ -338,6 +323,11 @@ pub(super) fn pure(
             Value::List(items.skip(n.min(items.len())))
         }
 
+        B::ToOption => match result_of(&args[0])? {
+            Ok(value) => option(Some(value)),
+            Err(_) => option(None),
+        },
+
         B::ReadFile => {
             let path = text(0)?;
             let contents = std::fs::read_to_string(path.as_ref())
@@ -352,9 +342,7 @@ pub(super) fn pure(
             });
         }
 
-        B::Head
-        | B::Get
-        | B::If
+        B::If
         | B::And
         | B::Or
         | B::Pure
@@ -367,7 +355,12 @@ pub(super) fn pure(
         | B::Filter
         | B::Foldl
         | B::Foldr
-        | B::ZipWith => {
+        | B::ZipWith
+        | B::WithDefault
+        | B::MapOption
+        | B::Unwrap
+        | B::MapResult
+        | B::UnwrapOk => {
             unreachable!("`{builtin}` is implemented by the machine")
         }
         B::File | B::Dir | B::Line => unreachable!("`{builtin}` is lowered to a literal"),
@@ -382,8 +375,56 @@ fn strings(items: impl Iterator<Item = String>) -> Value {
     )
 }
 
-fn out_of_bounds(index: usize, len: usize) -> String {
-    format!("index {index} is out of bounds for a list of length {len}")
+/// `Some` of a value, or `None`.
+fn option(value: Option<Thunk>) -> Value {
+    match value {
+        Some(value) => Value::Data(builtin_constructor(ConId::SOME), Vector::unit(value)),
+        None => Value::Data(builtin_constructor(ConId::NONE), Vector::new()),
+    }
+}
+
+fn ok(value: Value) -> Value {
+    Value::Data(
+        builtin_constructor(ConId::OK),
+        Vector::unit(Thunk::done(value)),
+    )
+}
+
+fn err(message: String) -> Value {
+    let message = Value::String(Rc::from(message));
+    Value::Data(
+        builtin_constructor(ConId::ERR),
+        Vector::unit(Thunk::done(message)),
+    )
+}
+
+/// The field of `Some`, or `None`.
+pub(super) fn option_of(value: &Value) -> Result<Option<Thunk>> {
+    match value {
+        Value::Data(con, fields) if con.id == ConId::SOME => Ok(fields.front().cloned()),
+        Value::Data(con, _) if con.id == ConId::NONE => Ok(None),
+        other => Err(internal("Option", other)),
+    }
+}
+
+/// The field of `Ok`, or of `Err`.
+pub(super) fn result_of(value: &Value) -> Result<std::result::Result<Thunk, Thunk>> {
+    let field = |fields: &Vector<Thunk>| {
+        fields
+            .front()
+            .cloned()
+            .ok_or_else(|| internal("Result", value))
+    };
+    match value {
+        Value::Data(con, fields) if con.id == ConId::OK => Ok(Ok(field(fields)?)),
+        Value::Data(con, fields) if con.id == ConId::ERR => Ok(Err(field(fields)?)),
+        other => Err(internal("Result", other)),
+    }
+}
+
+/// `index` as a position in a list of length `len`, if it is one.
+fn position(index: i64, len: usize) -> Option<usize> {
+    usize::try_from(index).ok().filter(|&i| i < len)
 }
 
 /// A list index or count must not be negative.
@@ -582,20 +623,63 @@ mod tests {
     fn parsing_numbers() {
         let s = |text: &str| Value::String(text.into());
         assert_eq!(
-            run(
-                Builtin::ParseInt,
-                &[s(" -42
-")]
-            ),
-            Ok("-42".into())
+            run(Builtin::ParseInt, &[s(" -42\n")]),
+            Ok("(Ok -42)".into())
         );
-        assert!(run(Builtin::ParseInt, &[s("3.5")]).is_err());
-        assert!(run(Builtin::ParseInt, &[s("99999999999999999999")]).is_err());
-        assert_eq!(run(Builtin::ParseFloat, &[s("3")]), Ok("3.0".into()));
-        assert_eq!(run(Builtin::ParseFloat, &[s("-1e-3")]), Ok("-0.001".into()));
+        assert_eq!(
+            run(Builtin::ParseInt, &[s("3.5")]),
+            Ok(r#"(Err "cannot parse \"3.5\" as an `Int`")"#.into())
+        );
+        assert!(
+            run(Builtin::ParseInt, &[s("99999999999999999999")])
+                .unwrap()
+                .starts_with("(Err ")
+        );
+        assert_eq!(run(Builtin::ParseFloat, &[s("3")]), Ok("(Ok 3.0)".into()));
+        assert_eq!(
+            run(Builtin::ParseFloat, &[s("-1e-3")]),
+            Ok("(Ok -0.001)".into())
+        );
         for text in ["inf", "NaN", "abc", ""] {
-            assert!(run(Builtin::ParseFloat, &[s(text)]).is_err(), "{text}");
+            assert!(
+                run(Builtin::ParseFloat, &[s(text)])
+                    .unwrap()
+                    .starts_with("(Err "),
+                "{text}"
+            );
         }
+    }
+
+    #[test]
+    fn list_access_is_total() {
+        let n = Value::Int;
+        let list = |items: &[i64]| Value::List(items.iter().map(|&i| Thunk::done(n(i))).collect());
+        assert_eq!(run(Builtin::Head, &[list(&[1, 2])]), Ok("(Some 1)".into()));
+        assert_eq!(run(Builtin::Head, &[list(&[])]), Ok("None".into()));
+        assert_eq!(
+            run(Builtin::Tail, &[list(&[1, 2])]),
+            Ok("(Some [2])".into())
+        );
+        assert_eq!(run(Builtin::Tail, &[list(&[1])]), Ok("(Some [])".into()));
+        assert_eq!(run(Builtin::Tail, &[list(&[])]), Ok("None".into()));
+        assert_eq!(
+            run(Builtin::Get, &[n(1), list(&[1, 2])]),
+            Ok("(Some 2)".into())
+        );
+        for index in [2, -1, i64::MIN] {
+            assert_eq!(
+                run(Builtin::Get, &[n(index), list(&[1, 2])]),
+                Ok("None".into())
+            );
+            assert_eq!(
+                run(Builtin::Remove, &[n(index), list(&[1, 2])]),
+                Ok("[1, 2]".into())
+            );
+        }
+        assert_eq!(
+            run(Builtin::Remove, &[n(0), list(&[1, 2])]),
+            Ok("[2]".into())
+        );
     }
 
     #[test]
@@ -626,8 +710,6 @@ mod tests {
                 .show(),
             "True"
         );
-        let error = element(Builtin::Head, &[Value::List(Vector::new())], None).unwrap_err();
-        assert_eq!(error.message, "`head` of an empty list");
         let error = pure(Builtin::Add, &[Value::Unit, n(1)], &[], None).unwrap_err();
         assert!(error.message.starts_with("internal error"));
     }

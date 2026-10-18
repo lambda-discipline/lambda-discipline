@@ -1,13 +1,15 @@
 -- Problem: https://adventofcode.com/2024/day/1 (part one)
 -- Run from anywhere: lbd run examples/aoc-24/day-01/part_01.lbd
 
-parseLine : String -> List<Int> = \line. (map parseInt (split "   " line))
+-- The input is known to be well formed, so a parse error may stop the
+-- program: `unwrapOk` takes the number out of `parseInt`'s `Result`.
+parseLine : String -> List<Int> = \line. (map \word. (unwrapOk (parseInt word)) (split "   " line))
 
 -- The puzzle is a pure function of the input text.
 distance : String -> Int = \input.
     let columns = (transpose (map parseLine (lines input))) in
-    let left = (sort (get 0 columns)) in
-    let right = (sort (get 1 columns)) in
+    let left = (sort (unwrap (get 0 columns))) in
+    let right = (sort (unwrap (get 1 columns))) in
     (sum (zipWith \a. \b. (abs (sub a b)) left right))
 
 -- Reading the input is an action; `<-` names its result. `__DIR__` is
