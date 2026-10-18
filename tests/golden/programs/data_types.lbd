@@ -2,14 +2,14 @@
 type Option<a> = None | Some a
 
 type Expr =
-    | Num Number
+    | Num Int
     | Add Expr Expr
     | Mul Expr Expr
     | Neg Expr
 
 type Tree<a> = Leaf | Node Tree<a> a Tree<a>
 
-eval : Expr -> Number = \e. match e
+eval : Expr -> Int = \e. match e
     | Num n -> n
     | Add a b -> (add (eval a) (eval b))
     | Mul a b -> (mul (eval a) (eval b))
@@ -40,7 +40,7 @@ toList : Tree<a> -> List<a> = \t. match t
     | Leaf -> []
     | Node l v r -> (append (toList l) (cons v (toList r)))
 
-describe : Number -> String = \n. match n
+describe : Int -> String = \n. match n
     | 0 -> "zero"
     | 1 -> "one"
     | _ -> "many"

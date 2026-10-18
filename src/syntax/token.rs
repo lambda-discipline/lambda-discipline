@@ -24,8 +24,10 @@ pub enum TokenKind {
 
     #[regex(r"[A-Za-z_][A-Za-z0-9_']*")]
     Ident,
-    #[regex(r"-?[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?")]
-    Number,
+    #[regex(r"-?[0-9]+")]
+    Int,
+    #[regex(r"-?[0-9]+(\.[0-9]+([eE][+-]?[0-9]+)?|[eE][+-]?[0-9]+)")]
+    Float,
     #[regex(r#""([^"\\]|\\.)*""#)]
     String,
 
@@ -75,7 +77,8 @@ impl TokenKind {
             TokenKind::Type => "`type`",
             TokenKind::Match => "`match`",
             TokenKind::Ident => "an identifier",
-            TokenKind::Number => "a number",
+            TokenKind::Int => "an integer",
+            TokenKind::Float => "a float",
             TokenKind::String => "a string",
             TokenKind::Lambda => "`\\`",
             TokenKind::Dot => "`.`",
@@ -232,7 +235,7 @@ mod tests {
         use TokenKind::*;
         assert_eq!(
             kinds("1 -2 3.25 -0.5 1e3 2.5E-2"),
-            vec![Number; 6].into_iter().chain([Eof]).collect::<Vec<_>>()
+            [Int, Int, Float, Float, Float, Float, Eof]
         );
     }
 
@@ -241,7 +244,7 @@ mod tests {
         use TokenKind::*;
         assert_eq!(
             kinds("a -> -1 -- comment -> 2\nb"),
-            vec![Ident, Arrow, Number, Ident, Eof]
+            vec![Ident, Arrow, Int, Ident, Eof]
         );
     }
 
@@ -251,7 +254,7 @@ mod tests {
         assert_eq!(
             kinds("[1, 2] λx. x"),
             vec![
-                LBracket, Number, Comma, Number, RBracket, Lambda, Ident, Dot, Ident, Eof
+                LBracket, Int, Comma, Int, RBracket, Lambda, Ident, Dot, Ident, Eof
             ]
         );
     }

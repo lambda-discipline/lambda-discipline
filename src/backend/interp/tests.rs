@@ -45,13 +45,22 @@ fn render(session: &Session, diagnostics: &[Diagnostic]) -> String {
 #[test]
 fn arithmetic() {
     assert_eq!(eval("(add 1 2)"), "3");
-    assert_eq!(eval("(sub 1 2.5)"), "-1.5");
-    assert_eq!(eval("(mul 3 (div 1 4))"), "0.75");
-    assert_eq!(eval("(div 1 0)"), "Infinity");
+    assert_eq!(eval("(sub 1.0 2.5)"), "-1.5");
+    assert_eq!(eval("(mul 3.0 (fdiv 1.0 4.0))"), "0.75");
+    assert_eq!(eval("(fdiv 1.0 0.0)"), "Infinity");
+    assert_eq!(eval("[(div 7 2), (div -7 2), (div 7 -2)]"), "[3, -4, -4]");
     assert_eq!(eval("[(mod 7 3), (mod -7 3), (mod 7 -3)]"), "[1, 2, -2]");
     assert_eq!(
-        eval("[(pow 2 10), (neg 3), (abs -3), (sqrt 16)]"),
-        "[1024, -3, 3, 4]"
+        eval("[(pow 2 10), (neg 3), (abs -3), (pow -3 3)]"),
+        "[1024, -3, 3, -27]"
+    );
+    assert_eq!(
+        eval("[(sqrt 16.0), (abs -0.5), (toFloat 3)]"),
+        "[4.0, 0.5, 3.0]"
+    );
+    assert_eq!(
+        eval("[9007199254740993, -9223372036854775808]"),
+        "[9007199254740993, -9223372036854775808]"
     );
     assert_eq!(
         eval("[(floor 1.5), (ceil 1.5), (round 2.5), (round -2.5)]"),
@@ -91,7 +100,8 @@ fn booleans_are_lazy() {
 fn strings() {
     assert_eq!(eval("(concat \"ab\" \"cd\")"), "\"abcd\"");
     assert_eq!(eval("(show [\"a\", \"b\"])"), r#""[\"a\", \"b\"]""#);
-    assert_eq!(eval("(parseNumber \" 42.5 \")"), "42.5");
+    assert_eq!(eval("(parseInt \" 42 \")"), "42");
+    assert_eq!(eval("(parseFloat \" 42.5 \")"), "42.5");
     assert_eq!(eval("(stringLength \"λx\")"), "2");
     assert_eq!(eval("(chars \"ab\")"), "[\"a\", \"b\"]");
     assert_eq!(
@@ -136,7 +146,8 @@ fn list_operations() {
     assert_eq!(eval("(zipWith add [1, 2, 3] [10, 20])"), "[11, 22]");
     assert_eq!(eval("(transpose [[1, 2, 3], [4, 5]])"), "[[1, 4], [2, 5]]");
     assert_eq!(eval("(transpose [])"), "[]");
-    assert_eq!(eval("(sum [1, 2, 3.5])"), "6.5");
+    assert_eq!(eval("(sum [1, 2, 3])"), "6");
+    assert_eq!(eval("(foldl add 0.0 [1.0, 2.5])"), "3.5");
     assert_eq!(
         eval("[(take 2 [1, 2, 3]), (drop 2 [1, 2, 3]), (take 9 [1])]"),
         "[[1, 2], [3], [1]]"
@@ -346,7 +357,7 @@ fn performed_results_are_returned_with_their_types() {
         .eval("<test>", r"(bind (pure 20) \x. (pure (add x 1)))")
         .unwrap();
     assert_eq!(evaluated.values[0].0.show(), "21");
-    assert_eq!(evaluated.values[0].1.to_string(), "Number");
+    assert_eq!(evaluated.values[0].1.to_string(), "Int");
     assert_eq!(eval("[(pure 1)]"), "[<action>]");
 }
 
@@ -379,15 +390,15 @@ fn runtime_errors_point_at_the_call() {
     );
     assert_eq!(
         runtime_error("(get -1 [1])").message,
-        "-1 is not a valid index (expected a whole number >= 0)"
+        "-1 is not a valid index (expected a number >= 0)"
     );
     assert_eq!(
         runtime_error("(remove 1 [1])").message,
         "index 1 is out of bounds for a list of length 1"
     );
     assert_eq!(
-        runtime_error("(parseNumber \"abc\")").message,
-        "cannot parse \"abc\" as a number"
+        runtime_error("(parseInt \"abc\")").message,
+        "cannot parse \"abc\" as an `Int`"
     );
     assert_eq!(
         runtime_error("(split \"\" \"abc\")").message,
@@ -416,7 +427,7 @@ fn definitions_persist_across_inputs() {
     session.eval("<1>", r"double = \x. (mul x 2)").unwrap();
     let evaluated = session.eval("<2>", "(double 21)").unwrap();
     assert_eq!(evaluated.values[0].0.show(), "42");
-    assert_eq!(evaluated.values[0].1.to_string(), "Number");
+    assert_eq!(evaluated.values[0].1.to_string(), "Int");
     // Redefinition shadows; earlier users keep the old definition.
     session.eval("<3>", "useDouble = (double 1)").unwrap();
     session.eval("<4>", r"double = \x. x").unwrap();
@@ -430,9 +441,7 @@ fn definitions_persist_across_inputs() {
 fn redefined_types_are_new_types() {
     let (mut session, out) = session();
     session.eval("<1>", "type T = A | B\nold = A").unwrap();
-    session
-        .eval("<2>", "type T = C Number\nnew = (C 1)")
-        .unwrap();
+    session.eval("<2>", "type T = C Int\nnew = (C 1)").unwrap();
     // The old value still has the old type, so it cannot pass for the new one.
     let errors = session.eval("<3>", "same = (eq old new)").unwrap_err();
     assert_eq!(errors[0].message, "mismatched types");
@@ -457,7 +466,7 @@ fn errors_leave_the_session_usable() {
     );
 }
 
-const SHAPES: &str = "type Shape = Circle Number | Rect Number Number\n";
+const SHAPES: &str = "type Shape = Circle Int | Rect Int Int\n";
 const OPTION: &str = "type Option<a> = None | Some a\n";
 
 #[test]

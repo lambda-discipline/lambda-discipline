@@ -1,2 +1,2 @@
-counter : Number = (add counter 1)
+counter : Int = (add counter 1)
 (println counter)

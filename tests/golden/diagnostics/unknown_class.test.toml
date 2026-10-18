@@ -4,6 +4,6 @@ file = "unknown_class.lbd"
 exit_code = 1
 stdout = ""
 stderr_contains = [
-    "Error: unknown class `Num`",
-    "the classes are `Eq`, `Ord` and `Show`",
+    "Error: unknown class `Monoid`",
+    "the classes are `Eq`, `Ord`, `Num` and `Show`",
 ]

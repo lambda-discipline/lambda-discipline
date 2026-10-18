@@ -4,9 +4,11 @@ file = "type_error.lbd"
 exit_code = 1
 stdout = ""
 stderr_contains = [
-    "Error: mismatched types",
+    "Error: values of type `String` cannot be used in arithmetic",
     "type_error.lbd:1:13",
     "(print (add \"hello\" 5))",
-    "expected `Number`, found `String`",
+    "this has type `String`",
+    "this needs `Num<String>`",
+    "only `Int` and `Float` are numbers",
     "in argument 1 of `add`",
 ]

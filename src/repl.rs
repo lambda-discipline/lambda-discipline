@@ -549,7 +549,7 @@ mod tests {
         let mut h = harness();
         h.repl.handle(r"double = \x. (mul x 2)");
         h.repl.handle("(double 21)");
-        assert_eq!(h.out.take(), "double : Number -> Number\n=> 42 : Number\n");
+        assert_eq!(h.out.take(), "double : Int -> Int\n=> 42 : Int\n");
         assert_eq!(h.err.take(), "");
     }
 
@@ -582,7 +582,7 @@ mod tests {
         assert_eq!(h.out.take(), "no definitions yet\n");
         h.repl.handle("x = 1");
         h.repl.handle(":e");
-        assert_eq!(h.out.take(), "x : Number\nx : Number\n");
+        assert_eq!(h.out.take(), "x : Int\nx : Int\n");
         h.repl.handle(":reset");
         assert_eq!(
             h.out.take(),
@@ -607,7 +607,7 @@ mod tests {
         assert_eq!(h.program.take(), "loading");
         assert!(h.out.take().ends_with("(1 definition)\n"));
         h.repl.handle("(triple 2)");
-        assert!(h.out.take().contains("=> 6 : Number"));
+        assert!(h.out.take().contains("=> 6 : Int"));
     }
 
     #[test]
@@ -633,7 +633,7 @@ mod tests {
         h.repl.handle(":ty True");
         assert_eq!(
             h.out.take(),
-            "(add 1) : Number -> Number
+            "(add 1) : Int -> Int
 True : Bool
 "
         );
@@ -648,7 +648,7 @@ True : Bool
         h.repl.handle(":info square");
         assert_eq!(
             h.out.take(),
-            "square : Number -> Number
+            "square : Num<a> => a -> a
     defined at <repl>:1:1
 "
         );
@@ -658,19 +658,19 @@ True : Bool
 "
         ));
         h.repl
-            .handle("type Shape =\n    | Circle Number\n    | Pair (Number -> Number) List<Shape>");
+            .handle("type Shape =\n    | Circle Int\n    | Pair (Int -> Int) List<Shape>");
         h.out.take();
         h.repl.handle(":info Shape");
         assert_eq!(
             h.out.take(),
-            "type Shape = Circle Number | Pair (Number -> Number) List<Shape>
+            "type Shape = Circle Int | Pair (Int -> Int) List<Shape>
     defined at <repl>:1:6
 "
         );
         h.repl.handle(":info Circle");
         assert_eq!(
             h.out.take(),
-            "Circle : Number -> Shape
+            "Circle : Int -> Shape
     a constructor of `Shape`
     defined at <repl>:2:7
 "
@@ -706,7 +706,7 @@ True : Bool
         h.repl.handle("answer");
         assert_eq!(
             h.out.take(),
-            "=> 42 : Number
+            "=> 42 : Int
 "
         );
     }
@@ -723,7 +723,7 @@ True : Bool
         assert!(!is_complete("x = let y <-"));
         assert!(!is_complete("\"unterminated"));
         assert!(!is_complete("type Shape ="));
-        assert!(!is_complete("type Shape = Circle Number |"));
+        assert!(!is_complete("type Shape = Circle Int |"));
         assert!(!is_complete("f = \\s. match s"));
         assert!(!is_complete("f = \\s. match s | Circle r ->"));
         assert!(is_complete("f = \\s. match s | Circle r -> r"));
@@ -740,7 +740,7 @@ True : Bool
         let mut h = harness();
         let input = "f = \\x.\n  (add x\n     1)\n(f 1)\n:quit\n(f 2)\n";
         run_lines(&mut h.repl, input.as_bytes()).unwrap();
-        assert_eq!(h.out.take(), "f : Number -> Number\n=> 2 : Number\n");
+        assert_eq!(h.out.take(), "f : Int -> Int\n=> 2 : Int\n");
     }
 
     #[test]

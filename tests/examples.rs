@@ -34,7 +34,7 @@ fn conditional_branching() {
 fn shapes() {
     assert_eq!(
         run("shapes.lbd"),
-        "Areas: [3.14, 6]\nVolume of cylinder is: 785\n"
+        "Areas: [3.14, 6.0]\nVolume of cylinder is: 785.0\n"
     );
 }
 

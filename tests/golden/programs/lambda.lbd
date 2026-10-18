@@ -1,2 +1,2 @@
-add2 : Number -> Number -> Number = \x. \y. (add x y)
+add2 : Int -> Int -> Int = \x. \y. (add x y)
 (println (add2 5 7))

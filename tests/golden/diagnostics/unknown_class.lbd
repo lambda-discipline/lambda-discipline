@@ -1,2 +1,2 @@
-double : Num<a> => a -> a = \x. x
+double : Monoid<a> => a -> a = \x. x
 (println (double 1))

@@ -1,0 +1,14 @@
+file = "int_float_mismatch.lbd"
+
+[expect]
+exit_code = 1
+stdout = ""
+stderr_contains = [
+    "Error: mismatched types",
+    "int_float_mismatch.lbd:2:15",
+    "expected `Int`, found `Float`",
+    "in argument 1 of `get`",
+    "int_float_mismatch.lbd:3:17",
+    "in argument 2 of `add`",
+    "`Int` and `Float` are not converted implicitly: write a float literal such as `1.0`, or convert with `(toFloat n)` or `(floor x)`",
+]

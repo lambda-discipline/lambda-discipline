@@ -1,11 +1,11 @@
-identity : Number -> Number = \x. x
+identity : Int -> Int = \x. x
 
 apply : (a -> b) -> a -> b = \f: (a -> b). \x: a. (f x)
 
-factorial : Number -> Number = \n.
+factorial : Int -> Int = \n.
     (if (eq n 0) 1 (mul n (factorial (sub n 1))))
 
-double : Number -> Number = \x. (mul x 2)
+double : Int -> Int = \x. (mul x 2)
 
 -- Unannotated definitions get their most general type.
 swap = \f. \x. \y. (f y x)

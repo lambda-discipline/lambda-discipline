@@ -1,6 +1,6 @@
 use "std.lbd"
 
-p1 : (Number -> Number -> c) -> c = (pair 1 2)
+p1 : (Int -> Int -> c) -> c = (pair 1 2)
 
 (println (first p1))
 (println (second p1))

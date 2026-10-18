@@ -1,5 +1,5 @@
 type Option<a> = None | Some a
-type Shape = Circle Number
+type Shape = Circle Int
 
 radius = \o. match o
     | Some r -> r

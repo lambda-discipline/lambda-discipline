@@ -1,1 +1,1 @@
-f : a -> Number = \x. (length x)
+f : a -> Int = \x. (length x)

@@ -1,11 +1,11 @@
 pipe : (a -> b) -> (b -> c) -> a -> c = \f. \g. \x. (g (f x))
 twice : (a -> a) -> a -> a = \f: (a -> a). \x: a. (f (f x))
 
-addFive : Number -> Number = \x. (add x 5)
-double : Number -> Number = \x. (mul x 2)
+addFive : Int -> Int = \x. (add x 5)
+double : Int -> Int = \x. (mul x 2)
 
-pipeline : Number -> Number = (pipe addFive double)
-quadruple : Number -> Number = (twice double)
+pipeline : Int -> Int = (pipe addFive double)
+quadruple : Int -> Int = (twice double)
 
 (println (pipeline 3))
 (println (quadruple 3))

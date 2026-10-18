@@ -1,7 +1,7 @@
-sum : Number -> Number = \n. (if (eq n 0) 0 (add n (sum (sub n 1))))
+sum : Int -> Int = \n. (if (eq n 0) 0 (add n (sum (sub n 1))))
 
 -- A tail-recursive loop runs in constant space.
-countDown : Number -> Number = \n. (if (eq n 0) 0 (countDown (sub n 1)))
+countDown : Int -> Int = \n. (if (eq n 0) 0 (countDown (sub n 1)))
 
 (println (sum 10))
 (println (sum 100000))

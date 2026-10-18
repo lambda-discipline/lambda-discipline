@@ -1,4 +1,4 @@
-fibonacci : Number -> Number = \n.
+fibonacci : Int -> Int = \n.
     (if (lt n 2)
         n
         (add (fibonacci (sub n 1)) (fibonacci (sub n 2))))

@@ -1,16 +1,16 @@
 -- A shape is one of several kinds, each with its own measurements.
 type Shape =
-    | Circle Number
-    | Rect Number Number
+    | Circle Float
+    | Rect Float Float
 
-pi : Number = 3.14
+pi : Float = 3.14
 
-area : Shape -> Number = \shape. match shape
+area : Shape -> Float = \shape. match shape
     | Circle r -> (mul pi (mul r r))
     | Rect w h -> (mul w h)
 
 -- A cylinder is a circle raised to a height.
-volumeOfCylinder : Number -> Number -> Number = \r. \h. (mul (area (Circle r)) h)
+volumeOfCylinder : Float -> Float -> Float = \r. \h. (mul (area (Circle r)) h)
 
-(println "Areas: " (map area [(Circle 1), (Rect 2 3)]))
-(println "Volume of cylinder is: " (volumeOfCylinder 5 10))
+(println "Areas: " (map area [(Circle 1.0), (Rect 2.0 3.0)]))
+(println "Volume of cylinder is: " (volumeOfCylinder 5.0 10.0))

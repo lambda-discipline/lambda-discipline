@@ -660,7 +660,7 @@ impl<'a> Checker<'a> {
                     Diagnostic::error(format!("unknown class `{}`", constraint.class.name))
                         .at(constraint.class.span)
                         .with_label("not a known class")
-                        .with_note("the classes are `Eq`, `Ord` and `Show`"),
+                        .with_note("the classes are `Eq`, `Ord`, `Num` and `Show`"),
                 );
                 continue;
             };
@@ -832,10 +832,10 @@ impl<'a> Checker<'a> {
     /// requirements added until nothing changes.
     fn derive_instances(&mut self, types: &[TypeDef]) {
         for def in types {
-            self.env.set_instances(
-                def.id,
-                [Some(Vec::new()), Some(Vec::new()), Some(Vec::new())],
-            );
+            // Data types can belong to the structural classes, never to `Num`.
+            let instances =
+                Class::ALL.map(|class| Class::STRUCTURAL.contains(&class).then(Vec::new));
+            self.env.set_instances(def.id, instances);
         }
         loop {
             let mut changed = false;
@@ -1050,7 +1050,8 @@ impl<'a> Checker<'a> {
 
     fn infer(&mut self, expr: &hir::Expr, ctx: &mut BodyCtx) -> Type {
         match &expr.kind {
-            ExprKind::Number(_) => Type::number(),
+            ExprKind::Int(_) => Type::int(),
+            ExprKind::Float(_) => Type::float(),
             ExprKind::String(_) => Type::string(),
             ExprKind::Unit => Type::unit(),
             ExprKind::Error => self.fresh(),
@@ -1345,7 +1346,8 @@ impl<'a> Checker<'a> {
                 ctx.locals.insert(*local, Scheme::mono(expected.clone()));
                 return;
             }
-            PatternKind::Number(_) => Type::number(),
+            PatternKind::Int(_) => Type::int(),
+            PatternKind::Float(_) => Type::float(),
             PatternKind::String(_) => Type::string(),
             PatternKind::Unit => Type::unit(),
             PatternKind::Con { con, args } => {
@@ -1425,9 +1427,18 @@ impl<'a> Checker<'a> {
         let found = self.zonk(&mismatch.found);
         let shown = display_together(&[&expected, &found]);
         let diagnostic = match mismatch.reason {
-            MismatchReason::Different => Diagnostic::error("mismatched types")
-                .at(span)
-                .with_label(label(&shown[0], &shown[1])),
+            MismatchReason::Different => {
+                let diagnostic = Diagnostic::error("mismatched types")
+                    .at(span)
+                    .with_label(label(&shown[0], &shown[1]));
+                if mixes_int_and_float(&expected, &found) {
+                    diagnostic.with_help(
+                        "`Int` and `Float` are not converted implicitly: write a float literal such as `1.0`, or convert with `(toFloat n)` or `(floor x)`",
+                    )
+                } else {
+                    diagnostic
+                }
+            }
             MismatchReason::Infinite => Diagnostic::error("cannot construct an infinite type")
                 .at(span)
                 .with_label(format!("`{}` would have to contain itself: `{}`", shown[0], shown[1])),
@@ -1476,6 +1487,13 @@ fn no_instance(
         format!("this has type `{whole}`, which contains `{part}`")
     };
     let (message, note) = match culprit {
+        _ if class == Class::Num => (
+            match culprit {
+                Type::Fun(..) => format!("functions cannot be {verb}"),
+                _ => format!("values of type `{part}` cannot be {verb}"),
+            },
+            Some("only `Int` and `Float` are numbers".to_owned()),
+        ),
         Type::Fun(..) => (format!("functions cannot be {verb}"), None),
         Type::Con(con, _) if con.id == TyConId::IO => {
             (format!("`IO` actions cannot be {verb}"), None)
@@ -1499,6 +1517,24 @@ fn no_instance(
     diagnostic
 }
 
+/// Whether two mismatched types differ by an `Int` in one where the other
+/// has a `Float`, which deserves a hint about conversions.
+fn mixes_int_and_float(a: &Type, b: &Type) -> bool {
+    match (a, b) {
+        (Type::Con(x, xs), Type::Con(y, ys)) if x.id == y.id => {
+            xs.iter().zip(ys).any(|(x, y)| mixes_int_and_float(x, y))
+        }
+        (Type::Con(x, _), Type::Con(y, _)) => {
+            let ids = [x.id, y.id];
+            ids.contains(&TyConId::INT) && ids.contains(&TyConId::FLOAT)
+        }
+        (Type::Fun(a1, r1), Type::Fun(a2, r2)) => {
+            mixes_int_and_float(a1, a2) || mixes_int_and_float(r1, r2)
+        }
+        _ => false,
+    }
+}
+
 fn substitute_gens(ty: &Type, with: &[Type]) -> Type {
     match ty {
         Type::Gen(i) => with[*i as usize].clone(),
@@ -1520,11 +1556,12 @@ fn describe_callee(func: &hir::Expr) -> String {
 
 fn type_hint(name: &str) -> Option<String> {
     match name {
-        "Float" | "Int" | "Integer" | "Double" => Some("numbers have type `Number`".into()),
+        "Integer" | "Long" => Some("integers have type `Int`".into()),
+        "Double" | "Real" => Some("floating-point numbers have type `Float`".into()),
         "Any" => Some("there is no `Any` type; use a type variable such as `a`".into()),
         "Str" => Some("strings have type `String`".into()),
         "Boolean" => Some("booleans have type `Bool`".into()),
-        "Eq" | "Ord" | "Show" => Some(format!(
+        "Eq" | "Ord" | "Num" | "Show" => Some(format!(
             "`{name}` is a class, not a type: write `{name}<a> =>` in front of the type"
         )),
         _ => None,
@@ -1576,11 +1613,52 @@ mod tests {
 
     #[test]
     fn literals_and_lists() {
-        assert_eq!(type_of_entry("1"), "Number");
+        assert_eq!(type_of_entry("1"), "Int");
         assert_eq!(type_of_entry("\"s\""), "String");
         assert_eq!(type_of_entry("()"), "Unit");
         assert_eq!(type_of_entry("[]"), "List<a>");
-        assert_eq!(type_of_entry("[[1], []]"), "List<List<Number>>");
+        assert_eq!(type_of_entry("[[1], []]"), "List<List<Int>>");
+        assert_eq!(type_of_entry("[1.5, 2.0, 1e3]"), "List<Float>");
+    }
+
+    #[test]
+    fn arithmetic_is_overloaded_on_int_and_float() {
+        assert_eq!(type_of_entry("(add 1 2)"), "Int");
+        assert_eq!(type_of_entry("(add 1.0 2.0)"), "Float");
+        assert_eq!(type_of_entry("(pow 1.5 2)"), "Float");
+        assert_eq!(
+            types_of(r"square = \x. (mul x x)"),
+            ["square : Num<a> => a -> a"]
+        );
+        assert_eq!(
+            types_of(r"f = \x. (lt (neg x) x)"),
+            ["f : (Ord<a>, Num<a>) => a -> Bool"]
+        );
+        let errors = errors_of("(add 1 1.5)");
+        assert_eq!(
+            errors[0].label.as_deref(),
+            Some("expected `Int`, found `Float`")
+        );
+        assert!(errors[0].help.as_deref().unwrap().contains("(toFloat n)"));
+        let errors = errors_of("(map toFloat [1.0])");
+        assert!(
+            errors[0].help.is_some(),
+            "nested mismatches get the hint too"
+        );
+        let errors = errors_of(r#"(neg "a")"#);
+        assert_eq!(
+            errors[0].message,
+            "values of type `String` cannot be used in arithmetic"
+        );
+        let errors = errors_of(r"(abs \x. x)");
+        assert_eq!(errors[0].message, "functions cannot be used in arithmetic");
+        // Data types never belong to `Num`, whatever their fields.
+        let errors = errors_of("type Meters = Meters Int\n(add (Meters 1) (Meters 2))");
+        assert_eq!(
+            errors[0].message,
+            "values of type `Meters` cannot be used in arithmetic"
+        );
+        assert_eq!(errors[0].notes[0], "only `Int` and `Float` are numbers");
     }
 
     #[test]
@@ -1595,7 +1673,7 @@ mod tests {
     fn let_polymorphism() {
         assert_eq!(
             type_of_entry(r#"let id = \x. x in [(id 1), (length (id ["a"]))]"#),
-            "List<Number>"
+            "List<Int>"
         );
     }
 
@@ -1607,14 +1685,14 @@ mod tests {
 
     #[test]
     fn builtins_are_instantiated_freshly() {
-        assert_eq!(type_of_entry("(map (add 1) [1, 2])"), "List<Number>");
+        assert_eq!(type_of_entry("(map (add 1) [1, 2])"), "List<Int>");
         assert_eq!(type_of_entry(r#"(map show [True])"#), "List<String>");
-        assert_eq!(type_of_entry("(foldr cons [] [1])"), "List<Number>");
+        assert_eq!(type_of_entry("(foldr cons [] [1])"), "List<Int>");
     }
 
     #[test]
     fn partial_application() {
-        assert_eq!(type_of_entry("(add 1)"), "Number -> Number");
+        assert_eq!(type_of_entry("(add 1)"), "Int -> Int");
         assert_eq!(type_of_entry("(if True)"), "a -> a -> a");
     }
 
@@ -1622,13 +1700,13 @@ mod tests {
     fn recursion_and_mutual_recursion() {
         assert_eq!(
             types_of(r"fact = \n. (if (eq n 0) 1 (mul n (fact (sub n 1))))"),
-            ["fact : Number -> Number"]
+            ["fact : Int -> Int"]
         );
         assert_eq!(
             types_of(
                 r"even = \n. (if (eq n 0) True (odd (sub n 1)))  odd = \n. (if (eq n 0) False (even (sub n 1)))"
             ),
-            ["even : Number -> Bool", "odd : Number -> Bool"]
+            ["even : Int -> Bool", "odd : Int -> Bool"]
         );
     }
 
@@ -1636,16 +1714,13 @@ mod tests {
     fn groups_are_generalized_before_use() {
         assert_eq!(
             types_of(r#"use1 = (id 1)  use2 = (id "a")  id = \x. x"#),
-            ["use1 : Number", "use2 : String", "id : a -> a"]
+            ["use1 : Int", "use2 : String", "id : a -> a"]
         );
     }
 
     #[test]
     fn annotations_are_checked_and_respected() {
-        assert_eq!(
-            types_of(r"f : Number -> Number = \x. x"),
-            ["f : Number -> Number"]
-        );
+        assert_eq!(types_of(r"f : Int -> Int = \x. x"), ["f : Int -> Int"]);
         assert_eq!(types_of(r"f : a -> a = \x. x"), ["f : a -> a"]);
         let errors = errors_of(r"f : a -> b = \x. x");
         assert_eq!(errors[0].message, "mismatched types");
@@ -1697,21 +1772,21 @@ mod tests {
 
     #[test]
     fn mismatch_points_at_argument() {
-        let errors = errors_of(r#"(add "hello" 5)"#);
+        let errors = errors_of(r#"(get "hello" [5])"#);
         assert_eq!(errors.len(), 1);
         assert_eq!(errors[0].message, "mismatched types");
         assert_eq!(
             errors[0].label.as_deref(),
-            Some("expected `Number`, found `String`")
+            Some("expected `Int`, found `String`")
         );
         assert_eq!(errors[0].span.unwrap().range(), 5..12);
-        assert_eq!(errors[0].notes, ["in argument 1 of `add`"]);
+        assert_eq!(errors[0].notes, ["in argument 1 of `get`"]);
     }
 
     #[test]
     fn calling_a_non_function() {
         let errors = errors_of("(1 2)");
-        assert_eq!(errors[0].message, "`Number` is not a function");
+        assert_eq!(errors[0].message, "`Int` is not a function");
         let errors = errors_of("(add 1 2 3)");
         assert_eq!(
             errors[0].message,
@@ -1755,13 +1830,13 @@ mod tests {
 
     #[test]
     fn unknown_types_and_wrong_arity() {
-        let errors = errors_of(r"f : Float -> Float = \x. x");
-        assert_eq!(errors[0].message, "unknown type `Float`");
+        let errors = errors_of(r"f : Double -> Double = \x. x");
+        assert_eq!(errors[0].message, "unknown type `Double`");
         assert_eq!(
             errors[0].help.as_deref(),
-            Some("numbers have type `Number`")
+            Some("floating-point numbers have type `Float`")
         );
-        let errors = errors_of(r"f : List -> Number = length");
+        let errors = errors_of(r"f : List -> Int = length");
         assert_eq!(
             errors[0].message,
             "`List` takes 1 type argument, but 0 were given"
@@ -1795,14 +1870,14 @@ mod tests {
         // No monomorphism restriction: a partial application generalizes.
         assert_eq!(
             types_of("isZero = (eq 0)\nsame = eq"),
-            ["isZero : Number -> Bool", "same : Eq<a> => a -> a -> Bool"]
+            ["isZero : Int -> Bool", "same : Eq<a> => a -> a -> Bool"]
         );
         // A constraint on a variable that does not appear is dropped.
         assert_eq!(type_of_entry("(show [])"), "String");
         // Lambda-bound variables collect their constraints.
         assert_eq!(
             type_of_entry(r"\f. (eq (f 1) (f 2))"),
-            "Eq<a> => (Number -> a) -> Bool"
+            "Eq<a> => (Int -> a) -> Bool"
         );
     }
 
@@ -1857,7 +1932,7 @@ mod tests {
             typed.diagnostics
         );
         let errors = errors_of(
-            "type Handler = Handler (Number -> Number)\n\
+            "type Handler = Handler (Int -> Int)\n\
              type Wrap = Wrap Handler\n\
              x = (eq (Wrap (Handler neg)) (Wrap (Handler neg)))",
         );
@@ -1890,9 +1965,9 @@ mod tests {
         // Polymorphic recursion at a type that needs the class.
         assert_eq!(
             types_of(
-                r"f : Eq<a> => Number -> a -> Bool = \n. \x. (if (eq n 0) (eq x x) (f (sub n 1) [x]))"
+                r"f : Eq<a> => Int -> a -> Bool = \n. \x. (if (eq n 0) (eq x x) (f (sub n 1) [x]))"
             ),
-            ["f : Eq<a> => Number -> a -> Bool"]
+            ["f : Eq<a> => Int -> a -> Bool"]
         );
         // Annotated `let`.
         assert_eq!(
@@ -1915,8 +1990,8 @@ mod tests {
 
     #[test]
     fn malformed_contexts_are_reported() {
-        let errors = errors_of(r"f : Num<a> => a -> a = \x. x");
-        assert_eq!(errors[0].message, "unknown class `Num`");
+        let errors = errors_of(r"f : Monoid<a> => a -> a = \x. x");
+        assert_eq!(errors[0].message, "unknown class `Monoid`");
         let errors = errors_of(r"f : Eq<List<a>> => a -> a = \x. x");
         assert_eq!(errors[0].message, "a constraint applies to a type variable");
         let errors = errors_of(r"f : Eq<b> => a -> a = \x. x");
@@ -1940,7 +2015,7 @@ mod tests {
             type_of_entry(
                 r#"let s <- (readFile "f") in let _ <- (println s) in (pure (length (lines s)))"#
             ),
-            "IO<Number>"
+            "IO<Int>"
         );
         assert_eq!(
             types_of(r"twice = \action. (then action action)"),
@@ -1948,11 +2023,11 @@ mod tests {
         );
         assert_eq!(
             type_of_entry("(sequence [(pure 1), (pure 2)])"),
-            "IO<List<Number>>"
+            "IO<List<Int>>"
         );
         assert_eq!(
-            type_of_entry(r#"let n: Number <- (pure 1) in (pure n)"#),
-            "IO<Number>"
+            type_of_entry(r#"let n: Int <- (pure 1) in (pure n)"#),
+            "IO<Int>"
         );
         let errors = errors_of(r#"let x <- (add 1 2) in (println x)"#);
         assert_eq!(errors[0].message, "mismatched types");
@@ -1985,7 +2060,7 @@ mod tests {
         );
         // An expression that is already wrong is reported once.
         assert_eq!(
-            program_errors(r#"(add "a" 1)"#)[0].message,
+            program_errors(r#"(concat "a" 1)"#)[0].message,
             "mismatched types"
         );
         assert_eq!(program_errors(r#"(add "a" 1)"#).len(), 1);
@@ -2031,7 +2106,7 @@ mod tests {
             Type::fun(Type::Gen(0), Type::list(Type::Gen(0))),
         )];
         let typed = check_unit(&resolved.unit, &prior, &TypeEnv::new(), TopLevel::Any);
-        assert_eq!(typed.entry_schemes[0].to_string(), "List<Number>");
+        assert_eq!(typed.entry_schemes[0].to_string(), "List<Int>");
     }
 
     const OPTION: &str = "type Option<a> = None | Some a\n";
@@ -2046,12 +2121,12 @@ mod tests {
                 "some : a -> Option<a>",
                 "none : Option<a>",
                 "pair : a -> b -> Pair<a, b>",
-                "boxed : a -> Pair<Number, a>",
+                "boxed : a -> Pair<Int, a>",
             ]
         );
         assert_eq!(
             type_of_entry(&format!("{OPTION}(map Some [1])")),
-            "List<Option<Number>>"
+            "List<Option<Int>>"
         );
         assert_eq!(type_of_entry("[True, False]"), "List<Bool>");
     }
@@ -2060,14 +2135,14 @@ mod tests {
     fn declared_types_can_be_recursive_and_used_in_any_order() {
         assert_eq!(
             types_of(
-                "depth : Tree<a> -> Number = \\t. match t\n\
+                "depth : Tree<a> -> Int = \\t. match t\n\
                  | Node l _ r -> (add 1 (max (depth l) (depth r)))\n\
                  | _ -> 0\n\
                  type Tree<a> = Leaf | Node Tree<a> a Tree<a> | Branches Forest<a>\n\
                  type Forest<a> = Forest List<Tree<a>>\n\
                  f = \\t. match t | Node _ x _ -> x | _ -> 0"
             ),
-            ["depth : Tree<a> -> Number", "f : Tree<Number> -> Number"]
+            ["depth : Tree<a> -> Int", "f : Tree<Int> -> Int"]
         );
     }
 
@@ -2078,17 +2153,14 @@ mod tests {
                 "{OPTION}withDefault = \\d. \\o. match o | Some x -> x | None -> d\n\
                  isZero = \\n. match n | 0 -> True | _ -> False"
             )),
-            [
-                "withDefault : a -> Option<a> -> a",
-                "isZero : Number -> Bool"
-            ]
+            ["withDefault : a -> Option<a> -> a", "isZero : Int -> Bool"]
         );
     }
 
     #[test]
     fn pattern_type_errors() {
         let errors = errors_of(&format!(
-            "{OPTION}type Shape = Circle Number\nf = \\o. match o | Some x -> x | Circle r -> r"
+            "{OPTION}type Shape = Circle Int\nf = \\o. match o | Some x -> x | Circle r -> r"
         ));
         assert_eq!(errors[0].message, "mismatched types");
         assert_eq!(
@@ -2110,7 +2182,7 @@ mod tests {
         assert_eq!(
             errors[0].label.as_deref(),
             Some(
-                "the arms of a `match` must all have the same type: expected `Number`, found `String`"
+                "the arms of a `match` must all have the same type: expected `Int`, found `String`"
             )
         );
     }
@@ -2152,7 +2224,7 @@ mod tests {
             errors[0].message,
             "`Option` takes 1 type argument, but 0 were given"
         );
-        let errors = errors_of("type P<a, b> = P a b\nx : P<Number> = (P 1 2)");
+        let errors = errors_of("type P<a, b> = P a b\nx : P<Int> = (P 1 2)");
         assert_eq!(errors[0].help.as_deref(), Some("write `P<a, b>`"));
     }
 }

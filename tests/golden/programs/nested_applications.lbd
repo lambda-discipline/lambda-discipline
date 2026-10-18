@@ -1,7 +1,7 @@
-triple : Number -> Number = \x. (mul x 3)
-increment : Number -> Number = \x. (add x 1)
-decrement : Number -> Number = \x. (add x -1)
+triple : Int -> Int = \x. (mul x 3)
+increment : Int -> Int = \x. (add x 1)
+decrement : Int -> Int = \x. (add x -1)
 
-complex : Number = (increment (triple (decrement (increment 5))))
+complex : Int = (increment (triple (decrement (increment 5))))
 
 (println complex)

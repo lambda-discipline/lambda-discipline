@@ -1,0 +1,10 @@
+file = "integer_overflow.lbd"
+
+[expect]
+exit_code = 1
+stdout = "2432902008176640000\n"
+stderr_contains = [
+    "Error: integer overflow: `(mul 21 2432902008176640000)` does not fit in an `Int`",
+    "integer_overflow.lbd:1:45",
+    "in this call to `mul`",
+]

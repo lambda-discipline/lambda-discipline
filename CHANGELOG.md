@@ -38,6 +38,16 @@ All notable changes to this project are documented here. The format follows
   Contexts are inferred and shown by `:type`
   (`eq : Eq<a> => a -> a -> Bool`), and annotations write them in front of
   the type: `member : Eq<a> => a -> List<a> -> Bool` (#19).
+- `Int` and `Float` replace `Number`. `Int` is a 64-bit integer whose
+  arithmetic is checked: overflow is an error instead of a silently rounded
+  result, so `9007199254740993` prints exactly. `1` is an `Int` and `1.0` a
+  `Float`, with no implicit conversion: `toFloat`, `floor`, `ceil` and
+  `round` convert. `add`, `sub`, `mul`, `neg`, `abs` and `pow` work on both
+  through the new `Num` class, `div` and `mod` are integer division
+  rounding toward negative infinity, and `fdiv` divides floats. Indices and
+  counts are `Int`, so `(get 1.5 xs)` is a type error. `parseInt` and
+  `parseFloat` replace `parseNumber`, and a whole `Float` prints as `42.0`
+  (#11).
 
 ### Changed
 
@@ -56,8 +66,8 @@ All notable changes to this project are documented here. The format follows
 ### Fixed
 
 - Type errors no longer print an inferred type variable with the same name as
-  an annotation's: checking `f : a -> Number = \x. (length x)` now reports
-  that the definition has type `List<b> -> Number`, not `List<a> -> Number`
+  an annotation's: checking `f : a -> Int = \x. (length x)` now reports
+  that the definition has type `List<b> -> Int`, not `List<a> -> Int`
   (#16).
 - Very large and very small numbers print with an exponent, as in
   JavaScript: `1e300` prints as `1e+300` instead of 301 digits, and `1e-7`

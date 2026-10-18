@@ -9,7 +9,7 @@ use imbl::Vector;
 use crate::backend::RuntimeError;
 use crate::builtins::Builtin;
 use crate::source::Span;
-use crate::syntax::number::format_number;
+use crate::syntax::number::format_float;
 
 use super::{Thunk, Value};
 
@@ -68,7 +68,7 @@ pub(super) fn element(builtin: Builtin, args: &[Value], span: Option<Span>) -> R
             .cloned()
             .ok_or_else(|| fail("`head` of an empty list".into())),
         Builtin::Get => {
-            let i = to_index(number_of(&args[0])?).map_err(fail)?;
+            let i = to_index(int_of(&args[0])?).map_err(fail)?;
             let items = list_of(&args[1])?;
             items
                 .get(i)
@@ -88,27 +88,99 @@ pub(super) fn pure(
     span: Option<Span>,
 ) -> Result<Value> {
     let fail = |message: String| call_error(builtin, span, message);
-    let num = |i: usize| number_of(&args[i]);
+    let int = |i: usize| int_of(&args[i]);
+    let float = |i: usize| float_of(&args[i]);
+    let index = |i: usize| int_of(&args[i]).and_then(|n| to_index(n).map_err(fail));
     let text = |i: usize| string_of(&args[i]);
     let list = |i: usize| list_of(&args[i]);
 
     use Builtin as B;
     Ok(match builtin {
-        B::Add => Value::Number(num(0)? + num(1)?),
-        B::Sub => Value::Number(num(0)? - num(1)?),
-        B::Mul => Value::Number(num(0)? * num(1)?),
-        B::Div => Value::Number(num(0)? / num(1)?),
-        B::Mod => {
-            let (a, b) = (num(0)?, num(1)?);
-            Value::Number(a - b * (a / b).floor())
+        B::Add | B::Sub | B::Mul => match (&args[0], &args[1]) {
+            (Value::Int(a), Value::Int(b)) => {
+                let result = match builtin {
+                    B::Add => a.checked_add(*b),
+                    B::Sub => a.checked_sub(*b),
+                    _ => a.checked_mul(*b),
+                };
+                Value::Int(result.ok_or_else(|| fail(overflow(builtin, &[*a, *b])))?)
+            }
+            (Value::Float(a), Value::Float(b)) => Value::Float(match builtin {
+                B::Add => a + b,
+                B::Sub => a - b,
+                _ => a * b,
+            }),
+            (a, b) => return Err(mixed(a, b)),
+        },
+        B::Neg | B::Abs => match &args[0] {
+            Value::Int(n) => {
+                let result = match builtin {
+                    B::Neg => n.checked_neg(),
+                    _ => n.checked_abs(),
+                };
+                Value::Int(result.ok_or_else(|| fail(overflow(builtin, &[*n])))?)
+            }
+            Value::Float(n) => Value::Float(if builtin == B::Neg { -n } else { n.abs() }),
+            other => return Err(internal("number", other)),
+        },
+        B::Pow => {
+            let exponent = int(1)?;
+            if exponent < 0 {
+                return Err(fail(format!(
+                    "the exponent given to `pow` must not be negative, but it is {exponent}"
+                )));
+            }
+            match &args[0] {
+                Value::Int(base) => Value::Int(
+                    int_pow(*base, exponent)
+                        .ok_or_else(|| fail(overflow(builtin, &[*base, exponent])))?,
+                ),
+                Value::Float(base) => Value::Float(
+                    i32::try_from(exponent).map_or(base.powf(exponent as f64), |e| base.powi(e)),
+                ),
+                other => return Err(internal("number", other)),
+            }
         }
-        B::Pow => Value::Number(num(0)?.powf(num(1)?)),
-        B::Neg => Value::Number(-num(0)?),
-        B::Abs => Value::Number(num(0)?.abs()),
-        B::Floor => Value::Number(num(0)?.floor()),
-        B::Ceil => Value::Number(num(0)?.ceil()),
-        B::Round => Value::Number(num(0)?.round()),
-        B::Sqrt => Value::Number(num(0)?.sqrt()),
+        B::Div | B::Mod => {
+            let (a, b) = (int(0)?, int(1)?);
+            if b == 0 {
+                return Err(fail("division by zero".into()));
+            }
+            // Rust's `/` and `%` round toward zero; Haskell's `div` and `mod`
+            // round toward negative infinity, so the remainder takes the
+            // sign of the divisor. Only `(div i64::MIN -1)` overflows.
+            let remainder = a.checked_rem(b).unwrap_or(0);
+            let floored = remainder != 0 && (remainder < 0) != (b < 0);
+            Value::Int(match builtin {
+                B::Div => {
+                    let quotient = a
+                        .checked_div(b)
+                        .ok_or_else(|| fail(overflow(builtin, &[a, b])))?;
+                    if floored { quotient - 1 } else { quotient }
+                }
+                _ if floored => remainder + b,
+                _ => remainder,
+            })
+        }
+        B::Fdiv => Value::Float(float(0)? / float(1)?),
+        B::Sqrt => Value::Float(float(0)?.sqrt()),
+        B::ToFloat => Value::Float(int(0)? as f64),
+        B::Floor | B::Ceil | B::Round => {
+            let n = float(0)?;
+            let whole = match builtin {
+                B::Floor => n.floor(),
+                B::Ceil => n.ceil(),
+                _ => n.round(),
+            };
+            // `i64::MAX as f64` rounds up to 2^63, which is out of range.
+            if !(-(2f64.powi(63))..2f64.powi(63)).contains(&whole) {
+                return Err(fail(format!(
+                    "{} cannot be converted to an `Int`",
+                    format_float(n)
+                )));
+            }
+            Value::Int(whole as i64)
+        }
         B::Min | B::Max => {
             let ordering = args[0].compare(&args[1]).map_err(fail)?;
             let first = match builtin {
@@ -129,7 +201,7 @@ pub(super) fn pure(
                 B::Le => Value::bool(ordering.is_le()),
                 B::Gt => Value::bool(ordering.is_gt()),
                 B::Ge => Value::bool(ordering.is_ge()),
-                _ => Value::Number(ordering as i8 as f64),
+                _ => Value::Int(ordering as i64),
             }
         }
 
@@ -137,15 +209,21 @@ pub(super) fn pure(
 
         B::Concat => Value::String(Rc::from(format!("{}{}", text(0)?, text(1)?))),
         B::Show => Value::String(Rc::from(args[0].show())),
-        B::ParseNumber => {
+        B::ParseInt => {
             let input = text(0)?;
             let number = input
                 .trim()
-                .parse::<f64>()
-                .map_err(|_| fail(format!("cannot parse {:?} as a number", input.as_ref())))?;
-            Value::Number(number)
+                .parse::<i64>()
+                .map_err(|_| fail(format!("cannot parse {:?} as an `Int`", input.as_ref())))?;
+            Value::Int(number)
         }
-        B::StringLength => Value::Number(text(0)?.chars().count() as f64),
+        B::ParseFloat => {
+            let input = text(0)?;
+            let number = parse_float(input.trim())
+                .ok_or_else(|| fail(format!("cannot parse {:?} as a `Float`", input.as_ref())))?;
+            Value::Float(number)
+        }
+        B::StringLength => Value::Int(text(0)?.chars().count() as i64),
         B::Chars => strings(text(0)?.chars().map(String::from)),
         B::Split => {
             let delimiter = text(0)?;
@@ -167,7 +245,7 @@ pub(super) fn pure(
         }
         B::Trim => Value::String(Rc::from(text(0)?.trim())),
 
-        B::Length => Value::Number(list(0)?.len() as f64),
+        B::Length => Value::Int(list(0)?.len() as i64),
         B::IsEmpty => Value::bool(list(0)?.is_empty()),
         B::Tail => {
             let items = list(0)?;
@@ -187,7 +265,7 @@ pub(super) fn pure(
             Value::List(items)
         }
         B::Remove => {
-            let (i, mut items) = (to_index(num(0)?).map_err(fail)?, list(1)?);
+            let (i, mut items) = (index(0)?, list(1)?);
             if i >= items.len() {
                 return Err(fail(out_of_bounds(i, items.len())));
             }
@@ -218,19 +296,12 @@ pub(super) fn pure(
             Value::List(items.into_iter().map(|(_, item)| item).collect())
         }
         B::Range => {
-            let (from, to) = (num(0)?, num(1)?);
-            let count = (to - from).ceil().max(0.0);
-            if count > 1e8 {
-                return Err(fail(format!(
-                    "`range` would produce {} elements",
-                    format_number(count)
-                )));
+            let (from, to) = (int(0)?, int(1)?);
+            let count = (i128::from(to) - i128::from(from)).max(0);
+            if count > 100_000_000 {
+                return Err(fail(format!("`range` would produce {count} elements")));
             }
-            Value::List(
-                (0..count as usize)
-                    .map(|i| Thunk::done(Value::Number(from + i as f64)))
-                    .collect(),
-            )
+            Value::List((from..to).map(|i| Thunk::done(Value::Int(i))).collect())
         }
         B::Transpose => {
             let rows: Vec<Vector<Thunk>> = list(0)?
@@ -248,18 +319,22 @@ pub(super) fn pure(
             )
         }
         B::Sum => {
-            let mut total = 0.0;
+            let mut total: i64 = 0;
             for item in list(0)?.iter() {
-                total += number_of(&element_of(item)?)?;
+                total = total
+                    .checked_add(int_of(&element_of(item)?)?)
+                    .ok_or_else(|| {
+                        fail("integer overflow in `sum`: the total does not fit in an `Int`".into())
+                    })?;
             }
-            Value::Number(total)
+            Value::Int(total)
         }
         B::Take => {
-            let (n, items) = (to_index(num(0)?).map_err(fail)?, list(1)?);
+            let (n, items) = (index(0)?, list(1)?);
             Value::List(items.take(n.min(items.len())))
         }
         B::Drop => {
-            let (n, items) = (to_index(num(0)?).map_err(fail)?, list(1)?);
+            let (n, items) = (index(0)?, list(1)?);
             Value::List(items.skip(n.min(items.len())))
         }
 
@@ -311,23 +386,69 @@ fn out_of_bounds(index: usize, len: usize) -> String {
     format!("index {index} is out of bounds for a list of length {len}")
 }
 
-/// A list index must be a whole, non-negative number.
-fn to_index(n: f64) -> std::result::Result<usize, String> {
-    if n.fract() == 0.0 && n >= 0.0 && n <= usize::MAX as f64 {
-        Ok(n as usize)
+/// A list index or count must not be negative.
+fn to_index(n: i64) -> std::result::Result<usize, String> {
+    usize::try_from(n).map_err(|_| format!("{n} is not a valid index (expected a number >= 0)"))
+}
+
+/// `base` to the power of a non-negative `exponent`, by repeated squaring;
+/// `None` on overflow.
+fn int_pow(mut base: i64, mut exponent: i64) -> Option<i64> {
+    let mut result: i64 = 1;
+    while exponent > 0 {
+        if exponent & 1 == 1 {
+            result = result.checked_mul(base)?;
+        }
+        exponent >>= 1;
+        if exponent > 0 {
+            base = base.checked_mul(base)?;
+        }
+    }
+    Some(result)
+}
+
+/// The error for `Int` arithmetic whose result does not fit in 64 bits.
+fn overflow(builtin: Builtin, args: &[i64]) -> String {
+    let args: Vec<String> = args.iter().map(i64::to_string).collect();
+    format!(
+        "integer overflow: `({builtin} {})` does not fit in an `Int`",
+        args.join(" ")
+    )
+}
+
+/// Parses a float literal or an integer, as `parseFloat` accepts them;
+/// Rust's parser would also take `inf` and `NaN`.
+fn parse_float(text: &str) -> Option<f64> {
+    let digits = text.strip_prefix(['-', '+']).unwrap_or(text);
+    if digits.starts_with(|c: char| c.is_ascii_digit()) || digits.starts_with('.') {
+        text.parse().ok()
     } else {
-        Err(format!(
-            "{} is not a valid index (expected a whole number >= 0)",
-            format_number(n)
-        ))
+        None
     }
 }
 
-pub(super) fn number_of(value: &Value) -> Result<f64> {
+pub(super) fn int_of(value: &Value) -> Result<i64> {
     match value {
-        Value::Number(n) => Ok(*n),
-        other => Err(internal("Number", other)),
+        Value::Int(n) => Ok(*n),
+        other => Err(internal("Int", other)),
     }
+}
+
+pub(super) fn float_of(value: &Value) -> Result<f64> {
+    match value {
+        Value::Float(n) => Ok(*n),
+        other => Err(internal("Float", other)),
+    }
+}
+
+/// `Int` and `Float` arguments to one `Num` builtin; the type checker
+/// rules this out.
+fn mixed(a: &Value, b: &Value) -> RuntimeError {
+    RuntimeError::new(format!(
+        "internal error: arithmetic on `{}` and `{}`",
+        a.show(),
+        b.show()
+    ))
 }
 
 pub(super) fn bool_of(value: &Value) -> Result<bool> {
@@ -368,11 +489,113 @@ mod tests {
     use super::*;
 
     #[test]
-    fn indices_must_be_whole_and_non_negative() {
-        assert_eq!(to_index(3.0), Ok(3));
-        assert!(to_index(-1.0).is_err());
-        assert!(to_index(1.5).is_err());
-        assert!(to_index(f64::NAN).is_err());
+    fn indices_must_not_be_negative() {
+        assert_eq!(to_index(3), Ok(3));
+        assert!(to_index(-1).is_err());
+    }
+
+    fn run(builtin: Builtin, args: &[Value]) -> std::result::Result<String, String> {
+        pure(builtin, args, &[], None)
+            .map(|value| value.show())
+            .map_err(|error| error.message)
+    }
+
+    #[test]
+    fn integer_division_rounds_toward_negative_infinity() {
+        let i = Value::Int;
+        for (a, b, quotient, remainder) in [
+            (7, 2, 3, 1),
+            (-7, 2, -4, 1),
+            (7, -2, -4, -1),
+            (-7, -2, 3, -1),
+            (6, -3, -2, 0),
+            (i64::MIN, -1, 0, 0),
+        ] {
+            if a != i64::MIN {
+                assert_eq!(run(Builtin::Div, &[i(a), i(b)]), Ok(quotient.to_string()));
+            }
+            assert_eq!(run(Builtin::Mod, &[i(a), i(b)]), Ok(remainder.to_string()));
+        }
+        assert_eq!(
+            run(Builtin::Div, &[i(1), i(0)]),
+            Err("division by zero".into())
+        );
+        assert_eq!(
+            run(Builtin::Mod, &[i(1), i(0)]),
+            Err("division by zero".into())
+        );
+        assert!(
+            run(Builtin::Div, &[i(i64::MIN), i(-1)])
+                .unwrap_err()
+                .starts_with("integer overflow")
+        );
+    }
+
+    #[test]
+    fn int_arithmetic_is_checked() {
+        let i = Value::Int;
+        assert_eq!(
+            run(Builtin::Mul, &[i(i64::MAX), i(2)]),
+            Err(format!(
+                "integer overflow: `(mul {} 2)` does not fit in an `Int`",
+                i64::MAX
+            ))
+        );
+        assert!(run(Builtin::Add, &[i(i64::MAX), i(1)]).is_err());
+        assert!(run(Builtin::Sub, &[i(i64::MIN), i(1)]).is_err());
+        assert!(run(Builtin::Neg, &[i(i64::MIN)]).is_err());
+        assert!(run(Builtin::Abs, &[i(i64::MIN)]).is_err());
+        assert_eq!(
+            run(Builtin::Neg, &[i(i64::MAX)]),
+            Ok(format!("-{}", i64::MAX))
+        );
+        assert_eq!(
+            run(Builtin::Pow, &[i(2), i(62)]),
+            Ok("4611686018427387904".into())
+        );
+        assert!(run(Builtin::Pow, &[i(2), i(63)]).is_err());
+        assert!(run(Builtin::Pow, &[i(2), i(1 << 40)]).is_err());
+        assert_eq!(run(Builtin::Pow, &[i(1), i(1 << 40)]), Ok("1".into()));
+        assert!(run(Builtin::Pow, &[i(2), i(-1)]).is_err());
+    }
+
+    #[test]
+    fn float_arithmetic_and_conversions() {
+        let (i, f) = (Value::Int, Value::Float);
+        assert_eq!(run(Builtin::Add, &[f(0.5), f(0.25)]), Ok("0.75".into()));
+        assert_eq!(run(Builtin::Pow, &[f(1.5), i(2)]), Ok("2.25".into()));
+        assert_eq!(run(Builtin::Fdiv, &[f(1.0), f(0.0)]), Ok("Infinity".into()));
+        assert_eq!(run(Builtin::ToFloat, &[i(3)]), Ok("3.0".into()));
+        assert_eq!(run(Builtin::Floor, &[f(-2.5)]), Ok("-3".into()));
+        assert_eq!(run(Builtin::Ceil, &[f(-2.5)]), Ok("-2".into()));
+        assert_eq!(run(Builtin::Round, &[f(-2.5)]), Ok("-3".into()));
+        assert_eq!(
+            run(Builtin::Floor, &[f(-9.223372036854776e18)]),
+            Ok(i64::MIN.to_string())
+        );
+        for n in [f64::NAN, f64::INFINITY, 9.223372036854776e18] {
+            assert!(run(Builtin::Floor, &[f(n)]).is_err(), "{n}");
+        }
+    }
+
+    #[test]
+    fn parsing_numbers() {
+        let s = |text: &str| Value::String(text.into());
+        assert_eq!(
+            run(
+                Builtin::ParseInt,
+                &[s(" -42
+")]
+            ),
+            Ok("-42".into())
+        );
+        assert!(run(Builtin::ParseInt, &[s("3.5")]).is_err());
+        assert!(run(Builtin::ParseInt, &[s("99999999999999999999")]).is_err());
+        assert_eq!(run(Builtin::ParseFloat, &[s("3")]), Ok("3.0".into()));
+        assert_eq!(run(Builtin::ParseFloat, &[s("-1e-3")]), Ok("-0.001".into()));
+        for text in ["inf", "NaN", "abc", ""] {
+            assert!(run(Builtin::ParseFloat, &[s(text)]).is_err(), "{text}");
+        }
     }
 
     #[test]
@@ -392,11 +615,9 @@ mod tests {
 
     #[test]
     fn pure_builtins_on_values() {
-        let n = Value::Number;
+        let n = Value::Int;
         assert_eq!(
-            pure(Builtin::Add, &[n(1.0), n(2.0)], &[], None)
-                .unwrap()
-                .show(),
+            pure(Builtin::Add, &[n(1), n(2)], &[], None).unwrap().show(),
             "3"
         );
         assert_eq!(
@@ -407,7 +628,7 @@ mod tests {
         );
         let error = element(Builtin::Head, &[Value::List(Vector::new())], None).unwrap_err();
         assert_eq!(error.message, "`head` of an empty list");
-        let error = pure(Builtin::Add, &[Value::Unit, n(1.0)], &[], None).unwrap_err();
+        let error = pure(Builtin::Add, &[Value::Unit, n(1)], &[], None).unwrap_err();
         assert!(error.message.starts_with("internal error"));
     }
 }

@@ -14,10 +14,10 @@ first : ((a -> b -> a) -> a) -> a = \p. (p \x. \y. x)
 second : ((a -> b -> b) -> b) -> b = \p. (p \x. \y. y)
 
 -- Lists
-count : (a -> Bool) -> List<a> -> Number = \predicate. \xs. (length (filter predicate xs))
+count : (a -> Bool) -> List<a> -> Int = \predicate. \xs. (length (filter predicate xs))
 all : (a -> Bool) -> List<a> -> Bool = \predicate. \xs. (foldr \x. \rest. (and (predicate x) rest) True xs)
 any : (a -> Bool) -> List<a> -> Bool = \predicate. \xs. (foldr \x. \rest. (or (predicate x) rest) False xs)
-product : List<Number> -> Number = (foldl mul 1)
+product : List<Int> -> Int = (foldl mul 1)
 maximum : Ord<a> => List<a> -> a = \xs. (foldl max (head xs) xs)
 minimum : Ord<a> => List<a> -> a = \xs. (foldl min (head xs) xs)
 

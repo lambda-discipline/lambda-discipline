@@ -5,7 +5,7 @@ exit_code = 1
 stdout = ""
 stderr_contains = [
     "Error: unexpected character `;`",
-    "unexpected_character.lbd:1:15",
-    "a : Number = 1;",
+    "unexpected_character.lbd:1:12",
+    "a : Int = 1;",
     "statements are not terminated by `;`",
 ]

@@ -12,20 +12,20 @@ pipeline designed to grow more backends.
 
 ```haskell
 -- Types are inferred; annotations are checked.
-fibonacci : Number -> Number = \n.
+fibonacci : Int -> Int = \n.
     (if (lt n 2) n (add (fibonacci (sub n 1)) (fibonacci (sub n 2))))
 
 compose = \f. \g. \x. (f (g x))          -- inferred: (a -> b) -> (c -> a) -> c -> b
 
-type Shape = Circle Number | Rect Number Number
+type Shape = Circle Float | Rect Float Float
 
-area : Shape -> Number = \s. match s
+area : Shape -> Float = \s. match s
     | Circle r -> (mul 3.14 (mul r r))
     | Rect w h -> (mul w h)
 
 (println (map fibonacci (range 0 10)))   -- [0, 1, 1, 2, 3, 5, 8, 13, 21, 34]
 (println ((compose show (mul 2)) 21))   -- 42
-(println (map area [(Circle 1), (Rect 2 3)]))   -- [3.14, 6]
+(println (map area [(Circle 1.0), (Rect 2.0 3.0)]))   -- [3.14, 6.0]
 ```
 
 ## Getting started
@@ -73,13 +73,15 @@ Diagnostics are rendered with [ariadne](https://crates.io/crates/ariadne):
 
 ```text
 Error: mismatched types
-   ╭─[ examples/demo.lbd:1:13 ]
+   ╭─[ examples/demo.lbd:1:17 ]
    │
- 1 │ (print (add "hello" 5))
-   │             ───┬───
-   │                ╰───── expected `Number`, found `String`
+ 1 │ (println (add 1 1.5))
+   │                 ─┬─
+   │                  ╰─── expected `Int`, found `Float`
    │
-   │ Note: in argument 1 of `add`
+   │ Help: `Int` and `Float` are not converted implicitly: write a float literal such as `1.0`, or convert with `(toFloat n)` or `(floor x)`
+   │
+   │ Note: in argument 2 of `add`
 ───╯
 ```
 
@@ -100,9 +102,9 @@ expr  = "\" LOWER [":" type] "." expr        lambda (also `λ`)
       | "(" expr expr+ ")"                   application; any expression can be called
       | "(" expr ")" | "(" ")"               grouping, unit
       | "[" expr, ... "]"                    list
-      | NUMBER | STRING | LOWER | UPPER       UPPER is a constructor
-pattern = UPPER pattern* | "_" | LOWER | NUMBER | STRING | "(" ")" | "(" pattern ")"
-type  = Number | String | Bool | Unit | List<type> | IO<type> | Declared<type, ...>
+      | INT | FLOAT | STRING | LOWER | UPPER UPPER is a constructor
+pattern = UPPER pattern* | "_" | LOWER | INT | FLOAT | STRING | "(" ")" | "(" pattern ")"
+type  = Int | Float | String | Bool | Unit | List<type> | IO<type> | Declared<type, ...>
       | lowercase-variable | type -> type | (type)
 scheme = [context "=>"] type                 see "Type classes"
 context = CLASS "<" LOWER ">" | "(" CLASS "<" LOWER ">", ... ")"
@@ -111,8 +113,8 @@ context = CLASS "<" LOWER ">" | "(" CLASS "<" LOWER ">", ... ")"
 Names that start with a lowercase letter (or `_`) are values; names that
 start with an uppercase letter are types and constructors.
 
-* Numbers are 64-bit floats and print the way most languages print them: `42`,
-  `3.14`, `0.30000000000000004`, `Infinity`.
+* `42` and `-7` are `Int` literals; `3.14`, `1.0` and `1e-3` are `Float`
+  literals (see "Numbers").
 * Strings support `\n \t \r \0 \\ \" \' \u{3bb}` escapes.
 * Definitions are order independent and may be mutually recursive; `let` is
   recursive too.
@@ -129,9 +131,6 @@ Full Hindley-Milner inference with let-polymorphism:
 * Mutually recursive definitions are inferred together, then generalized.
 * `print` and `println` take any number of arguments of any types in `Show`
   and must be called directly. They return `IO<Unit>`.
-* Numbers print as JavaScript prints them: `42`, `0.000001`, and with an
-  exponent below `1e-6` or from `1e21` up (`1e-7`, `1e+300`). `-0` prints
-  as `0`.
 
 ### Data types
 
@@ -149,7 +148,7 @@ withDefault : a -> Option<a> -> a = \fallback. \o. match o
     | Some x -> x
     | None -> fallback
 
-depth : Tree<a> -> Number = \t. match t
+depth : Tree<a> -> Int = \t. match t
     | Leaf -> 0
     | Node left _ right -> (add 1 (max (depth left) (depth right)))
 
@@ -168,7 +167,8 @@ depth : Tree<a> -> Number = \t. match t
   pattern.
 * Every `match` must cover all values of its type; otherwise it is an error
   that names a missing case (`` `Rect _ _` is not covered ``). Numbers and
-  strings need a `_` or variable arm.
+  strings need a `_` or variable arm. An `Int` pattern matches an `Int` and
+  a `Float` pattern a `Float`.
 * An arm's body extends as far as it can, like a `let` body, so a `match`
   inside the last arm of another needs parentheses.
 * Fields are lazy, like list elements, and `match` evaluates only what it
@@ -183,16 +183,43 @@ depth : Tree<a> -> Number = \t. match t
 * In the REPL, declaring a type again makes a new type; values of the old one
   keep the old type.
 
+### Numbers
+
+There are two number types, and nothing converts between them implicitly:
+
+* `Int` is a 64-bit integer. Arithmetic that overflows is a runtime error
+  ("integer overflow: `(mul 9223372036854775807 2)` does not fit in an
+  `Int`"), never a wrong answer, and an integer literal too large for 64 bits
+  is a compile error.
+* `Float` is a 64-bit IEEE float.
+* `add sub mul neg abs pow` work on both (they are in the `Num` class, see
+  "Type classes"), so `square = \x. (mul x x)` is
+  `Num<a> => a -> a`. `(add 1 1.5)` is a type error: write `1.0`, or convert
+  with `toFloat : Int -> Float` and `floor`, `ceil`, `round : Float -> Int`.
+* `div` and `mod` are integer division, rounding toward negative infinity as
+  in Haskell (`(div -7 2)` is `-4`, `(mod -7 2)` is `1`); dividing by zero is
+  an error. `fdiv` divides floats, and `(fdiv 1.0 0.0)` is `Infinity`.
+* Indices and counts are `Int`: `length`, `get`, `take`, `drop`, `remove`,
+  `range`, `stringLength`, `compare` and `__LINE__`. `sum` adds up a
+  `List<Int>`; for floats write `(foldl add 0.0 xs)`.
+* An `Int` prints as its digits. A `Float` prints with the shortest digits
+  that read back as the same number, as JavaScript prints it, but a whole
+  float keeps its `.0` so it reads back as a `Float`: `42.0`, `3.14`,
+  `0.30000000000000004`, `0.000001`, and an exponent below `1e-6` or from
+  `1e21` up (`1e-7`, `1e+300`). `-0.0` prints as `0.0`.
+
 ### Type classes
 
-Comparing and showing work on every value except functions and `IO` actions.
-Three built-in classes say which types support them, so a mistake such as
-`(eq \x. x \y. y)` is a type error rather than a runtime error:
+Comparing and showing work on every value except functions and `IO` actions,
+and arithmetic works on `Int` and `Float`. Four built-in classes say which
+types support what, so a mistake such as `(eq \x. x \y. y)` is a type error
+rather than a runtime error:
 
 | Class | Builtins | Types in it |
 | --- | --- | --- |
-| `Eq` | `eq neq` | numbers, strings, `Unit`, `Bool`, and lists and data types whose elements and fields are in it |
+| `Eq` | `eq neq` | `Int`, `Float`, `String`, `Unit`, `Bool`, and lists and data types whose elements and fields are in it |
 | `Ord` | `lt le gt ge compare sort min max` | the same as `Eq`; `Ord<a>` implies `Eq<a>` |
+| `Num` | `add sub mul neg abs pow` | `Int` and `Float` |
 | `Show` | `show`, and the arguments of `print` and `println` | the same as `Eq` |
 
 ```haskell
@@ -282,10 +309,10 @@ takes the data it works on last, so partial application reads well:
 
 | Group | Builtins |
 | --- | --- |
-| Numbers | `add sub mul div mod pow neg abs floor ceil round sqrt min max` |
+| Numbers | `add sub mul neg abs pow div mod fdiv sqrt toFloat floor ceil round min max` |
 | Comparison | `eq neq lt le gt ge compare` (structural, for types in `Eq` and `Ord`; see "Type classes") |
 | Booleans | `not and or if`, and the constructors `True` and `False` |
-| Strings | `concat show parseNumber stringLength chars split lines join trim` |
+| Strings | `concat show parseInt parseFloat stringLength chars split lines join trim` |
 | Lists | `length isEmpty head tail get cons push remove append map filter foldl foldr reverse sort range zipWith transpose sum take drop` |
 | Input/output | `pure bind then sequence print println readFile error` |
 | Source location | `__FILE__ __DIR__ __LINE__` (spelled as in C and Elixir, since their value depends on where they are written) |

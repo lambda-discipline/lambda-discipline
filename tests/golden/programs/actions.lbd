@@ -17,7 +17,7 @@ twice : IO<a> -> IO<a> = \action. (then action action)
 (twice (get 1 greetings))
 
 -- `let x <- action in` performs an action and names its result.
-countdown : Number -> IO<Number> = \n.
+countdown : Int -> IO<Int> = \n.
     (if (eq n 0)
         (pure 0)
         let _ <- (print n " ") in

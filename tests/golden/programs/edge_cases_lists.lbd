@@ -1,7 +1,7 @@
 identity : a -> a = \x. x
 
-singleElement : List<Number> = [42]
-twoElements : List<Number> = [1, 2]
+singleElement : List<Int> = [42]
+twoElements : List<Int> = [1, 2]
 
 (println (length singleElement))
 (println (length twoElements))

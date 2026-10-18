@@ -237,13 +237,13 @@ mod tests {
         let (map, span) = sample();
         let text = Diagnostic::error("type mismatch")
             .at(span)
-            .with_label("expected `Number`, found `String`")
+            .with_label("expected `Int`, found `String`")
             .with_note("in a call to `add`")
             .to_plain_string(&map);
         assert!(text.contains("Error: type mismatch"), "{text}");
         assert!(text.contains("demo.lbd:1:12"), "{text}");
         assert!(text.contains("x = (add 1 \"two\")"), "{text}");
-        assert!(text.contains("expected `Number`, found `String`"), "{text}");
+        assert!(text.contains("expected `Int`, found `String`"), "{text}");
         assert!(text.contains("in a call to `add`"), "{text}");
     }
 

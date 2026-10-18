@@ -3,10 +3,10 @@
 
 use "../../std.lbd"
 
-parseLine : String -> List<Number> = \line. (map parseNumber (split "   " line))
+parseLine : String -> List<Int> = \line. (map parseInt (split "   " line))
 
 -- The puzzle is a pure function of the input text.
-similarity : String -> Number = \input.
+similarity : String -> Int = \input.
     let columns = (transpose (map parseLine (lines input))) in
     let left = (get 0 columns) in
     let right = (get 1 columns) in

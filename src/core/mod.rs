@@ -28,13 +28,14 @@ use std::rc::Rc;
 use crate::builtins::Builtin;
 use crate::hir::{ConId, GlobalId};
 use crate::source::Span;
-use crate::syntax::number::format_number;
+use crate::syntax::number::format_float;
 
 pub use lower::lower_unit;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Literal {
-    Number(f64),
+    Int(i64),
+    Float(f64),
     String(Rc<str>),
     Unit,
 }
@@ -158,7 +159,8 @@ pub struct Module {
 impl fmt::Display for Expr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Expr::Lit(Literal::Number(n)) => f.write_str(&format_number(*n)),
+            Expr::Lit(Literal::Int(n)) => write!(f, "{n}"),
+            Expr::Lit(Literal::Float(n)) => f.write_str(&format_float(*n)),
             Expr::Lit(Literal::String(s)) => write!(f, "{s:?}"),
             Expr::Lit(Literal::Unit) => f.write_str("()"),
             Expr::Local(slot) => write!(f, "${slot}"),

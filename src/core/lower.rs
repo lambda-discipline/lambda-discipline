@@ -108,13 +108,17 @@ struct Row<'h> {
 fn refutable(pattern: &hir::Pattern) -> bool {
     matches!(
         pattern.kind,
-        PatternKind::Con { .. } | PatternKind::Number(_) | PatternKind::String(_)
+        PatternKind::Con { .. }
+            | PatternKind::Int(_)
+            | PatternKind::Float(_)
+            | PatternKind::String(_)
     )
 }
 
 fn literal_of(pattern: &hir::Pattern) -> Option<Literal> {
     match &pattern.kind {
-        PatternKind::Number(n) => Some(Literal::Number(*n)),
+        PatternKind::Int(n) => Some(Literal::Int(*n)),
+        PatternKind::Float(n) => Some(Literal::Float(*n)),
         PatternKind::String(s) => Some(Literal::String(s.clone())),
         _ => None,
     }
@@ -143,7 +147,8 @@ impl Lowerer<'_> {
 
     fn expr(&mut self, expr: &hir::Expr) -> Rc<Expr> {
         Rc::new(match &expr.kind {
-            ExprKind::Number(n) => Expr::Lit(Literal::Number(*n)),
+            ExprKind::Int(n) => Expr::Lit(Literal::Int(*n)),
+            ExprKind::Float(n) => Expr::Lit(Literal::Float(*n)),
             ExprKind::String(s) => Expr::Lit(Literal::String(s.clone())),
             ExprKind::Unit => Expr::Lit(Literal::Unit),
             ExprKind::Local(local) => Expr::Local(self.slot(self.frames.len() - 1, *local)),
@@ -157,8 +162,8 @@ impl Lowerer<'_> {
             )),
             ExprKind::Builtin(Builtin::Line) => {
                 let file = self.sources.get(expr.span.file);
-                Expr::Lit(Literal::Number(
-                    file.line_col(expr.span.start as usize).0 as f64,
+                Expr::Lit(Literal::Int(
+                    file.line_col(expr.span.start as usize).0 as i64,
                 ))
             }
             ExprKind::Builtin(builtin) => Expr::Builtin(*builtin),
