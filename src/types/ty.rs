@@ -94,6 +94,12 @@ impl Type {
         }
     }
 
+    /// `(a, b, ...)`, with 2 to [`crate::syntax::ast::MAX_TUPLE_ARITY`]
+    /// components.
+    pub fn tuple(components: Vec<Type>) -> Type {
+        Type::builtin(TyConId::tuple(components.len()), components)
+    }
+
     pub fn fun(from: Type, to: Type) -> Type {
         Type::Fun(Box::new(from), Box::new(to))
     }
@@ -311,6 +317,16 @@ impl Namer {
                 out.push_str(&self.gens[g]);
             }
             Type::Rigid(name) => out.push_str(name),
+            Type::Con(con, args) if con.id.tuple_arity().is_some() => {
+                out.push('(');
+                for (i, arg) in args.iter().enumerate() {
+                    if i > 0 {
+                        out.push_str(", ");
+                    }
+                    self.write(arg, out, false);
+                }
+                out.push(')');
+            }
             Type::Con(con, args) => {
                 out.push_str(&con.name);
                 if !args.is_empty() {

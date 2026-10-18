@@ -22,18 +22,20 @@ pub enum Module {
     Bool,
     String,
     List,
+    Tuple,
     Option,
     Io,
     Source,
 }
 
 impl Module {
-    pub const ALL: [Module; 8] = [
+    pub const ALL: [Module; 9] = [
         Module::Number,
         Module::Compare,
         Module::Bool,
         Module::String,
         Module::List,
+        Module::Tuple,
         Module::Option,
         Module::Io,
         Module::Source,
@@ -46,6 +48,7 @@ impl Module {
             Module::Bool => "Booleans",
             Module::String => "Strings",
             Module::List => "Lists",
+            Module::Tuple => "Tuples",
             Module::Option => "Options and results",
             Module::Io => "Input/output",
             Module::Source => "Source location",
@@ -152,6 +155,9 @@ builtins! {
     Take => "take" : "Int -> List<a> -> List<a>", List, "The first `n` elements.";
     Drop => "drop" : "Int -> List<a> -> List<a>", List, "All but the first `n` elements.";
 
+    Fst => "fst" : "(a, b) -> a", Tuple, "The first component of a pair.";
+    Snd => "snd" : "(a, b) -> b", Tuple, "The second component of a pair.";
+
     WithDefault => "withDefault" : "a -> Option<a> -> a", Option, "`(withDefault fallback option)` is the value in `Some`, or `fallback` for `None`; `fallback` is only evaluated when needed.";
     MapOption => "mapOption" : "(a -> b) -> Option<a> -> Option<b>", Option, "Applies a function to the value in `Some`; `None` stays `None`.";
     Unwrap => "unwrap" : "Option<a> -> a", Option, "The value in `Some`; an error for `None`. For scripts that know the value is there.";
@@ -254,6 +260,9 @@ pub fn reference() -> String {
         out.push_str(&format!("-- {}\n", module.title()));
         if module == Module::Bool {
             out.push_str("type Bool = False | True\n    Booleans are data: `match` on `True` and `False`, or use `if`.\n");
+        }
+        if module == Module::Tuple {
+            out.push_str("type (a, b)\n    Tuples group 2 to 7 values of any types: `(1, \"one\")` has type `(Int, String)`. Take one apart with a pattern: `\\(x, y). x`, `let (x, y) = p in x` or `match p | (x, y) -> x`.\n");
         }
         if module == Module::Option {
             out.push_str("type Option<a> = None | Some a\n    A value that may be missing, such as the `head` of a list.\n");
@@ -363,6 +372,7 @@ mod tests {
         assert_eq!(Builtin::ReadFile.arity(), 1);
         assert_eq!(Builtin::Head.arity(), 1);
         assert_eq!(Builtin::MapResult.arity(), 2);
+        assert_eq!(Builtin::Fst.arity(), 1);
     }
 
     #[test]

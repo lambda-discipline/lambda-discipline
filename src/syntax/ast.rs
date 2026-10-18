@@ -9,6 +9,10 @@ use std::rc::Rc;
 use crate::source::Span;
 use crate::syntax::number::format_float;
 
+/// The most components a tuple may have. Larger groups of values read
+/// better as a data type with a constructor.
+pub const MAX_TUPLE_ARITY: usize = 7;
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Ident {
     pub name: Rc<str>,
@@ -73,9 +77,10 @@ pub enum ExprKind {
     /// `()`
     Unit,
     Var(Ident),
-    /// `\x: T. body`
+    /// `\x: T. body`, or `\(x, y). body` with a parenthesized pattern that
+    /// must match every argument.
     Lambda {
-        param: Ident,
+        param: Pattern,
         ann: Option<TypeExpr>,
         body: Box<Expr>,
     },
@@ -86,6 +91,8 @@ pub enum ExprKind {
     },
     /// `[a, b, ...]`
     List(Vec<Expr>),
+    /// `(a, b, ...)` with 2 to [`MAX_TUPLE_ARITY`] components.
+    Tuple(Vec<Expr>),
     /// `let x: T = value in body`
     Let {
         name: Ident,
@@ -93,10 +100,19 @@ pub enum ExprKind {
         value: Box<Expr>,
         body: Box<Expr>,
     },
+    /// `let (x, y) = value in body`: matches `value` against a parenthesized
+    /// pattern that must match every value. Unlike a plain `let`, it is not
+    /// recursive and its variables are not generic.
+    LetPattern {
+        pattern: Pattern,
+        value: Box<Expr>,
+        body: Box<Expr>,
+    },
     /// `let x: T <- action in body`: performs `action` and binds its result
-    /// to `x` in `body`, which is an action too.
+    /// to `x` in `body`, which is an action too. The binder may also be a
+    /// parenthesized pattern, without an annotation.
     Bind {
-        name: Ident,
+        pattern: Pattern,
         ann: Option<TypeExpr>,
         action: Box<Expr>,
         body: Box<Expr>,
@@ -139,6 +155,8 @@ pub enum PatternKind {
     String(Rc<str>),
     /// `()`
     Unit,
+    /// `(x, y, ...)`
+    Tuple(Vec<Pattern>),
 }
 
 /// The annotation of a definition or `let`: a type with an optional
@@ -190,6 +208,8 @@ pub enum TypeExprKind {
     Fun(Box<TypeExpr>, Box<TypeExpr>),
     /// `()`
     Unit,
+    /// `(a, b, ...)`
+    Tuple(Vec<TypeExpr>),
 }
 
 impl fmt::Display for TypeExpr {
@@ -212,6 +232,7 @@ impl fmt::Display for TypeExpr {
                 _ => write!(f, "{from} -> {to}"),
             },
             TypeExprKind::Unit => f.write_str("()"),
+            TypeExprKind::Tuple(items) => write_tuple(f, items),
         }
     }
 }
@@ -226,8 +247,8 @@ impl fmt::Display for Expr {
             ExprKind::Unit => f.write_str("()"),
             ExprKind::Var(id) => f.write_str(&id.name),
             ExprKind::Lambda { param, ann, body } => match ann {
-                Some(t) => write!(f, "(\\{}: {}. {})", param.name, t, body),
-                None => write!(f, "(\\{}. {})", param.name, body),
+                Some(t) => write!(f, "(\\{param}: {t}. {body})"),
+                None => write!(f, "(\\{param}. {body})"),
             },
             ExprKind::App { func, args } => {
                 write!(f, "({func}")?;
@@ -246,6 +267,7 @@ impl fmt::Display for Expr {
                 }
                 f.write_str("]")
             }
+            ExprKind::Tuple(items) => write_tuple(f, items),
             ExprKind::Let {
                 name,
                 ann,
@@ -255,14 +277,19 @@ impl fmt::Display for Expr {
                 Some(t) => write!(f, "(let {}: {} = {} in {})", name.name, t, value, body),
                 None => write!(f, "(let {} = {} in {})", name.name, value, body),
             },
+            ExprKind::LetPattern {
+                pattern,
+                value,
+                body,
+            } => write!(f, "(let {pattern} = {value} in {body})"),
             ExprKind::Bind {
-                name,
+                pattern,
                 ann,
                 action,
                 body,
             } => match ann {
-                Some(t) => write!(f, "(let {}: {} <- {} in {})", name.name, t, action, body),
-                None => write!(f, "(let {} <- {} in {})", name.name, action, body),
+                Some(t) => write!(f, "(let {pattern}: {t} <- {action} in {body})"),
+                None => write!(f, "(let {pattern} <- {action} in {body})"),
             },
             ExprKind::Match { scrutinee, arms } => {
                 write!(f, "(match {scrutinee}")?;
@@ -303,8 +330,21 @@ impl Pattern {
             PatternKind::Float(n) => f.write_str(&format_float(*n)),
             PatternKind::String(s) => write!(f, "{s:?}"),
             PatternKind::Unit => f.write_str("()"),
+            PatternKind::Tuple(items) => write_tuple(f, items),
         }
     }
+}
+
+/// Writes `(a, b, ...)`.
+fn write_tuple(f: &mut fmt::Formatter<'_>, items: &[impl fmt::Display]) -> fmt::Result {
+    f.write_str("(")?;
+    for (i, item) in items.iter().enumerate() {
+        if i > 0 {
+            f.write_str(", ")?;
+        }
+        write!(f, "{item}")?;
+    }
+    f.write_str(")")
 }
 
 impl fmt::Display for Pattern {

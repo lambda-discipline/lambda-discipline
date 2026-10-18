@@ -9,18 +9,28 @@
 //!         | IDENT [":" type] "=" expr
 //!         | expr ;
 //! ctor    = UPPER btype* ;                (* fields end at a line's first column *)
-//! expr    = "\" IDENT [":" type] "." expr
+//! expr    = "\" (IDENT | ppat) [":" type] "." expr
 //!         | "let" IDENT [":" type] ("=" | "<-") expr "in" expr
+//!         | "let" ppat ("=" | "<-") expr "in" expr
 //!         | "match" expr ("|" pattern "->" expr)+
 //!         | INT | FLOAT | STRING | IDENT
 //!         | "(" ")"                       (* unit *)
 //!         | "(" expr expr* ")"            (* grouping or application *)
+//!         | "(" group ("," group)+ ")"    (* tuple *)
 //!         | "[" [expr ("," expr)* [","]] "]" ;
+//! group   = expr expr* ;                  (* one expression or an application *)
 //! type    = btype ["->" type] ;
-//! btype   = UPPER ["<" type ("," type)* ">"] | LOWER | "(" ")" | "(" type ")" ;
+//! btype   = UPPER ["<" type ("," type)* ">"] | LOWER
+//!         | "(" ")" | "(" type ")" | "(" type ("," type)+ ")" ;
 //! pattern = UPPER apat* | apat ;
-//! apat    = "_" | LOWER | UPPER | INT | FLOAT | STRING | "(" ")" | "(" pattern ")" ;
+//! apat    = "_" | LOWER | UPPER | INT | FLOAT | STRING | ppat ;
+//! ppat    = "(" ")" | "(" pattern ")" | "(" pattern ("," pattern)+ ")" ;
 //! ```
+//!
+//! A comma inside parentheses makes a tuple, of at most
+//! [`MAX_TUPLE_ARITY`] components, so `(f x, y)` pairs `(f x)` with `y`.
+//! A lambda or `let` can bind a parenthesized pattern such as `(x, y)`,
+//! which the type checker requires to match every value.
 //!
 //! A `match` arm's body extends as far as it can, like a `let` body, so a
 //! `match` nested in the last arm of another takes the arms that follow it
@@ -40,8 +50,8 @@ use crate::diagnostics::Diagnostic;
 use crate::source::{FileId, Span};
 
 use super::ast::{
-    Arm, Constraint, CtorDecl, Def, Expr, ExprKind, Ident, Item, Module, Pattern, PatternKind,
-    TypeDecl, TypeExpr, TypeExprKind, TypeScheme,
+    Arm, Constraint, CtorDecl, Def, Expr, ExprKind, Ident, Item, MAX_TUPLE_ARITY, Module, Pattern,
+    PatternKind, TypeDecl, TypeExpr, TypeExprKind, TypeScheme,
 };
 use super::token::{Token, TokenKind, lex, unescape};
 
@@ -328,7 +338,7 @@ impl Parser<'_> {
 
     fn lambda(&mut self) -> PResult<Expr> {
         let start = self.bump().span;
-        let param = self.ident()?;
+        let param = self.binder()?;
         let ann = match self.eat(TokenKind::Colon) {
             Some(_) => Some(self.ty()?),
             None => None,
@@ -345,29 +355,29 @@ impl Parser<'_> {
         })
     }
 
+    /// What a lambda binds: a name, or a parenthesized pattern.
+    fn binder(&mut self) -> PResult<Pattern> {
+        if self.peek_kind() == TokenKind::LParen {
+            return self.nested("pattern", Self::atomic_pattern);
+        }
+        let name = self.ident()?;
+        Ok(Pattern {
+            span: name.span,
+            kind: PatternKind::Var(name),
+        })
+    }
+
     fn let_expr(&mut self) -> PResult<Expr> {
         let start = self.bump().span;
+        if self.peek_kind() == TokenKind::LParen {
+            return self.let_pattern(start);
+        }
         let name = self.ident()?;
         let ann = match self.eat(TokenKind::Colon) {
             Some(_) => Some(self.scheme()?),
             None => None,
         };
-        let binds = match self.eat(TokenKind::LeftArrow) {
-            Some(_) => true,
-            None if self.peek_kind() == TokenKind::Equals => {
-                self.bump();
-                false
-            }
-            None => {
-                let found = self.peek();
-                return Err(self.error(
-                    Diagnostic::error(format!("expected `=` or `<-`, found {}", found.kind))
-                        .at(found.span)
-                        .with_label("expected `=` or `<-`")
-                        .with_help("`let x = value in ...` names a value; `let x <- action in ...` performs an action and names its result"),
-                ));
-            }
-        };
+        let binds = self.let_arrow()?;
         let value = Box::new(self.expr()?);
         self.expect(TokenKind::In)?;
         let body = Box::new(self.expr()?);
@@ -382,7 +392,10 @@ impl Parser<'_> {
                 ));
             }
             ExprKind::Bind {
-                name,
+                pattern: Pattern {
+                    span: name.span,
+                    kind: PatternKind::Var(name),
+                },
                 ann: ann.map(|ann| ann.ty),
                 action: value,
                 body,
@@ -396,6 +409,72 @@ impl Parser<'_> {
             }
         };
         Ok(Expr { kind, span })
+    }
+
+    /// `let (x, y) = value in body` or `let (x, y) <- action in body`.
+    fn let_pattern(&mut self, start: Span) -> PResult<Expr> {
+        let pattern = self.nested("pattern", Self::atomic_pattern)?;
+        if let Some(colon) = self.eat(TokenKind::Colon) {
+            return Err(self.error(
+                Diagnostic::error("a `let` with a pattern cannot have a type annotation")
+                    .at(colon.span)
+                    .with_label("not allowed here")
+                    .with_help("annotate the definition the value comes from, or bind a name and match on it"),
+            ));
+        }
+        let binds = self.let_arrow()?;
+        let value = Box::new(self.expr()?);
+        self.expect(TokenKind::In)?;
+        let body = Box::new(self.expr()?);
+        let span = start.to(body.span);
+        let kind = if binds {
+            ExprKind::Bind {
+                pattern,
+                ann: None,
+                action: value,
+                body,
+            }
+        } else {
+            ExprKind::LetPattern {
+                pattern,
+                value,
+                body,
+            }
+        };
+        Ok(Expr { kind, span })
+    }
+
+    /// The `=` of a `let` (false) or its `<-` (true).
+    fn let_arrow(&mut self) -> PResult<bool> {
+        if self.eat(TokenKind::LeftArrow).is_some() {
+            return Ok(true);
+        }
+        if self.eat(TokenKind::Equals).is_some() {
+            return Ok(false);
+        }
+        let found = self.peek();
+        Err(self.error(
+            Diagnostic::error(format!("expected `=` or `<-`, found {}", found.kind))
+                .at(found.span)
+                .with_label("expected `=` or `<-`")
+                .with_help("`let x = value in ...` names a value; `let x <- action in ...` performs an action and names its result"),
+        ))
+    }
+
+    /// Fails if a tuple spanning `span` has more than [`MAX_TUPLE_ARITY`]
+    /// components.
+    fn check_tuple_arity(&mut self, arity: usize, span: Span) -> PResult<()> {
+        if arity <= MAX_TUPLE_ARITY {
+            return Ok(());
+        }
+        Err(self.error(
+            Diagnostic::error(format!(
+                "a tuple can have at most {MAX_TUPLE_ARITY} components, but this one has {arity}"
+            ))
+            .at(span)
+            .with_label("too many components")
+            .with_help("declare a data type with a constructor for the values: `type Name = Name Field ...`"),
+        ))
     }
 
     /// `type Name<a, b> = Con field ... | ...`
@@ -580,10 +659,23 @@ impl Parser<'_> {
                     });
                 }
                 let inner = self.pattern()?;
+                if self.peek_kind() != TokenKind::Comma {
+                    let close = self.expect_closing(TokenKind::RParen, open)?;
+                    return Ok(Pattern {
+                        span: open.to(close.span),
+                        ..inner
+                    });
+                }
+                let mut items = vec![inner];
+                while self.eat(TokenKind::Comma).is_some() {
+                    items.push(self.pattern()?);
+                }
                 let close = self.expect_closing(TokenKind::RParen, open)?;
+                let span = open.to(close.span);
+                self.check_tuple_arity(items.len(), span)?;
                 Ok(Pattern {
-                    span: open.to(close.span),
-                    ..inner
+                    kind: PatternKind::Tuple(items),
+                    span,
                 })
             }
             _ => Err(self.error(
@@ -602,10 +694,9 @@ impl Parser<'_> {
                 span: open.to(close.span),
             });
         }
-        let func = self.expr()?;
-        let mut args = Vec::new();
-        while !matches!(self.peek_kind(), TokenKind::RParen | TokenKind::Eof) {
-            args.push(self.expr()?);
+        let (func, args) = self.group()?;
+        if self.peek_kind() == TokenKind::Comma {
+            return self.tuple(open, func, args);
         }
         let close = self.expect_closing(TokenKind::RParen, open)?;
         let span = open.to(close.span);
@@ -618,6 +709,55 @@ impl Parser<'_> {
                 func: Box::new(func),
                 args,
             },
+            span,
+        })
+    }
+
+    /// The expressions up to a `)` or `,`: a function and its arguments.
+    fn group(&mut self) -> PResult<(Expr, Vec<Expr>)> {
+        let func = self.expr()?;
+        let mut args = Vec::new();
+        while !matches!(
+            self.peek_kind(),
+            TokenKind::RParen | TokenKind::Comma | TokenKind::Eof
+        ) {
+            args.push(self.expr()?);
+        }
+        Ok((func, args))
+    }
+
+    /// The rest of `(a, b, ...)` after its first component, an application
+    /// if `args` is not empty.
+    fn tuple(&mut self, open: Span, func: Expr, args: Vec<Expr>) -> PResult<Expr> {
+        let component = |func: Expr, args: Vec<Expr>| match args.last() {
+            None => func,
+            Some(last) => Expr {
+                span: func.span.to(last.span),
+                kind: ExprKind::App {
+                    func: Box::new(func),
+                    args,
+                },
+            },
+        };
+        let mut items = vec![component(func, args)];
+        while let Some(comma) = self.eat(TokenKind::Comma) {
+            if self.peek_kind() == TokenKind::RParen {
+                return Err(self.error(
+                    Diagnostic::error("expected an expression after `,`, found `)`")
+                        .at(self.peek().span)
+                        .with_label("expected an expression")
+                        .with_secondary(comma.span, "this comma makes a tuple")
+                        .with_help("a tuple has at least two components; `(x)` is just `x`"),
+                ));
+            }
+            let (func, args) = self.group()?;
+            items.push(component(func, args));
+        }
+        let close = self.expect_closing(TokenKind::RParen, open)?;
+        let span = open.to(close.span);
+        self.check_tuple_arity(items.len(), span)?;
+        Ok(Expr {
+            kind: ExprKind::Tuple(items),
             span,
         })
     }
@@ -744,10 +884,20 @@ impl Parser<'_> {
                 });
             }
             let inner = self.ty()?;
+            let mut items = vec![inner];
+            while self.eat(TokenKind::Comma).is_some() {
+                items.push(self.ty()?);
+            }
             let close = self.expect_closing(TokenKind::RParen, open.span)?;
+            let span = open.span.to(close.span);
+            if items.len() == 1 {
+                let inner = items.pop().expect("one type");
+                return Ok(TypeExpr { span, ..inner });
+            }
+            self.check_tuple_arity(items.len(), span)?;
             return Ok(TypeExpr {
-                span: open.span.to(close.span),
-                ..inner
+                kind: TypeExprKind::Tuple(items),
+                span,
             });
         }
         if self.peek_kind() != TokenKind::Ident {
@@ -877,6 +1027,65 @@ mod tests {
         assert_eq!(roundtrip("()"), "()\n");
         assert_eq!(roundtrip("[]"), "[]\n");
         assert_eq!(roundtrip("[1, (f 2), [3],]"), "[1, (f 2), [3]]\n");
+    }
+
+    #[test]
+    fn tuples_in_expressions_types_and_patterns() {
+        assert_eq!(
+            roundtrip("p : (Int, List<a>) = (1, [], (f x, \"s\"))"),
+            "p : (Int, List<a>) = (1, [], ((f x), \"s\"))\n"
+        );
+        assert_eq!(
+            roundtrip(r"swap : (a, b) -> (b, a) = \(x, y). (y, x)"),
+            "swap : (a, b) -> (b, a) = (\\(x, y). (y, x))\n"
+        );
+        assert_eq!(
+            roundtrip(r"f = \(x, _): (Int, b). match x | (Some (a, 1), ()) -> a"),
+            "f = (\\(x, _): (Int, b). (match x | (Some (a, 1), ()) -> a))\n"
+        );
+        // A parenthesized type or pattern is not a tuple.
+        assert_eq!(
+            roundtrip(r"f : (a) -> a = \(x). x"),
+            "f : a -> a = (\\x. x)\n"
+        );
+        assert_eq!(
+            roundtrip("type P = P (Int, Int) Int"),
+            "type P = P (Int, Int) Int\n"
+        );
+    }
+
+    #[test]
+    fn let_with_patterns() {
+        assert_eq!(
+            roundtrip("x = let (a, b) = p in let (c, d) <- (pure p) in (f a b c d)"),
+            "x = (let (a, b) = p in (let (c, d) <- (pure p) in (f a b c d)))\n"
+        );
+        let (_, diagnostics) = parse("x = let (a, b): (Int, Int) = p in a");
+        assert_eq!(
+            diagnostics[0].message,
+            "a `let` with a pattern cannot have a type annotation"
+        );
+    }
+
+    #[test]
+    fn malformed_tuples() {
+        let (_, diagnostics) = parse("x = (1,)");
+        assert_eq!(
+            diagnostics[0].message,
+            "expected an expression after `,`, found `)`"
+        );
+        for text in [
+            "x = (1, 2, 3, 4, 5, 6, 7, 8)",
+            "x : (a, a, a, a, a, a, a, a) = y",
+            "f = \\(a, b, c, d, e, f, g, h). a",
+        ] {
+            let (_, diagnostics) = parse(text);
+            assert_eq!(
+                diagnostics[0].message, "a tuple can have at most 7 components, but this one has 8",
+                "{text}"
+            );
+        }
+        parse_ok("x = (1, 2, 3, 4, 5, 6, 7)");
     }
 
     #[test]

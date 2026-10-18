@@ -31,7 +31,8 @@ use std::rc::Rc;
 use crate::builtins::Builtin;
 use crate::diagnostics::Diagnostic;
 use crate::hir::{
-    self, Body, ExprKind, GlobalDef, GlobalId, LocalId, PatternKind, TyConId, TypeDef, Unit,
+    self, Body, ExprKind, GlobalDef, GlobalId, LocalId, MatchSource, PatternKind, TyConId, TypeDef,
+    Unit,
 };
 use crate::source::{SourceMap, Span};
 use crate::syntax::ast::{Constraint, TypeExpr, TypeExprKind, TypeScheme};
@@ -721,6 +722,11 @@ impl<'a> Checker<'a> {
     ) -> Option<Type> {
         Some(match &ann.kind {
             TypeExprKind::Unit => Type::unit(),
+            TypeExprKind::Tuple(items) => {
+                let converted: Vec<Option<Type>> =
+                    items.iter().map(|a| self.convert(a, var, ok)).collect();
+                Type::tuple(converted.into_iter().collect::<Option<_>>()?)
+            }
             TypeExprKind::Var(name) => var(&name.name, self)?,
             TypeExprKind::Fun(from, to) => {
                 let from = self.convert(from, var, ok);
@@ -1094,7 +1100,11 @@ impl<'a> Checker<'a> {
                 let scheme = self.env.constructor(*con).scheme.clone();
                 self.instantiate(&scheme)
             }
-            ExprKind::Match { scrutinee, arms } => self.infer_match(scrutinee, arms, ctx),
+            ExprKind::Match {
+                scrutinee,
+                arms,
+                source,
+            } => self.infer_match(scrutinee, arms, *source, ctx),
             ExprKind::App { func, args } => self.infer_app(func, args, ctx),
             ExprKind::List(items) => {
                 let element = self.fresh();
@@ -1299,7 +1309,13 @@ impl<'a> Checker<'a> {
 
     // ---- match ----------------------------------------------------------------
 
-    fn infer_match(&mut self, scrutinee: &hir::Expr, arms: &[hir::Arm], ctx: &mut BodyCtx) -> Type {
+    fn infer_match(
+        &mut self,
+        scrutinee: &hir::Expr,
+        arms: &[hir::Arm],
+        source: MatchSource,
+        ctx: &mut BodyCtx,
+    ) -> Type {
         let matched = self.infer(scrutinee, ctx);
         let result = self.fresh();
         for arm in arms {
@@ -1317,13 +1333,12 @@ impl<'a> Checker<'a> {
             let patterns: Vec<&hir::Pattern> = arms.iter().map(|arm| &arm.pattern).collect();
             if let Some(missing) = exhaustive::missing(&self.env, &patterns) {
                 let ty = self.zonk(&matched);
-                self.error(
-                    ctx,
-                    Diagnostic::error(format!(
+                let label = format!("`{missing}` is not covered");
+                // The scrutinee of a lambda's or `let`'s match is its pattern.
+                let diagnostic = match source {
+                    MatchSource::Match => Diagnostic::error(format!(
                         "this `match` does not cover every value of type `{ty}`"
                     ))
-                    .at(scrutinee.span)
-                    .with_label(format!("`{missing}` is not covered"))
                     .with_help(if missing == "_" {
                         "add an arm `| _ -> ...` to cover every other value".to_owned()
                     } else {
@@ -1331,7 +1346,17 @@ impl<'a> Checker<'a> {
                             "add an arm `| {missing} -> ...`, or `| _ -> ...` to cover every other value"
                         )
                     }),
-                );
+                    MatchSource::Lambda | MatchSource::Let => Diagnostic::error(format!(
+                        "this pattern does not cover every value of type `{ty}`"
+                    ))
+                    .with_note(if source == MatchSource::Lambda {
+                        "the pattern of a lambda's parameter must match every argument"
+                    } else {
+                        "the pattern of a `let` must match every value"
+                    })
+                    .with_help("bind a name instead and use `match` to handle each case"),
+                };
+                self.error(ctx, diagnostic.at(scrutinee.span).with_label(label));
             }
         }
         result
@@ -1509,7 +1534,7 @@ fn no_instance(
         .at(span)
         .with_label(label)
         .with_note(note.unwrap_or_else(|| format!(
-            "numbers, strings, `Unit`, lists and data types can be {verb}; functions and `IO` actions cannot"
+            "numbers, strings, `Unit`, lists, tuples and data types can be {verb}; functions and `IO` actions cannot"
         )));
     if let Some(origin) = origin.filter(|&origin| origin != span) {
         diagnostic = diagnostic.with_secondary(origin, format!("this needs `{class}<{whole}>`"));

@@ -51,6 +51,11 @@ All notable changes to this project are documented here. The format follows
 - Built-in `Option<a> = None | Some a` and `Result<e, a> = Ok a | Err e`
   types, with `withDefault`, `mapOption`, `mapResult` and `toOption`, and
   `unwrap` and `unwrapOk` for scripts that know the value is there (#22).
+- Tuples of 2 to 7 components: `(1, "one")` has type `(Int, String)`.
+  Patterns take them apart in `match`, in a lambda's parameter
+  (`\(x, y). (y, x)`) and in `let (x, y) = p in ...`, and such a pattern
+  must match every value. Tuples are compared, ordered and shown
+  structurally, and `fst` and `snd` take pairs apart (#6).
 
 ### Changed
 
@@ -61,7 +66,8 @@ All notable changes to this project are documented here. The format follows
   list unchanged for an index out of bounds, like `take` and `drop`.
   `maximum` and `minimum` in `examples/std.lbd` return an `Option` too
   (#22).
-
+- `examples/std.lbd` replaces its Church-encoded `pair`, `first` and
+  `second` with `swap`, `curry` and `uncurry` on tuples (#6).
 - `min` and `max` work on any type in `Ord`, not only numbers, so
   `maximum` and `minimum` in `examples/std.lbd` do too (#19).
 - `Bool` is now the data type `False | True`: write `True` and `False`

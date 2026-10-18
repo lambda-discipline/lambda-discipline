@@ -194,7 +194,9 @@ impl Lowerer<'_> {
                     span: expr.span,
                 },
             },
-            ExprKind::Match { scrutinee, arms } => {
+            ExprKind::Match {
+                scrutinee, arms, ..
+            } => {
                 return self.lower_match(scrutinee, arms, expr.span);
             }
             ExprKind::List(items) => Expr::List {

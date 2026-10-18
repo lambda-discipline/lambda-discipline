@@ -149,6 +149,16 @@ fn rebuild(con: ConId, arity: usize, mut witness: Vec<Pat>) -> Vec<Pat> {
 fn write_pattern(env: &TypeEnv, pattern: &Pat, nested: bool, out: &mut String) {
     match pattern {
         Pat::Wild | Pat::Lit(_) => out.push('_'),
+        Pat::Con(con, args) if con.tuple_arity().is_some() => {
+            out.push('(');
+            for (i, arg) in args.iter().enumerate() {
+                if i > 0 {
+                    out.push_str(", ");
+                }
+                write_pattern(env, arg, false, out);
+            }
+            out.push(')');
+        }
         Pat::Con(con, args) => {
             let parens = nested && !args.is_empty();
             if parens {
@@ -250,6 +260,21 @@ mod tests {
             ),
             Some("Pair False True".into())
         );
+    }
+
+    #[test]
+    fn tuples_have_one_constructor() {
+        assert_eq!(missing_in("f = \\p. match p | (x, _) -> x"), None);
+        assert_eq!(
+            missing_in("f = \\p. match p | (True, _) -> 0 | (_, None) -> 1"),
+            Some("(False, Some _)".into())
+        );
+        assert_eq!(
+            missing_in("f = \\o. match o | Some (_, 1, _) -> 0 | None -> 1"),
+            Some("Some (_, _, _)".into())
+        );
+        // The pattern of a lambda is checked like a `match`.
+        assert_eq!(missing_in("f = \\(Some x). x"), Some("None".into()));
     }
 
     #[test]

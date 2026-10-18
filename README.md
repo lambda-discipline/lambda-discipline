@@ -96,16 +96,20 @@ item  = "use" STRING                         include another file (path relative
       | LOWER [":" scheme] "=" expr          definition; the annotation is optional
       | expr                                 an action, performed in order when the program runs
 expr  = "\" LOWER [":" type] "." expr        lambda (also `λ`)
+      | "\" "(" pattern ")" [":" type] "." expr   lambda taking its argument apart, as in `\(x, y). x`
       | "let" LOWER [":" scheme] "=" expr "in" expr
       | "let" LOWER [":" type] "<-" expr "in" expr   perform an action and name its result
+      | "let" "(" pattern ")" ("=" | "<-") expr "in" expr   take the value apart
       | "match" expr ("|" pattern "->" expr)+
       | "(" expr expr+ ")"                   application; any expression can be called
       | "(" expr ")" | "(" ")"               grouping, unit
+      | "(" expr, expr, ... ")"              tuple; a component may be an application, `(f x, y)`
       | "[" expr, ... "]"                    list
       | INT | FLOAT | STRING | LOWER | UPPER UPPER is a constructor
 pattern = UPPER pattern* | "_" | LOWER | INT | FLOAT | STRING | "(" ")" | "(" pattern ")"
+      | "(" pattern, pattern, ... ")"
 type  = Int | Float | String | Bool | Unit | List<type> | IO<type> | Declared<type, ...>
-      | lowercase-variable | type -> type | (type)
+      | lowercase-variable | type -> type | (type) | (type, type, ...)
 scheme = [context "=>"] type                 see "Type classes"
 context = CLASS "<" LOWER ">" | "(" CLASS "<" LOWER ">", ... ")"
 ```
@@ -182,6 +186,35 @@ orZero : Option<Int> -> Int = \o. match o
   `type Result<e, a> = Ok a | Err e`.
 * In the REPL, declaring a type again makes a new type; values of the old one
   keep the old type.
+
+### Tuples
+
+A tuple groups a fixed number of values of any types, as in Haskell, OCaml
+and Rust. It is written with commas in parentheses, and so is its type.
+Patterns take tuples apart, also in a lambda's parameter and in `let`:
+
+```haskell
+p : (Int, String) = (1, "one")
+swap : (a, b) -> (b, a) = \(x, y). (y, x)
+
+(println p (swap p))                              -- (1, "one")("one", 1)
+(println (fst p) " " (snd p))                     -- 1 one
+(println (let (n, name) = p in (concat name (show n))))   -- one1
+(println (sort [(2, "b"), (1, "z"), (2, "a")]))   -- [(1, "z"), (2, "a"), (2, "b")]
+```
+
+* A tuple has 2 to 7 components; a larger group of values reads better as a
+  data type. `()` is the unit value and `(x)` is just `x`.
+* A tuple is a built-in data type with one constructor, so its components
+  are lazy, `match` checks tuple patterns for exhaustiveness like any other,
+  and tuples are compared, ordered (component by component) and shown
+  structurally.
+* The pattern of a lambda or `let` must match every value, so `\(x, y). x`
+  works but `\(Some x). x` is an error that names the missing `None`. A
+  `let` with a pattern is not recursive, its variables are not generic, and
+  it has no annotation.
+* `fst` and `snd` take a pair apart, and [`examples/std.lbd`](examples/std.lbd)
+  has `swap`, `curry` and `uncurry`.
 
 ### Missing values and errors
 
@@ -344,12 +377,13 @@ takes the data it works on last, so partial application reads well:
 | Booleans | `not and or if`, and the constructors `True` and `False` |
 | Strings | `concat show parseInt parseFloat stringLength chars split lines join trim` |
 | Lists | `length isEmpty head tail get cons push remove append map filter foldl foldr reverse sort range zipWith transpose sum take drop` |
+| Tuples | `fst snd` |
 | Options and results | `withDefault mapOption unwrap mapResult toOption unwrapOk`, and the constructors `None`, `Some`, `Ok` and `Err` |
 | Input/output | `pure bind then sequence print println readFile error` |
 | Source location | `__FILE__ __DIR__ __LINE__` (spelled as in C and Elixir, since their value depends on where they are written) |
 
 [`examples/std.lbd`](examples/std.lbd) is a small library written in the
-language itself (`compose`, `flip`, Church pairs, `count`, `all`, `any`, `forEach`, ...).
+language itself (`compose`, `flip`, `swap`, `uncurry`, `count`, `all`, `any`, `forEach`, ...).
 
 ## Architecture
 

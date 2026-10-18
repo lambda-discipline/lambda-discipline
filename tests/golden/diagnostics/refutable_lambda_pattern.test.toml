@@ -1,0 +1,11 @@
+file = "refutable_lambda_pattern.lbd"
+
+[expect]
+exit_code = 1
+stdout = ""
+stderr_contains = [
+    "Error: this pattern does not cover every value of type `(Option<a>, b)`",
+    "refutable_lambda_pattern.lbd:1:59",
+    "`(None, _)` is not covered",
+    "the pattern of a lambda's parameter must match every argument",
+]

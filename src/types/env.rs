@@ -40,6 +40,23 @@ const fn nullary(name: &'static str) -> BuiltinConstructor {
 
 const NUMERIC: &[Class] = &[Class::Eq, Class::Ord, Class::Num, Class::Show];
 
+/// The tuple type with the given parameters, and its constructor with one
+/// field per parameter. Both are named like GHC's, `(,)` for pairs, which
+/// no program can write: tuples are only written as `(a, b)`.
+macro_rules! tuple {
+    ($name:literal, [$($param:literal),*], [$($field:literal),*]) => {
+        BuiltinType {
+            name: $name,
+            params: &[$($param),*],
+            constructors: &[BuiltinConstructor {
+                name: $name,
+                fields: &[$($field),*],
+            }],
+            classes: &Class::STRUCTURAL,
+        }
+    };
+}
+
 /// The built-in types, indexed by [`TyConId`]. Their constructors take the
 /// first [`ConId`]s, in order.
 pub const BUILTIN_TYPES: &[BuiltinType] = &[
@@ -113,6 +130,21 @@ pub const BUILTIN_TYPES: &[BuiltinType] = &[
         ],
         classes: &Class::STRUCTURAL,
     },
+    // Tuples, by arity from 2 to `MAX_TUPLE_ARITY` (see `TyConId::tuple`).
+    tuple!("(,)", ["a", "b"], [0, 1]),
+    tuple!("(,,)", ["a", "b", "c"], [0, 1, 2]),
+    tuple!("(,,,)", ["a", "b", "c", "d"], [0, 1, 2, 3]),
+    tuple!("(,,,,)", ["a", "b", "c", "d", "e"], [0, 1, 2, 3, 4]),
+    tuple!(
+        "(,,,,,)",
+        ["a", "b", "c", "d", "e", "f"],
+        [0, 1, 2, 3, 4, 5]
+    ),
+    tuple!(
+        "(,,,,,,)",
+        ["a", "b", "c", "d", "e", "f", "g"],
+        [0, 1, 2, 3, 4, 5, 6]
+    ),
 ];
 
 /// The constructors of the built-in types, in [`ConId`] order.
@@ -223,14 +255,17 @@ impl TypeEnv {
         env
     }
 
-    /// Adds a type; its id must be the next one.
+    /// Adds a type; its id must be the next one. Tuple types have no name a
+    /// program can use.
     pub fn add_type(&mut self, info: TypeInfo) {
         assert_eq!(
             info.con.id.index(),
             self.types.len(),
             "type ids are consecutive"
         );
-        self.type_names.insert(info.con.name.clone(), info.con.id);
+        if info.con.id.tuple_arity().is_none() {
+            self.type_names.insert(info.con.name.clone(), info.con.id);
+        }
         self.types.push(info);
     }
 
@@ -241,7 +276,9 @@ impl TypeEnv {
             self.constructors.len(),
             "constructor ids are consecutive"
         );
-        self.constructor_names.insert(info.name.clone(), info.id);
+        if info.id.tuple_arity().is_none() {
+            self.constructor_names.insert(info.name.clone(), info.id);
+        }
         self.constructors.push(info);
     }
 
@@ -342,6 +379,7 @@ fn name_params(ty: &Type, names: &[Type]) -> Type {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::syntax::ast::MAX_TUPLE_ARITY;
 
     #[test]
     fn builtin_types_and_constructors() {
@@ -370,6 +408,7 @@ mod tests {
         assert_eq!(env.instance(TyConId::RESULT, Class::Ord), Some(&[0, 1][..]));
         assert_eq!(
             builtin_constructors()
+                .take(6)
                 .map(|(id, con)| (id, con.name))
                 .collect::<Vec<_>>(),
             [
@@ -393,6 +432,36 @@ mod tests {
         assert_eq!(
             env.constructor(ConId::ERR).scheme.to_string(),
             "a -> Result<a, b>"
+        );
+    }
+
+    #[test]
+    fn tuples_of_every_arity_are_built_in_without_names() {
+        let env = TypeEnv::new();
+        for arity in 2..=MAX_TUPLE_ARITY {
+            let ty = TyConId::tuple(arity);
+            assert_eq!(ty.tuple_arity(), Some(arity));
+            assert_eq!(env.ty(ty).arity(), arity);
+            assert_eq!(env.ty(ty).con.name.matches(',').count(), arity - 1);
+            assert_eq!(env.ty(ty).constructors, [ConId::tuple(arity)]);
+            assert_eq!(ConId::tuple(arity).tuple_arity(), Some(arity));
+            assert_eq!(env.constructor(ConId::tuple(arity)).arity, arity);
+            assert_eq!(
+                env.instance(ty, Class::Ord),
+                Some(&(0..arity).collect::<Vec<_>>()[..])
+            );
+        }
+        // Declared types and constructors come after the tuples.
+        assert_eq!(env.next_type_id(), BUILTIN_TYPES.len() as u32);
+        assert_eq!(TyConId(env.next_type_id()).tuple_arity(), None);
+        assert_eq!(ConId(env.next_constructor_id()).tuple_arity(), None);
+        assert_eq!(TyConId::RESULT.tuple_arity(), None);
+        assert_eq!(ConId::ERR.tuple_arity(), None);
+        assert!(env.lookup_type("(,)").is_none());
+        assert!(env.constructor_names().all(|name| !name.starts_with('(')));
+        assert_eq!(
+            env.constructor(ConId::tuple(2)).scheme.to_string(),
+            "a -> b -> (a, b)"
         );
     }
 }
