@@ -16,10 +16,11 @@ use crate::builtins::Builtin;
 use crate::hir::{self, ConId, ExprKind, LocalId, PatternKind};
 use crate::source::{SourceMap, Span};
 use crate::types::TypeEnv;
+use crate::types::env::builtin_constructors;
 
 use super::{
     Alt, AltPat, Body, Case, Constructor, Expr, GlobalBody, Lambda, Literal, Module,
-    bool_constructor,
+    builtin_constructor,
 };
 
 /// Lowers a resolved, type-checked unit. `sources` holds the files its spans
@@ -215,8 +216,8 @@ impl Lowerer<'_> {
     }
 
     fn constructor(&mut self, id: ConId) -> Rc<Constructor> {
-        if id == ConId::FALSE || id == ConId::TRUE {
-            return bool_constructor(id == ConId::TRUE);
+        if id.index() < builtin_constructors().count() {
+            return builtin_constructor(id);
         }
         let types = self.types;
         self.constructors
@@ -607,11 +608,9 @@ mod tests {
         );
     }
 
-    const OPTION: &str = "type Option<a> = None | Some a\n";
-
     #[test]
     fn constructors_are_saturated_or_wrapped_in_lambdas() {
-        let module = lower_text(&format!("{OPTION}a = (Some 1)\nb = Some\nc = None"));
+        let module = lower_text("a = (Some 1)\nb = Some\nc = None");
         let shown: Vec<String> = module
             .globals
             .iter()
@@ -626,9 +625,7 @@ mod tests {
     #[test]
     fn nested_patterns_become_a_tree_of_flat_cases() {
         assert_eq!(
-            global(&format!(
-                "{OPTION}f = \\o. match o | Some 0 -> 1 | Some n -> n | None -> 2"
-            )),
+            global("f = \\o. match o | Some 0 -> 1 | Some n -> n | None -> 2"),
             "(lambda/1 [] frame=2 (case $0 | Some $1 -> (case $1 | 0 -> 1 | _ -> $1) | None -> 2))"
         );
     }
@@ -636,9 +633,7 @@ mod tests {
     #[test]
     fn a_scrutinee_that_is_not_a_variable_gets_a_slot() {
         assert_eq!(
-            global(&format!(
-                "{OPTION}h = \\x. match (Some x) | Some y -> y | _ -> x"
-            )),
+            global("h = \\x. match (Some x) | Some y -> y | _ -> x"),
             "(lambda/1 [] frame=3 (let $1 = (Some $0) in (case $1 | Some $2 -> $2 | _ -> $0)))"
         );
     }
@@ -646,9 +641,7 @@ mod tests {
     #[test]
     fn case_slots_follow_captures() {
         assert_eq!(
-            global(&format!(
-                "{OPTION}k = \\o. \\y. (map \\z. (match o | Some v -> (add v z) | None -> y) [1])"
-            )),
+            global("k = \\o. \\y. (map \\z. (match o | Some v -> (add v z) | None -> y) [1])"),
             "(lambda/2 [] frame=2 (map (lambda/1 [$0 $1] frame=4 (case $0 | Some $3 -> (add $3 $2) | None -> $1)) [1]))"
         );
     }

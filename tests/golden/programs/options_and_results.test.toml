@@ -1,0 +1,12 @@
+file = "options_and_results.lbd"
+
+[expect]
+exit_code = 0
+stdout = """
+None (Some 3)
+number 42
+bad input: cannot parse "4x2" as an `Int`
+0 (Some 4)
+(Ok 2) None
+42
+"""

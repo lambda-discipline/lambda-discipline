@@ -34,6 +34,8 @@ impl TyConId {
     pub const UNIT: TyConId = TyConId(4);
     pub const LIST: TyConId = TyConId(5);
     pub const IO: TyConId = TyConId(6);
+    pub const OPTION: TyConId = TyConId(7);
+    pub const RESULT: TyConId = TyConId(8);
 
     pub fn index(self) -> usize {
         self.0 as usize
@@ -49,6 +51,10 @@ pub struct ConId(pub u32);
 impl ConId {
     pub const FALSE: ConId = ConId(0);
     pub const TRUE: ConId = ConId(1);
+    pub const NONE: ConId = ConId(2);
+    pub const SOME: ConId = ConId(3);
+    pub const OK: ConId = ConId(4);
+    pub const ERR: ConId = ConId(5);
 
     pub fn index(self) -> usize {
         self.0 as usize

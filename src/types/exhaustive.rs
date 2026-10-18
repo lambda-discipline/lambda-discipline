@@ -203,7 +203,6 @@ mod tests {
     }
 
     const SHAPES: &str = "type Shape = Circle Int | Rect Int Int | Dot\n";
-    const OPTION: &str = "type Option<a> = None | Some a\n";
 
     #[test]
     fn complete_matches() {
@@ -242,15 +241,13 @@ mod tests {
     #[test]
     fn missing_values_inside_constructors() {
         assert_eq!(
-            missing_in(&format!(
-                "{OPTION}f = \\o. match o | None -> 0 | Some None -> 1"
-            )),
+            missing_in("f = \\o. match o | None -> 0 | Some None -> 1"),
             Some("Some (Some _)".into())
         );
         assert_eq!(
-            missing_in(&format!(
-                "{OPTION}type Pair<a, b> = Pair a b\nf = \\p. match p | Pair True _ -> 0 | Pair _ False -> 1"
-            )),
+            missing_in(
+                "type Pair<a, b> = Pair a b\nf = \\p. match p | Pair True _ -> 0 | Pair _ False -> 1"
+            ),
             Some("Pair False True".into())
         );
     }
@@ -263,9 +260,7 @@ mod tests {
         );
         assert_eq!(missing_in("f = \\s. match s | \"a\" -> 1 | _ -> 2"), None);
         assert_eq!(
-            missing_in(&format!(
-                "{OPTION}f = \\o. match o | Some 1 -> 1 | None -> 0"
-            )),
+            missing_in("f = \\o. match o | Some 1 -> 1 | None -> 0"),
             Some("Some _".into())
         );
     }

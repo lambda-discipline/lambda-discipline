@@ -11,7 +11,7 @@
 mean : List<Int> -> Float = \xs. (fdiv (toFloat (sum xs)) (toFloat (length xs)))
 (println (mean [1, 2, 3, 4]))
 (println [(floor 2.7), (ceil 2.1), (round -2.5)])
-(println (add (parseInt "40") 2) " " (parseFloat "2"))
+(println (add (unwrapOk (parseInt "40")) 2) " " (unwrapOk (parseFloat "2")))
 
 -- `Num` functions work on both types.
 square : Num<a> => a -> a = \x. (mul x x)
@@ -19,4 +19,4 @@ square : Num<a> => a -> a = \x. (mul x x)
 
 -- Whole floats keep their `.0`, so `show` reads back as the same type.
 (println (show [1.0, 2.5, 1e21]) " " (show [1, 2]))
-(println (compare 1 2) " " (get (sub __LINE__ 21) ["a", "b", "c"]))
+(println (compare 1 2) " " (unwrap (get (sub __LINE__ 21) ["a", "b", "c"])))

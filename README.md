@@ -138,22 +138,20 @@ Full Hindley-Milner inference with let-polymorphism:
 fields. `match` takes a value apart by trying patterns from top to bottom.
 
 ```haskell
-type Option<a> = None | Some a
-
 type Tree<a> =
     | Leaf
     | Node Tree<a> a Tree<a>
-
-withDefault : a -> Option<a> -> a = \fallback. \o. match o
-    | Some x -> x
-    | None -> fallback
 
 depth : Tree<a> -> Int = \t. match t
     | Leaf -> 0
     | Node left _ right -> (add 1 (max (depth left) (depth right)))
 
-(println (map Some [1, 2]))              -- [(Some 1), (Some 2)]
-(println (withDefault 0 None))           -- 0
+orZero : Option<Int> -> Int = \o. match o
+    | Some x -> x
+    | None -> 0
+
+(println (depth (Node Leaf 1 (Node Leaf 2 Leaf))))   -- 2
+(println (map Some [1, 2]))                          -- [(Some 1), (Some 2)]
 ```
 
 * Type parameters are written in angle brackets, as in `List<a>`. Types may
@@ -178,10 +176,41 @@ depth : Tree<a> -> Int = \t. match t
   "Type classes"). Values are ordered by constructor, in declaration order,
   then by their fields. `show` and `print` write them as code:
   `(Some (Node Leaf 1 Leaf))`.
-* `Bool` is the built-in data type `type Bool = False | True`, so booleans
-  can be matched too.
+* `Bool`, `Option` and `Result` are built-in data types (see "Missing values
+  and errors"), so they can be matched like any other:
+  `type Bool = False | True`, `type Option<a> = None | Some a` and
+  `type Result<e, a> = Ok a | Err e`.
 * In the REPL, declaring a type again makes a new type; values of the old one
   keep the old type.
+
+### Missing values and errors
+
+Builtins that cannot always produce a value say so in their type instead of
+stopping the program, as in Elm, Rust and Gleam. `head`, `tail` and `get`
+return an `Option`, which is `None` for an empty list or an index out of
+bounds, and `parseInt` and `parseFloat` return a `Result` whose `Err`
+carries a message. The type checker then makes the caller handle the
+failure:
+
+```haskell
+report : String -> String = \line. match (parseInt line)
+    | Ok n -> (concat "number " (show n))
+    | Err e -> (concat "bad input: " e)
+
+(println (report "4x2"))                     -- bad input: cannot parse "4x2" as an `Int`
+(println (withDefault 0 (get 5 [1, 2])))     -- 0
+(println (mapOption (mul 2) (head [21])))    -- (Some 42)
+```
+
+* `withDefault`, `mapOption`, `mapResult` and `toOption` cover the common
+  cases without a `match`.
+* `unwrap` takes the value out of a `Some`, and `unwrapOk` out of an `Ok`;
+  otherwise they stop the program with an error (for `unwrapOk`, the one in
+  the `Err`). They are for scripts that know the value is there, such as
+  [`examples/aoc-24`](examples/aoc-24) parsing its puzzle input.
+* Where the original list is a sensible answer, there is no `Option`:
+  `take`, `drop` and `remove` return as much as they can, so `(drop 1 xs)`
+  is `[]` for an empty list and `(remove 5 [1, 2])` is `[1, 2]`.
 
 ### Numbers
 
@@ -226,7 +255,8 @@ rather than a runtime error:
 member : Eq<a> => a -> List<a> -> Bool =
     \x. \xs. (foldr \y. \found. (or (eq x y) found) False xs)
 
-largest = \xs. (foldl max (head xs) xs)   -- inferred: Ord<a> => List<a> -> a
+-- inferred: Ord<a> => List<a> -> Option<a>
+largest = \xs. (mapOption \first. (foldl max first xs) (head xs))
 
 (println (sort [(Some 3), None, (Some 1)]))   -- [None, (Some 1), (Some 3)]
 ```
@@ -257,7 +287,7 @@ A value that depends on itself (`x = (add x 1)`) is reported, not looped on.
 Lists are immutable persistent vectors: `push`, `remove`, `get` and friends
 return new lists in `O(log n)` and never change their argument. A list's
 length is fixed when it is built, but its elements are lazy like arguments:
-`(head [1, (error "boom")])` is `1`, `map` and `zipWith` compute an element
+`(head [1, (error "boom")])` is `(Some 1)`, `map` and `zipWith` compute an element
 only when it is used, and `foldr` stops as soon as its function ignores the
 rest of the list. Comparing, showing, printing or summing a list evaluates
 the elements it inspects. Lists are always finite.
@@ -314,6 +344,7 @@ takes the data it works on last, so partial application reads well:
 | Booleans | `not and or if`, and the constructors `True` and `False` |
 | Strings | `concat show parseInt parseFloat stringLength chars split lines join trim` |
 | Lists | `length isEmpty head tail get cons push remove append map filter foldl foldr reverse sort range zipWith transpose sum take drop` |
+| Options and results | `withDefault mapOption unwrap mapResult toOption unwrapOk`, and the constructors `None`, `Some`, `Ok` and `Err` |
 | Input/output | `pure bind then sequence print println readFile error` |
 | Source location | `__FILE__ __DIR__ __LINE__` (spelled as in C and Elixir, since their value depends on where they are written) |
 

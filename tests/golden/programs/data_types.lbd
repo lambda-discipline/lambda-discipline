@@ -1,5 +1,4 @@
 -- User-defined data types, constructors as functions and `match`.
-type Option<a> = None | Some a
 
 type Expr =
     | Num Int
@@ -27,10 +26,6 @@ simplify : Expr -> Expr = \e. match e
 
 find : (a -> Bool) -> List<a> -> Option<a> = \p. \xs.
     (foldr \x. \rest. (if (p x) (Some x) rest) None xs)
-
-withDefault : a -> Option<a> -> a = \fallback. \o. match o
-    | Some x -> x
-    | None -> fallback
 
 insert : Ord<a> => a -> Tree<a> -> Tree<a> = \x. \t. match t
     | Leaf -> (Node Leaf x Leaf)

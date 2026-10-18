@@ -1,0 +1,20 @@
+-- Functions that can fail return `Option` or `Result`, so the type checker
+-- makes the caller handle the failure.
+inner = \x. (head x)
+middle = \x. match (tail x) | Some rest -> (inner rest) | None -> None
+outer = \x. match (tail x) | Some rest -> (middle rest) | None -> None
+(println (outer [1, 2]) " " (outer [1, 2, 3]))
+
+-- `match` takes a `Result` apart.
+report : String -> String = \line. match (parseInt line)
+    | Ok n -> (concat "number " (show n))
+    | Err e -> (concat "bad input: " e)
+(println (report "42"))
+(println (report "4x2"))
+
+-- Combinators cover the common cases.
+(println (withDefault 0 (get 5 [1, 2])) " " (mapOption (mul 2) (get 1 [1, 2])))
+(println (mapResult (add 1) (parseInt "1")) " " (toOption (parseFloat "x")))
+
+-- `unwrap` and `unwrapOk` are for scripts that know the value is there.
+(println (add (unwrap (head [40])) (unwrapOk (parseInt "2"))))

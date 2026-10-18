@@ -3,13 +3,15 @@
 
 use "../../std.lbd"
 
-parseLine : String -> List<Int> = \line. (map parseInt (split "   " line))
+-- The input is known to be well formed, so a parse error may stop the
+-- program: `unwrapOk` takes the number out of `parseInt`'s `Result`.
+parseLine : String -> List<Int> = \line. (map \word. (unwrapOk (parseInt word)) (split "   " line))
 
 -- The puzzle is a pure function of the input text.
 similarity : String -> Int = \input.
     let columns = (transpose (map parseLine (lines input))) in
-    let left = (get 0 columns) in
-    let right = (get 1 columns) in
+    let left = (unwrap (get 0 columns)) in
+    let right = (unwrap (get 1 columns)) in
     (sum (map \x. (mul x (count (eq x) right)) left))
 
 -- Reading the input is an action; `<-` names its result. `__DIR__` is

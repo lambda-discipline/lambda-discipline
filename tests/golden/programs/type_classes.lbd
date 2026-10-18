@@ -7,7 +7,7 @@ type Tree<a> = Leaf | Node Tree<a> a Tree<a>
 member : Eq<a> => a -> List<a> -> Bool = \x. \xs. (foldr \y. \found. (or (eq x y) found) False xs)
 
 -- The context is inferred when there is no annotation.
-largest = \xs. (foldl max (head xs) xs)
+largest = \xs. (mapOption \first. (foldl max first xs) (head xs))
 
 describe : (Ord<a>, Show<a>) => a -> a -> String = \x. \y.
     (concat (show (min x y)) (concat " <= " (show (max x y))))

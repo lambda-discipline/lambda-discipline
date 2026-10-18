@@ -29,6 +29,7 @@ use crate::builtins::Builtin;
 use crate::hir::{ConId, GlobalId};
 use crate::source::Span;
 use crate::syntax::number::format_float;
+use crate::types::env::builtin_constructors;
 
 pub use lower::lower_unit;
 
@@ -84,13 +85,24 @@ pub struct Constructor {
 
 /// `True` or `False`, which builtins produce.
 pub fn bool_constructor(value: bool) -> Rc<Constructor> {
+    builtin_constructor(if value { ConId::TRUE } else { ConId::FALSE })
+}
+
+/// A constructor of a built-in type (`True`, `Some`, `Err`, ...), shared so
+/// builtins can produce its values cheaply.
+pub fn builtin_constructor(id: ConId) -> Rc<Constructor> {
     thread_local! {
-        static BOOLS: [Rc<Constructor>; 2] = [
-            Rc::new(Constructor { id: ConId::FALSE, name: Rc::from("False"), arity: 0 }),
-            Rc::new(Constructor { id: ConId::TRUE, name: Rc::from("True"), arity: 0 }),
-        ];
+        static CONSTRUCTORS: Vec<Rc<Constructor>> = builtin_constructors()
+            .map(|(id, con)| {
+                Rc::new(Constructor {
+                    id,
+                    name: Rc::from(con.name),
+                    arity: con.fields.len() as u32,
+                })
+            })
+            .collect();
     }
-    BOOLS.with(|bools| bools[usize::from(value)].clone())
+    CONSTRUCTORS.with(|constructors| constructors[id.index()].clone())
 }
 
 /// Evaluates `scrutinee` to its outermost constructor or literal and

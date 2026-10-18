@@ -211,7 +211,7 @@ fn repl_is_the_default_and_accepts_the_legacy_flag() {
 
 #[test]
 fn colors_are_disabled_when_not_a_terminal() {
-    let (_dir, path) = program("(head [])");
+    let (_dir, path) = program("(unwrap (head []))");
     let output = Command::cargo_bin("lbd")
         .unwrap()
         .arg("run")
@@ -219,7 +219,7 @@ fn colors_are_disabled_when_not_a_terminal() {
         .output()
         .unwrap();
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("`head` of an empty list"));
+    assert!(stderr.contains("`unwrap` of `None`"));
     assert!(!stderr.contains('\u{1b}'));
 }
 

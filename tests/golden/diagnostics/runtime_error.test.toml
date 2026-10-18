@@ -4,7 +4,7 @@ file = "runtime_error.lbd"
 exit_code = 1
 stdout = "1\n"
 stderr_contains = [
-    "Error: `head` of an empty list",
+    "Error: `unwrap` of `None`",
     "runtime_error.lbd:1:35",
-    "in this call to `head`",
+    "in this call to `unwrap`",
 ]
