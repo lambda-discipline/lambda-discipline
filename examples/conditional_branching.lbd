@@ -1,5 +1,5 @@
 -- Booleans are built in, and `if` only evaluates the branch it picks.
-describe : Number -> String = \n.
+describe : Int -> String = \n.
     (if (lt n 0) "negative"
         (if (eq n 0) "zero" "positive"))
 

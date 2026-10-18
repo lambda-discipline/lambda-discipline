@@ -3,9 +3,9 @@ identity : a -> a = \x. x
 passthrough : a -> a = \value: a. value
 selectFirst : a -> b -> a = \first. \second. first
 
-result1 : Number = (identity 42)
+result1 : Int = (identity 42)
 result2 : String = (passthrough "test")
-result3 : Number = (selectFirst 100 "ignored")
+result3 : Int = (selectFirst 100 "ignored")
 
 (println result1)
 (println result2)

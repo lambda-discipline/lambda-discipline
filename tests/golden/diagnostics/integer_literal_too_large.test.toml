@@ -1,0 +1,11 @@
+file = "integer_literal_too_large.lbd"
+
+[expect]
+exit_code = 1
+stdout = ""
+stderr_contains = [
+    "Error: integer literal is too large for an `Int`",
+    "integer_literal_too_large.lbd:1:10",
+    "does not fit in 64 bits",
+    "an `Int` is between -9223372036854775808 and 9223372036854775807; write a `Float` such as `1e20` for larger numbers",
+]

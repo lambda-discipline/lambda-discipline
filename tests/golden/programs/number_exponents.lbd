@@ -1,6 +1,6 @@
 -- Very large and very small numbers print with an exponent, like JavaScript.
 (println 1e300)
 (println 1e-7)
-(println -0)
+(println -0.0)
 (println 1e20 " " 0.000001)
 (println (show [1.5e21, -2e-9]))

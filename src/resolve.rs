@@ -358,7 +358,8 @@ impl<'a> BodyResolver<'a> {
     fn expr(&mut self, expr: ast::Expr) -> hir::Expr {
         let span = expr.span;
         let kind = match expr.kind {
-            ast::ExprKind::Number(n) => hir::ExprKind::Number(n),
+            ast::ExprKind::Int(n) => hir::ExprKind::Int(n),
+            ast::ExprKind::Float(n) => hir::ExprKind::Float(n),
             ast::ExprKind::String(s) => hir::ExprKind::String(s),
             ast::ExprKind::Unit => hir::ExprKind::Unit,
             ast::ExprKind::Var(ident) => self.lookup(&ident),
@@ -480,7 +481,8 @@ impl<'a> BodyResolver<'a> {
                     None => hir::PatternKind::Error,
                 }
             }
-            ast::PatternKind::Number(n) => hir::PatternKind::Number(n),
+            ast::PatternKind::Int(n) => hir::PatternKind::Int(n),
+            ast::PatternKind::Float(n) => hir::PatternKind::Float(n),
             ast::PatternKind::String(s) => hir::PatternKind::String(s),
             ast::PatternKind::Unit => hir::PatternKind::Unit,
         };
@@ -630,7 +632,7 @@ mod tests {
     #[test]
     fn types_and_constructors_get_consecutive_ids() {
         let resolved = resolve_text(
-            "type Shape = Circle Number | Rect Number Number
+            "type Shape = Circle Int | Rect Int Int
 type Unit2 = U
 c = (Circle 1)
 b = True",
@@ -641,8 +643,8 @@ b = True",
             resolved.diagnostics
         );
         let types = &resolved.unit.types;
-        assert_eq!(types[0].id, TyConId(6));
-        assert_eq!(types[1].id, TyConId(7));
+        assert_eq!(types[0].id, TyConId(7));
+        assert_eq!(types[1].id, TyConId(8));
         let ids: Vec<ConId> = types
             .iter()
             .flat_map(|t| t.constructors.iter().map(|c| c.id))
@@ -661,7 +663,7 @@ b = True",
     #[test]
     fn unknown_constructors_are_reported_with_suggestions() {
         let resolved = resolve_text(
-            "type Shape = Circle Number
+            "type Shape = Circle Int
 c = (Circel 1)
 d = Square",
         );
@@ -730,7 +732,7 @@ type List = L",
     #[test]
     fn pattern_variables_are_scoped_to_their_arm() {
         let resolved = resolve_text(
-            "type P = P Number Number
+            "type P = P Int Int
 f = \\p. match p | P x y -> (add x y) | q -> x",
         );
         assert_eq!(resolved.diagnostics.len(), 1);
@@ -739,7 +741,7 @@ f = \\p. match p | P x y -> (add x y) | q -> x",
             "cannot find `x` in this scope"
         );
         let resolved = resolve_text(
-            "type P = P Number Number
+            "type P = P Int Int
 f = \\p. match p | P x x -> x",
         );
         assert_eq!(

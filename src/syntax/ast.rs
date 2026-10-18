@@ -7,7 +7,7 @@ use std::fmt;
 use std::rc::Rc;
 
 use crate::source::Span;
-use crate::syntax::number::format_number;
+use crate::syntax::number::format_float;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Ident {
@@ -67,7 +67,8 @@ pub struct Expr {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ExprKind {
-    Number(f64),
+    Int(i64),
+    Float(f64),
     String(Rc<str>),
     /// `()`
     Unit,
@@ -133,7 +134,8 @@ pub enum PatternKind {
         name: Ident,
         args: Vec<Pattern>,
     },
-    Number(f64),
+    Int(i64),
+    Float(f64),
     String(Rc<str>),
     /// `()`
     Unit,
@@ -180,7 +182,7 @@ pub struct TypeExpr {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TypeExprKind {
-    /// `Number`, `List<a>`: a capitalized constructor with arguments.
+    /// `Int`, `List<a>`: a capitalized constructor with arguments.
     Con { name: Ident, args: Vec<TypeExpr> },
     /// `a`: a lowercase type variable.
     Var(Ident),
@@ -218,7 +220,8 @@ impl fmt::Display for TypeExpr {
 impl fmt::Display for Expr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.kind {
-            ExprKind::Number(n) => f.write_str(&format_number(*n)),
+            ExprKind::Int(n) => write!(f, "{n}"),
+            ExprKind::Float(n) => f.write_str(&format_float(*n)),
             ExprKind::String(s) => write!(f, "{s:?}"),
             ExprKind::Unit => f.write_str("()"),
             ExprKind::Var(id) => f.write_str(&id.name),
@@ -296,7 +299,8 @@ impl Pattern {
                 }
                 Ok(())
             }
-            PatternKind::Number(n) => f.write_str(&format_number(*n)),
+            PatternKind::Int(n) => write!(f, "{n}"),
+            PatternKind::Float(n) => f.write_str(&format_float(*n)),
             PatternKind::String(s) => write!(f, "{s:?}"),
             PatternKind::Unit => f.write_str("()"),
         }

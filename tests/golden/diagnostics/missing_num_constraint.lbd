@@ -1,0 +1,3 @@
+-- `mul` needs `Num<a>`, which the annotation does not give.
+square : a -> a = \x. (mul x x)
+(println (square 3))

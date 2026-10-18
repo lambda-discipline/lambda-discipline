@@ -1,8 +1,8 @@
 -- Arguments are only evaluated when needed.
-divide : Number -> Number -> Number = \a. \b.
+divide : Int -> Int -> Int = \a. \b.
     (if (eq b 0) (error "division by zero") (div a b))
 
-safeDivide : Number -> Number -> Number = \dividend. \divisor.
+safeDivide : Int -> Int -> Int = \dividend. \divisor.
     (if (eq divisor 0) 0 (divide dividend divisor))
 
 const : a -> b -> a = \x. \unused. x

@@ -6,6 +6,6 @@ stdout = ""
 stderr_contains = [
     "Error: a top-level expression must be an `IO` action",
     "top_level_value.lbd:2:1",
-    "this has type `Number`",
+    "this has type `Int`",
     "a program runs its top-level actions in source order",
 ]

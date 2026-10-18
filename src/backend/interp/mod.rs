@@ -409,7 +409,8 @@ impl Interpreter {
                     }
                     true
                 }
-                (AltPat::Lit(Literal::Number(n)), Value::Number(m)) => n == m,
+                (AltPat::Lit(Literal::Int(n)), Value::Int(m)) => n == m,
+                (AltPat::Lit(Literal::Float(n)), Value::Float(m)) => n == m,
                 (AltPat::Lit(Literal::String(s)), Value::String(t)) => s == t,
                 _ => false,
             };
@@ -912,7 +913,8 @@ fn call_of(func: Expr, first: u32, count: u32, span: Span) -> Rc<Expr> {
 
 fn literal_value(literal: &Literal) -> Value {
     match literal {
-        Literal::Number(n) => Value::Number(*n),
+        Literal::Int(n) => Value::Int(*n),
+        Literal::Float(n) => Value::Float(*n),
         Literal::String(s) => Value::String(s.clone()),
         Literal::Unit => Value::Unit,
     }

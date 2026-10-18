@@ -1,5 +1,5 @@
-isEven : Number -> Bool = \n. (if (eq n 0) True (isOdd (sub n 1)))
-isOdd : Number -> Bool = \n. (if (eq n 0) False (isEven (sub n 1)))
+isEven : Int -> Bool = \n. (if (eq n 0) True (isOdd (sub n 1)))
+isOdd : Int -> Bool = \n. (if (eq n 0) False (isEven (sub n 1)))
 
 (println (isEven 4))
 (println (isEven 5))

@@ -5,5 +5,5 @@ exit_code = 1
 stdout = ""
 stderr_contains = [
     "Error: this value depends on itself, so it can never be computed",
-    "self_reference.lbd:1:20",
+    "self_reference.lbd:1:17",
 ]

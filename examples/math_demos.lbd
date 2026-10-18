@@ -1,14 +1,14 @@
-fibonacci : Number -> Number = \n.
+fibonacci : Int -> Int = \n.
     (if (lt n 2) n (add (fibonacci (sub n 1)) (fibonacci (sub n 2))))
 
-factorial : Number -> Number = \n.
+factorial : Int -> Int = \n.
     (if (eq n 0) 1 (mul n (factorial (sub n 1))))
 
 -- Greatest common divisor, tail recursive.
-gcd : Number -> Number -> Number = \a. \b.
+gcd : Int -> Int -> Int = \a. \b.
     (if (eq b 0) a (gcd b (mod a b)))
 
-isPrime : Number -> Bool = \n.
+isPrime : Int -> Bool = \n.
     let divides = \d. (eq (mod n d) 0) in
     let check = \d. (if (gt (mul d d) n) True (if (divides d) False (check (add d 1)))) in
     (and (gt n 1) (check 2))

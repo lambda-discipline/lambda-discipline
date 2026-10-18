@@ -1,7 +1,7 @@
-nums : List<Number> = [1, 2, 3, 4]
+nums : List<Int> = [1, 2, 3, 4]
 
-total : Number = (foldr add 0 nums)
-product : Number = (foldr mul 1 nums)
+total : Int = (foldr add 0 nums)
+product : Int = (foldr mul 1 nums)
 
 (println total)
 (println product)

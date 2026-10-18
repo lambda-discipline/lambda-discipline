@@ -5,5 +5,5 @@ exit_code = 1
 stdout = ""
 stderr_contains = [
     "Error: mismatched types",
-    "the annotation says `a -> Number`, but the definition has type `List<b> -> Number`",
+    "the annotation says `a -> Int`, but the definition has type `List<b> -> Int`",
 ]

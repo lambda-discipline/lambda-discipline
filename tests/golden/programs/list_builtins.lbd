@@ -1,4 +1,4 @@
-numbers : List<Number> = [10, 20, 30, 40, 50]
+numbers : List<Int> = [10, 20, 30, 40, 50]
 
 (println (length numbers))
 (println (length (map \x. (mul x 2) numbers)))

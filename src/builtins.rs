@@ -86,18 +86,20 @@ macro_rules! builtins {
 }
 
 builtins! {
-    Add => "add" : "Number -> Number -> Number", Number, "Sum of two numbers.";
-    Sub => "sub" : "Number -> Number -> Number", Number, "`(sub a b)` is `a - b`.";
-    Mul => "mul" : "Number -> Number -> Number", Number, "Product of two numbers.";
-    Div => "div" : "Number -> Number -> Number", Number, "`(div a b)` is `a / b` (IEEE: dividing by zero gives infinity).";
-    Mod => "mod" : "Number -> Number -> Number", Number, "Remainder with the sign of the divisor, like Haskell's `mod`.";
-    Pow => "pow" : "Number -> Number -> Number", Number, "`(pow base exponent)`.";
-    Neg => "neg" : "Number -> Number", Number, "Negation.";
-    Abs => "abs" : "Number -> Number", Number, "Absolute value.";
-    Floor => "floor" : "Number -> Number", Number, "Largest integer not greater than the argument.";
-    Ceil => "ceil" : "Number -> Number", Number, "Smallest integer not less than the argument.";
-    Round => "round" : "Number -> Number", Number, "Nearest integer, halves away from zero.";
-    Sqrt => "sqrt" : "Number -> Number", Number, "Square root.";
+    Add => "add" : "Num<a> => a -> a -> a", Number, "Sum of two numbers. `Int` arithmetic that overflows 64 bits is an error.";
+    Sub => "sub" : "Num<a> => a -> a -> a", Number, "`(sub a b)` is `a - b`.";
+    Mul => "mul" : "Num<a> => a -> a -> a", Number, "Product of two numbers.";
+    Neg => "neg" : "Num<a> => a -> a", Number, "Negation.";
+    Abs => "abs" : "Num<a> => a -> a", Number, "Absolute value.";
+    Pow => "pow" : "Num<a> => a -> Int -> a", Number, "`(pow base exponent)`; the exponent must not be negative.";
+    Div => "div" : "Int -> Int -> Int", Number, "`(div a b)` is `a / b` rounded toward negative infinity, like Haskell's `div`; dividing by zero is an error.";
+    Mod => "mod" : "Int -> Int -> Int", Number, "Remainder of `div`, with the sign of the divisor, like Haskell's `mod`.";
+    Fdiv => "fdiv" : "Float -> Float -> Float", Number, "`(fdiv a b)` is `a / b` (IEEE: dividing by zero gives infinity).";
+    Sqrt => "sqrt" : "Float -> Float", Number, "Square root.";
+    ToFloat => "toFloat" : "Int -> Float", Number, "The `Float` nearest to an `Int`.";
+    Floor => "floor" : "Float -> Int", Number, "Largest integer not greater than the argument; an error for `NaN`, infinities and values beyond `Int`.";
+    Ceil => "ceil" : "Float -> Int", Number, "Smallest integer not less than the argument.";
+    Round => "round" : "Float -> Int", Number, "Nearest integer, halves away from zero.";
     Min => "min" : "Ord<a> => a -> a -> a", Number, "The smaller of two values; the first if they are equal.";
     Max => "max" : "Ord<a> => a -> a -> a", Number, "The larger of two values; the second if they are equal.";
 
@@ -107,7 +109,7 @@ builtins! {
     Le => "le" : "Ord<a> => a -> a -> Bool", Compare, "`(le a b)` is `a <= b`.";
     Gt => "gt" : "Ord<a> => a -> a -> Bool", Compare, "`(gt a b)` is `a > b`.";
     Ge => "ge" : "Ord<a> => a -> a -> Bool", Compare, "`(ge a b)` is `a >= b`.";
-    Compare => "compare" : "Ord<a> => a -> a -> Number", Compare, "`-1`, `0` or `1` as `a` is less than, equal to or greater than `b`.";
+    Compare => "compare" : "Ord<a> => a -> a -> Int", Compare, "`-1`, `0` or `1` as `a` is less than, equal to or greater than `b`.";
 
     Not => "not" : "Bool -> Bool", Bool, "Boolean negation.";
     And => "and" : "Bool -> Bool -> Bool", Bool, "Conjunction; the second argument is only evaluated when needed.";
@@ -116,22 +118,23 @@ builtins! {
 
     Concat => "concat" : "String -> String -> String", String, "Joins two strings.";
     Show => "show" : "Show<a> => a -> String", String, "Renders a value as source-like text (strings are quoted). Every type without functions or `IO` actions in it belongs to `Show`.";
-    ParseNumber => "parseNumber" : "String -> Number", String, "Parses a number, ignoring surrounding whitespace.";
-    StringLength => "stringLength" : "String -> Number", String, "Number of characters in a string.";
+    ParseInt => "parseInt" : "String -> Int", String, "Parses an integer such as `-42`, ignoring surrounding whitespace.";
+    ParseFloat => "parseFloat" : "String -> Float", String, "Parses a number such as `3.5`, `2` or `1e-3`, ignoring surrounding whitespace.";
+    StringLength => "stringLength" : "String -> Int", String, "Number of characters in a string.";
     Chars => "chars" : "String -> List<String>", String, "Splits a string into its characters.";
     Split => "split" : "String -> String -> List<String>", String, "`(split delimiter text)`; the delimiter must not be empty.";
     Lines => "lines" : "String -> List<String>", String, "Splits text into lines, accepting `\\n` and `\\r\\n`.";
     Join => "join" : "String -> List<String> -> String", String, "`(join separator parts)`.";
     Trim => "trim" : "String -> String", String, "Removes leading and trailing whitespace.";
 
-    Length => "length" : "List<a> -> Number", List, "Number of elements.";
+    Length => "length" : "List<a> -> Int", List, "Number of elements.";
     IsEmpty => "isEmpty" : "List<a> -> Bool", List, "Whether the list has no elements.";
     Head => "head" : "List<a> -> a", List, "First element; an error on an empty list.";
     Tail => "tail" : "List<a> -> List<a>", List, "Everything but the first element; an error on an empty list.";
-    Get => "get" : "Number -> List<a> -> a", List, "`(get index list)`, zero-based; an error when out of bounds.";
+    Get => "get" : "Int -> List<a> -> a", List, "`(get index list)`, zero-based; an error when out of bounds.";
     Cons => "cons" : "a -> List<a> -> List<a>", List, "Prepends an element.";
     Push => "push" : "a -> List<a> -> List<a>", List, "Appends an element at the end.";
-    Remove => "remove" : "Number -> List<a> -> List<a>", List, "`(remove index list)` without the element at `index`.";
+    Remove => "remove" : "Int -> List<a> -> List<a>", List, "`(remove index list)` without the element at `index`.";
     Append => "append" : "List<a> -> List<a> -> List<a>", List, "Concatenates two lists.";
     Map => "map" : "(a -> b) -> List<a> -> List<b>", List, "Applies a function to every element.";
     Filter => "filter" : "(a -> Bool) -> List<a> -> List<a>", List, "Keeps the elements satisfying a predicate.";
@@ -139,12 +142,12 @@ builtins! {
     Foldr => "foldr" : "(a -> b -> b) -> b -> List<a> -> b", List, "Right fold: `(foldr f z [x, y])` is `(f x (f y z))`, where each inner fold is evaluated only if `f` uses it.";
     Reverse => "reverse" : "List<a> -> List<a>", List, "Reverses a list.";
     Sort => "sort" : "Ord<a> => List<a> -> List<a>", List, "Stable ascending sort using the same ordering as `lt`.";
-    Range => "range" : "Number -> Number -> List<Number>", List, "`(range from to)` counts from `from` up to, not including, `to`.";
+    Range => "range" : "Int -> Int -> List<Int>", List, "`(range from to)` counts from `from` up to, not including, `to`.";
     ZipWith => "zipWith" : "(a -> b -> c) -> List<a> -> List<b> -> List<c>", List, "Combines two lists element-wise, stopping at the shorter.";
     Transpose => "transpose" : "List<List<a>> -> List<List<a>>", List, "Turns rows into columns, truncated to the shortest row.";
-    Sum => "sum" : "List<Number> -> Number", List, "Sum of all elements.";
-    Take => "take" : "Number -> List<a> -> List<a>", List, "The first `n` elements.";
-    Drop => "drop" : "Number -> List<a> -> List<a>", List, "All but the first `n` elements.";
+    Sum => "sum" : "List<Int> -> Int", List, "Sum of all elements. For floats, use `(foldl add 0.0 xs)`.";
+    Take => "take" : "Int -> List<a> -> List<a>", List, "The first `n` elements.";
+    Drop => "drop" : "Int -> List<a> -> List<a>", List, "All but the first `n` elements.";
 
     Pure => "pure" : "a -> IO<a>", Io, "An action that does nothing and produces its argument.";
     Bind => "bind" : "IO<a> -> (a -> IO<b>) -> IO<b>", Io, "`(bind action f)` runs `action`, then the action `f` returns for its result. `let x <- action in body` is `(bind action \\x. body)`.";
@@ -157,7 +160,7 @@ builtins! {
 
     File => "__FILE__" : "String", Source, "The path of the source file this name is written in; `<repl>` in the REPL.";
     Dir => "__DIR__" : "String", Source, "The directory of the source file this name is written in, which `use` paths are relative to; `.` in the REPL. `(readFile (concat __DIR__ \"/data.txt\"))` reads the `data.txt` next to the program from any working directory.";
-    Line => "__LINE__" : "Number", Source, "The line this name is written on, counting from 1.";
+    Line => "__LINE__" : "Int", Source, "The line this name is written on, counting from 1.";
 }
 
 impl Builtin {

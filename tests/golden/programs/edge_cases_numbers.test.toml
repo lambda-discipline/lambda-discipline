@@ -3,9 +3,9 @@ file = "edge_cases_numbers.lbd"
 [expect]
 exit_code = 0
 stdout = """
-0
-42
-1999999
+0.0
+42.0
+1999999.0
 0.3333333333333333
 Infinity
 1e+21 0.0025

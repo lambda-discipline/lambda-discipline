@@ -93,7 +93,7 @@ fn check_succeeds_silently_or_reports() {
         .arg(&path)
         .assert()
         .code(1)
-        .stderr(predicate::str::contains("expected `Bool`, found `Number`"));
+        .stderr(predicate::str::contains("expected `Bool`, found `Int`"));
 }
 
 #[test]
@@ -190,7 +190,7 @@ fn repl_reads_piped_input_without_prompts() {
         )
         .assert()
         .success()
-        .stdout("double : Number -> Number\n=> 42 : Number\ndouble : Number -> Number\nafter an error\n")
+        .stdout("double : Int -> Int\n=> 42 : Int\ndouble : Int -> Int\nafter an error\n")
         .stderr(predicate::str::contains("mismatched types"));
 }
 
@@ -200,7 +200,7 @@ fn repl_is_the_default_and_accepts_the_legacy_flag() {
         .write_stdin("(add 2 2)\n")
         .assert()
         .success()
-        .stdout("=> 4 : Number\n");
+        .stdout("=> 4 : Int\n");
     lbd()
         .arg("--repl")
         .write_stdin(":quit\n(add 2 2)\n")
@@ -251,7 +251,7 @@ fn read_file_is_relative_to_the_working_directory_and_dir_to_the_file() {
         dir.path().join("lib/lib.lbd"),
         "libData : String = (concat __DIR__ \"/data.txt\")\n\
          libFile : String = __FILE__\n\
-         libLine : Number = __LINE__\n",
+         libLine : Int = __LINE__\n",
     )
     .unwrap();
     fs::write(

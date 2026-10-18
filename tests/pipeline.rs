@@ -18,22 +18,22 @@ fn session_evaluates_and_reports_types() {
         )
         .unwrap();
     assert_eq!(evaluated.definitions[0].0.as_ref(), "square");
-    assert_eq!(evaluated.definitions[0].1.to_string(), "Number -> Number");
+    assert_eq!(evaluated.definitions[0].1.to_string(), "Num<a> => a -> a");
     assert_eq!(evaluated.values[1].0.show(), "[1, 4]");
-    assert_eq!(evaluated.values[1].1.to_string(), "List<Number>");
+    assert_eq!(evaluated.values[1].1.to_string(), "List<Int>");
     assert_eq!(out.contents(), "16\n");
 }
 
 #[test]
 fn diagnostics_render_against_session_sources() {
     let mut session = Session::new(Box::new(std::io::sink()));
-    let diagnostics = session.eval("demo.lbd", "(add True 1)").unwrap_err();
+    let diagnostics = session.eval("demo.lbd", "(sub 1 True)").unwrap_err();
     let mut rendered = Vec::new();
     session.render(&diagnostics, &mut rendered, false);
     let rendered = String::from_utf8(rendered).unwrap();
-    assert!(rendered.contains("demo.lbd:1:6"), "{rendered}");
+    assert!(rendered.contains("demo.lbd:1:8"), "{rendered}");
     assert!(
-        rendered.contains("expected `Number`, found `Bool`"),
+        rendered.contains("expected `Int`, found `Bool`"),
         "{rendered}"
     );
 }

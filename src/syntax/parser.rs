@@ -12,14 +12,14 @@
 //! expr    = "\" IDENT [":" type] "." expr
 //!         | "let" IDENT [":" type] ("=" | "<-") expr "in" expr
 //!         | "match" expr ("|" pattern "->" expr)+
-//!         | NUMBER | STRING | IDENT
+//!         | INT | FLOAT | STRING | IDENT
 //!         | "(" ")"                       (* unit *)
 //!         | "(" expr expr* ")"            (* grouping or application *)
 //!         | "[" [expr ("," expr)* [","]] "]" ;
 //! type    = btype ["->" type] ;
 //! btype   = UPPER ["<" type ("," type)* ">"] | LOWER | "(" ")" | "(" type ")" ;
 //! pattern = UPPER apat* | apat ;
-//! apat    = "_" | LOWER | UPPER | NUMBER | STRING | "(" ")" | "(" pattern ")" ;
+//! apat    = "_" | LOWER | UPPER | INT | FLOAT | STRING | "(" ")" | "(" pattern ")" ;
 //! ```
 //!
 //! A `match` arm's body extends as far as it can, like a `let` body, so a
@@ -262,6 +262,27 @@ impl Parser<'_> {
         })
     }
 
+    fn int_value(&mut self, token: Token) -> PResult<i64> {
+        self.slice(token).parse().map_err(|_| {
+            self.error(
+                Diagnostic::error("integer literal is too large for an `Int`")
+                    .at(token.span)
+                    .with_label("does not fit in 64 bits")
+                    .with_help(format!(
+                        "an `Int` is between {} and {}; write a `Float` such as `1e20` for larger numbers",
+                        i64::MIN,
+                        i64::MAX
+                    )),
+            )
+        })
+    }
+
+    fn float_value(&self, token: Token) -> f64 {
+        self.slice(token)
+            .parse()
+            .expect("the lexer only accepts valid floats")
+    }
+
     fn expr(&mut self) -> PResult<Expr> {
         self.nested("expression", Self::expr_inner)
     }
@@ -275,11 +296,13 @@ impl Parser<'_> {
             })
         };
         match token.kind {
-            TokenKind::Number => {
+            TokenKind::Int => {
                 self.bump();
-                let text = self.slice(token);
-                let value: f64 = text.parse().expect("the lexer only accepts valid numbers");
-                simple(ExprKind::Number(value))
+                simple(ExprKind::Int(self.int_value(token)?))
+            }
+            TokenKind::Float => {
+                self.bump();
+                simple(ExprKind::Float(self.float_value(token)))
             }
             TokenKind::String => {
                 self.bump();
@@ -497,7 +520,11 @@ impl Parser<'_> {
         let mut args = Vec::new();
         while matches!(
             self.peek_kind(),
-            TokenKind::Ident | TokenKind::Number | TokenKind::String | TokenKind::LParen
+            TokenKind::Ident
+                | TokenKind::Int
+                | TokenKind::Float
+                | TokenKind::String
+                | TokenKind::LParen
         ) {
             let arg = self.nested("pattern", Self::atomic_pattern)?;
             span = span.to(arg.span);
@@ -531,13 +558,13 @@ impl Parser<'_> {
                     })
                 }
             }
-            TokenKind::Number => {
+            TokenKind::Int => {
                 self.bump();
-                let value: f64 = self
-                    .slice(token)
-                    .parse()
-                    .expect("the lexer only accepts valid numbers");
-                simple(PatternKind::Number(value))
+                simple(PatternKind::Int(self.int_value(token)?))
+            }
+            TokenKind::Float => {
+                self.bump();
+                simple(PatternKind::Float(self.float_value(token)))
             }
             TokenKind::String => {
                 self.bump();
@@ -786,7 +813,7 @@ mod tests {
 
     #[test]
     fn definitions_with_and_without_annotations() {
-        assert_eq!(roundtrip("x : Number = 1"), "x : Number = 1\n");
+        assert_eq!(roundtrip("x : Int = 1"), "x : Int = 1\n");
         assert_eq!(roundtrip("x = 1"), "x = 1\n");
         assert_eq!(
             roundtrip(r"apply : (a -> b) -> a -> b = \f. \x. (f x)"),
@@ -833,8 +860,8 @@ mod tests {
     #[test]
     fn annotated_lambda_parameters() {
         assert_eq!(
-            roundtrip(r"f = \x: List<Number>. x"),
-            "f = (\\x: List<Number>. x)\n"
+            roundtrip(r"f = \x: List<Int>. x"),
+            "f = (\\x: List<Int>. x)\n"
         );
     }
 
@@ -855,21 +882,21 @@ mod tests {
     #[test]
     fn let_expressions() {
         assert_eq!(
-            roundtrip("x = let y: Number = 2 in (add y y)"),
-            "x = (let y: Number = 2 in (add y y))\n"
+            roundtrip("x = let y: Int = 2 in (add y y)"),
+            "x = (let y: Int = 2 in (add y y))\n"
         );
     }
 
     #[test]
     fn let_bindings_of_action_results() {
         assert_eq!(
-            roundtrip(r"x = let s <- (readFile f) in let n: Number <- (pure 1) in (println s n)"),
-            "x = (let s <- (readFile f) in (let n: Number <- (pure 1) in (println s n)))\n"
+            roundtrip(r"x = let s <- (readFile f) in let n: Int <- (pure 1) in (println s n)"),
+            "x = (let s <- (readFile f) in (let n: Int <- (pure 1) in (println s n)))\n"
         );
         let (_, diagnostics) = parse("x = let s 1 in s");
         assert_eq!(
             diagnostics[0].message,
-            "expected `=` or `<-`, found a number"
+            "expected `=` or `<-`, found an integer"
         );
     }
 
@@ -936,8 +963,25 @@ mod tests {
 
     #[test]
     fn lexer_errors_are_included() {
-        let (_, diagnostics) = parse("a : Number = 1;");
+        let (_, diagnostics) = parse("a : Int = 1;");
         assert_eq!(diagnostics[0].message, "unexpected character `;`");
+    }
+
+    #[test]
+    fn integer_and_float_literals() {
+        assert_eq!(
+            roundtrip("x = [1, -2, 1.0, 2.50, 1e3, -9223372036854775808]"),
+            "x = [1, -2, 1.0, 2.5, 1000.0, -9223372036854775808]\n"
+        );
+        assert_eq!(
+            roundtrip("f = \\n. match n | 0 -> 0.5 | _ -> 1e-7"),
+            "f = (\\n. (match n | 0 -> 0.5 | _ -> 1e-7))\n"
+        );
+        let (_, diagnostics) = parse("x = 9223372036854775808");
+        assert_eq!(
+            diagnostics[0].message,
+            "integer literal is too large for an `Int`"
+        );
     }
 
     /// Runs `f` on a thread with a stack like the one `lbd` gives the front end.
@@ -968,7 +1012,7 @@ mod tests {
                     "expression nested too deeply (the limit is 10000 levels)",
                 ),
                 (
-                    format!("f : {}Number = 1", "Number -> ".repeat(deep)),
+                    format!("f : {}Int = 1", "Int -> ".repeat(deep)),
                     "type nested too deeply (the limit is 10000 levels)",
                 ),
             ] {
@@ -994,8 +1038,8 @@ mod tests {
     #[test]
     fn type_declarations() {
         assert_eq!(
-            roundtrip("type Shape = Circle Number | Rect Number Number"),
-            "type Shape = Circle Number | Rect Number Number\n"
+            roundtrip("type Shape = Circle Int | Rect Int Int"),
+            "type Shape = Circle Int | Rect Int Int\n"
         );
         assert_eq!(
             roundtrip(
@@ -1007,11 +1051,11 @@ mod tests {
 
     #[test]
     fn type_declarations_end_at_the_next_item() {
-        let module = parse_ok("type T = A Number\n(println 1)\ntype U = B\nb : U = B");
+        let module = parse_ok("type T = A Int\n(println 1)\ntype U = B\nb : U = B");
         assert_eq!(module.items.len(), 4);
         assert_eq!(
             module.to_string(),
-            "type T = A Number\n(println 1)\ntype U = B\nb : U = B\n"
+            "type T = A Int\n(println 1)\ntype U = B\nb : U = B\n"
         );
     }
 

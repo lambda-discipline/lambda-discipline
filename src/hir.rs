@@ -20,19 +20,20 @@ impl GlobalId {
     }
 }
 
-/// Identifies a type constructor (`Number`, `List`, a declared type) for the
+/// Identifies a type constructor (`Int`, `List`, a declared type) for the
 /// lifetime of a session. Redefining a type in the REPL allocates a new id,
 /// so values of the old type keep the old type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct TyConId(pub u32);
 
 impl TyConId {
-    pub const NUMBER: TyConId = TyConId(0);
-    pub const STRING: TyConId = TyConId(1);
-    pub const BOOL: TyConId = TyConId(2);
-    pub const UNIT: TyConId = TyConId(3);
-    pub const LIST: TyConId = TyConId(4);
-    pub const IO: TyConId = TyConId(5);
+    pub const INT: TyConId = TyConId(0);
+    pub const FLOAT: TyConId = TyConId(1);
+    pub const STRING: TyConId = TyConId(2);
+    pub const BOOL: TyConId = TyConId(3);
+    pub const UNIT: TyConId = TyConId(4);
+    pub const LIST: TyConId = TyConId(5);
+    pub const IO: TyConId = TyConId(6);
 
     pub fn index(self) -> usize {
         self.0 as usize
@@ -73,7 +74,8 @@ pub struct Expr {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ExprKind {
-    Number(f64),
+    Int(i64),
+    Float(f64),
     String(Rc<str>),
     Unit,
     Local(LocalId),
@@ -127,7 +129,8 @@ pub enum PatternKind {
         con: ConId,
         args: Vec<Pattern>,
     },
-    Number(f64),
+    Int(i64),
+    Float(f64),
     String(Rc<str>),
     Unit,
     /// Stands in for a pattern that failed to resolve.
@@ -210,7 +213,8 @@ impl Expr {
                     arm.body.for_each_global(f);
                 }
             }
-            ExprKind::Number(_)
+            ExprKind::Int(_)
+            | ExprKind::Float(_)
             | ExprKind::String(_)
             | ExprKind::Unit
             | ExprKind::Local(_)

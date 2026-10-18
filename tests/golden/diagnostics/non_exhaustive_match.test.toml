@@ -5,7 +5,7 @@ exit_code = 1
 stdout = ""
 stderr_contains = [
     "Error: this `match` does not cover every value of type `Shape`",
-    "non_exhaustive_match.lbd:3:36",
+    "non_exhaustive_match.lbd:3:33",
     "`Rect _ _` is not covered",
     "add an arm `| Rect _ _ -> ...`, or `| _ -> ...` to cover every other value",
 ]

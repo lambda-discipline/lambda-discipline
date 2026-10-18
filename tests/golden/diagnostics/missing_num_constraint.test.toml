@@ -1,0 +1,10 @@
+file = "missing_num_constraint.lbd"
+
+[expect]
+exit_code = 1
+stdout = ""
+stderr_contains = [
+    "Error: `a` cannot be used in arithmetic here",
+    "this needs `Num<a>`",
+    "add `Num<a> =>` in front of the annotation that introduces `a`",
+]

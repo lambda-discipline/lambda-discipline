@@ -16,11 +16,12 @@ use crate::builtins::Builtin;
 use crate::core::{Constructor, Expr, Lambda, bool_constructor};
 use crate::hir::ConId;
 use crate::source::Span;
-use crate::syntax::number::format_number;
+use crate::syntax::number::format_float;
 
 #[derive(Clone)]
 pub enum Value {
-    Number(f64),
+    Int(i64),
+    Float(f64),
     String(Rc<str>),
     Unit,
     /// Persistent vector: cheap to clone, `O(log n)` push, get and update.
@@ -101,7 +102,8 @@ impl Value {
         let (mut a, mut b) = (self.clone(), other.clone());
         loop {
             let equal = match (&a, &b) {
-                (Value::Number(a), Value::Number(b)) => a == b,
+                (Value::Int(a), Value::Int(b)) => a == b,
+                (Value::Float(a), Value::Float(b)) => a == b,
                 (Value::String(a), Value::String(b)) => a == b,
                 (Value::Unit, Value::Unit) => true,
                 (Value::List(a), Value::List(b)) => {
@@ -151,7 +153,8 @@ impl Value {
         let (mut a, mut b) = (self.clone(), other.clone());
         loop {
             let ordering = match (&a, &b) {
-                (Value::Number(a), Value::Number(b)) => a
+                (Value::Int(a), Value::Int(b)) => a.cmp(b),
+                (Value::Float(a), Value::Float(b)) => a
                     .partial_cmp(b)
                     .ok_or_else(|| "`NaN` cannot be ordered".to_owned())?,
                 (Value::String(a), Value::String(b)) => a.cmp(b),
@@ -215,7 +218,8 @@ impl Value {
         let mut value = self.clone();
         loop {
             match &value {
-                Value::Number(n) => out.push_str(&format_number(*n)),
+                Value::Int(n) => out.push_str(&n.to_string()),
+                Value::Float(n) => out.push_str(&format_float(*n)),
                 Value::String(s) => out.push_str(&format!("{:?}", s.as_ref())),
                 Value::Unit => out.push_str("()"),
                 Value::List(items) => {
@@ -446,7 +450,7 @@ mod tests {
 
     #[test]
     fn display_and_show() {
-        let value = list(vec![Value::String("a\"b".into()), Value::Number(1.0)]);
+        let value = list(vec![Value::String("a\"b".into()), Value::Int(1)]);
         assert_eq!(value.show(), r#"["a\"b", 1]"#);
         assert_eq!(Value::String("hi\n".into()).display(), "hi\n");
         assert_eq!(Value::String("hi\n".into()).show(), r#""hi\n""#);
@@ -458,18 +462,14 @@ mod tests {
     #[test]
     fn structural_equality() {
         assert!(
-            list(vec![Value::Number(1.0)])
-                .equals(&list(vec![Value::Number(1.0)]))
+            list(vec![Value::Int(1)])
+                .equals(&list(vec![Value::Int(1)]))
                 .unwrap()
         );
+        assert!(!list(vec![Value::Int(1)]).equals(&list(vec![])).unwrap());
         assert!(
-            !list(vec![Value::Number(1.0)])
-                .equals(&list(vec![]))
-                .unwrap()
-        );
-        assert!(
-            !Value::Number(f64::NAN)
-                .equals(&Value::Number(f64::NAN))
+            !Value::Float(f64::NAN)
+                .equals(&Value::Float(f64::NAN))
                 .unwrap()
         );
         assert!(
@@ -482,26 +482,23 @@ mod tests {
     #[test]
     fn ordering() {
         use Ordering::*;
-        let n = Value::Number;
-        assert_eq!(n(1.0).compare(&n(2.0)), Ok(Less));
+        let n = Value::Int;
+        assert_eq!(n(1).compare(&n(2)), Ok(Less));
         assert_eq!(
             Value::String("b".into()).compare(&Value::String("a".into())),
             Ok(Greater)
         );
+        assert_eq!(list(vec![n(1)]).compare(&list(vec![n(1), n(0)])), Ok(Less));
         assert_eq!(
-            list(vec![n(1.0)]).compare(&list(vec![n(1.0), n(0.0)])),
-            Ok(Less)
-        );
-        assert_eq!(
-            list(vec![n(2.0)]).compare(&list(vec![n(1.0), n(0.0)])),
+            list(vec![n(2)]).compare(&list(vec![n(1), n(0)])),
             Ok(Greater)
         );
-        assert!(n(f64::NAN).compare(&n(1.0)).is_err());
+        assert!(Value::Float(f64::NAN).compare(&Value::Float(1.0)).is_err());
     }
 
     /// `depth` lists, each holding the next, around `[1]`.
-    fn nested_list(depth: usize, innermost: f64) -> Value {
-        let mut value = list(vec![Value::Number(innermost)]);
+    fn nested_list(depth: usize, innermost: i64) -> Value {
+        let mut value = list(vec![Value::Int(innermost)]);
         for _ in 0..depth {
             value = list(vec![value]);
         }
@@ -513,8 +510,8 @@ mod tests {
 
     #[test]
     fn deep_lists_compare_show_and_drop_without_overflow() {
-        let a = nested_list(DEEP, 1.0);
-        let b = nested_list(DEEP, 2.0);
+        let a = nested_list(DEEP, 1);
+        let b = nested_list(DEEP, 2);
         assert_eq!(a.equals(&a.clone()), Ok(true));
         assert_eq!(a.equals(&b), Ok(false));
         assert_eq!(a.compare(&b), Ok(Ordering::Less));
@@ -525,16 +522,15 @@ mod tests {
 
     #[test]
     fn nested_lists_keep_their_rendering_and_order() {
-        let n = Value::Number;
-        let value = list(vec![list(vec![n(1.0), list(vec![])]), n(2.0), list(vec![])]);
+        let n = Value::Int;
+        let value = list(vec![list(vec![n(1), list(vec![])]), n(2), list(vec![])]);
         assert_eq!(value.show(), "[[1, []], 2, []]");
         assert_eq!(
-            list(vec![list(vec![n(1.0)]), n(2.0)])
-                .compare(&list(vec![list(vec![n(1.0), n(0.0)]), n(0.0)])),
+            list(vec![list(vec![n(1)]), n(2)]).compare(&list(vec![list(vec![n(1), n(0)]), n(0)])),
             Ok(Ordering::Less)
         );
         assert_eq!(
-            list(vec![list(vec![n(1.0)]), n(3.0)]).compare(&list(vec![list(vec![n(1.0)]), n(2.0)])),
+            list(vec![list(vec![n(1)]), n(3)]).compare(&list(vec![list(vec![n(1)]), n(2)])),
             Ok(Ordering::Greater)
         );
         assert!(
@@ -566,7 +562,7 @@ mod tests {
     #[test]
     fn env_slots() {
         let env = Env::with(3, [Thunk::done(Value::Unit)]);
-        env.set(2, Thunk::done(Value::Number(5.0)));
+        env.set(2, Thunk::done(Value::Int(5)));
         assert_eq!(env.get(2).value().unwrap().show(), "5");
         assert_eq!(env.get(0).value().unwrap().show(), "()");
     }

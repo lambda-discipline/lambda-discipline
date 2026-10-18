@@ -24,8 +24,9 @@ enum Pat {
 
 #[derive(Debug, Clone, PartialEq)]
 enum Lit {
-    /// The bits of the number, with `-0` folded into `0`.
-    Number(u64),
+    Int(i64),
+    /// The bits of the float, with `-0.0` folded into `0.0`.
+    Float(u64),
     String(Rc<str>),
 }
 
@@ -42,7 +43,8 @@ pub fn missing(env: &TypeEnv, arms: &[&hir::Pattern]) -> Option<String> {
 fn simplify(pattern: &hir::Pattern) -> Pat {
     match &pattern.kind {
         PatternKind::Con { con, args } => Pat::Con(*con, args.iter().map(simplify).collect()),
-        PatternKind::Number(n) => Pat::Lit(Lit::Number(if *n == 0.0 { 0.0 } else { *n }.to_bits())),
+        PatternKind::Int(n) => Pat::Lit(Lit::Int(*n)),
+        PatternKind::Float(n) => Pat::Lit(Lit::Float(if *n == 0.0 { 0.0 } else { *n }.to_bits())),
         PatternKind::String(s) => Pat::Lit(Lit::String(s.clone())),
         PatternKind::Wild | PatternKind::Bind(_) | PatternKind::Unit | PatternKind::Error => {
             Pat::Wild
@@ -200,7 +202,7 @@ mod tests {
         }
     }
 
-    const SHAPES: &str = "type Shape = Circle Number | Rect Number Number | Dot\n";
+    const SHAPES: &str = "type Shape = Circle Int | Rect Int Int | Dot\n";
     const OPTION: &str = "type Option<a> = None | Some a\n";
 
     #[test]

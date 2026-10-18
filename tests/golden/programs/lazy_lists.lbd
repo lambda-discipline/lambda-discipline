@@ -7,7 +7,7 @@
 (println (head (zipWith add [1, (error "not needed")] [2, 3])))
 
 -- `foldr` stops as soon as its function ignores the rest of the list.
-hasOne : List<Number> -> Bool = \xs.
+hasOne : List<Int> -> Bool = \xs.
     (foldr \x. \acc. (or (eq x 1) acc) False xs)
 (println (hasOne [1, (error "never needed")]))
 

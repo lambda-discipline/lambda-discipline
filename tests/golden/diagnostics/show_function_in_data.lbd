@@ -1,2 +1,2 @@
-type Handler = Handler (Number -> Number)
+type Handler = Handler (Int -> Int)
 (println (show [(Handler \x. x)]))

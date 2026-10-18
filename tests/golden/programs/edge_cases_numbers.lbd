@@ -1,13 +1,13 @@
 -- Shadows the builtin `abs`.
-abs : Number -> Number = \x. (if (lt x 0) (neg x) x)
+abs : Float -> Float = \x. (if (lt x 0.0) (neg x) x)
 
-zero : Number = 0.0
-negativeNumber : Number = -42.0
-largeNumber : Number = 999999.0
+zero : Float = 0.0
+negativeNumber : Float = -42.0
+largeNumber : Float = 999999.0
 
 (println (abs zero))
 (println (abs negativeNumber))
-(println (add (mul largeNumber 2) 1))
-(println (div 1 3))
-(println (div 1 0))
+(println (add (mul largeNumber 2.0) 1.0))
+(println (fdiv 1.0 3.0))
+(println (fdiv 1.0 0.0))
 (println 1e21 " " 2.5e-3)

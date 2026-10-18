@@ -1,7 +1,7 @@
-square : Number -> Number = \x. (mul x x)
+square : Int -> Int = \x. (mul x x)
 
-numbers : List<Number> = (range 1 6)
-squared : List<Number> = (map square numbers)
+numbers : List<Int> = (range 1 6)
+squared : List<Int> = (map square numbers)
 
 (println (length squared))
 (println squared)

@@ -10,7 +10,7 @@ use crate::hir::TyConId;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct TyVar(pub u32);
 
-/// A type constructor: a built-in type such as `Number` or `List`, or a
+/// A type constructor: a built-in type such as `Int` or `List`, or a
 /// declared data type. Two constructors are the same when their ids are,
 /// whatever their names.
 #[derive(Debug, Clone)]
@@ -46,7 +46,7 @@ pub enum Type {
     /// A rigid (skolem) variable from a user annotation, such as the `a` in
     /// `id : a -> a`; it only unifies with itself.
     Rigid(Rc<str>),
-    /// A type constructor applied to arguments: `Number`, `List<a>`.
+    /// A type constructor applied to arguments: `Int`, `List<a>`.
     Con(TyCon, Vec<Type>),
     /// A function type.
     Fun(Box<Type>, Box<Type>),
@@ -57,8 +57,12 @@ impl Type {
         Type::Con(TyCon::builtin(id), args)
     }
 
-    pub fn number() -> Type {
-        Type::builtin(TyConId::NUMBER, Vec::new())
+    pub fn int() -> Type {
+        Type::builtin(TyConId::INT, Vec::new())
+    }
+
+    pub fn float() -> Type {
+        Type::builtin(TyConId::FLOAT, Vec::new())
     }
 
     pub fn string() -> Type {
@@ -107,25 +111,35 @@ impl Type {
 }
 
 /// One of the built-in type classes. A type belongs to a class when the
-/// class's builtins work on its values; every type built without functions
-/// or `IO` actions belongs to all of them.
+/// class's builtins work on its values. Every type built without functions
+/// or `IO` actions belongs to the structural classes `Eq`, `Ord` and `Show`;
+/// only `Int` and `Float` belong to `Num`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Class {
     /// Equality: `eq`, `neq`.
     Eq,
     /// Ordering: `lt`, `compare`, `sort`, ...; implies `Eq`.
     Ord,
+    /// Arithmetic: `add`, `sub`, `mul`, `neg`, `abs`, `pow`.
+    Num,
     /// Conversion to source-like text: `show`, `print`.
     Show,
 }
 
+/// How many classes there are, for tables indexed by [`Class::index`].
+pub const CLASS_COUNT: usize = Class::ALL.len();
+
 impl Class {
-    pub const ALL: [Class; 3] = [Class::Eq, Class::Ord, Class::Show];
+    pub const ALL: [Class; 4] = [Class::Eq, Class::Ord, Class::Num, Class::Show];
+
+    /// The classes every type without functions or `IO` actions belongs to.
+    pub const STRUCTURAL: [Class; 3] = [Class::Eq, Class::Ord, Class::Show];
 
     pub fn name(self) -> &'static str {
         match self {
             Class::Eq => "Eq",
             Class::Ord => "Ord",
+            Class::Num => "Num",
             Class::Show => "Show",
         }
     }
@@ -144,6 +158,7 @@ impl Class {
         match self {
             Class::Eq => "compared",
             Class::Ord => "ordered",
+            Class::Num => "used in arithmetic",
             Class::Show => "shown",
         }
     }
@@ -411,16 +426,16 @@ mod tests {
     fn variables_are_named_in_order_of_appearance() {
         let ty = Type::fun(Type::Var(TyVar(7)), Type::Var(TyVar(3)));
         assert_eq!(ty.to_string(), "a -> b");
-        let rigid = Type::fun(Type::Rigid("x".into()), Type::number());
-        assert_eq!(rigid.to_string(), "x -> Number");
+        let rigid = Type::fun(Type::Rigid("x".into()), Type::int());
+        assert_eq!(rigid.to_string(), "x -> Int");
     }
 
     #[test]
     fn inferred_variables_skip_rigid_names() {
-        let annotation = Type::fun(Type::Rigid("a".into()), Type::number());
-        let found = Type::fun(Type::list(Type::Var(TyVar(0))), Type::number());
+        let annotation = Type::fun(Type::Rigid("a".into()), Type::int());
+        let found = Type::fun(Type::list(Type::Var(TyVar(0))), Type::int());
         let shown = display_together(&[&annotation, &found]);
-        assert_eq!(shown, ["a -> Number", "List<b> -> Number"]);
+        assert_eq!(shown, ["a -> Int", "List<b> -> Int"]);
         // A rigid name that appears after the variable is reserved too.
         let ty = Type::fun(Type::Var(TyVar(0)), Type::Rigid("a".into()));
         assert_eq!(ty.to_string(), "b -> a");
@@ -459,7 +474,8 @@ mod tests {
             Classes::of(Class::Show).union(Classes(1 << Class::Ord.index()))
         );
         assert_eq!(Class::lookup("Show"), Some(Class::Show));
-        assert_eq!(Class::lookup("Num"), None);
+        assert_eq!(Class::lookup("Num"), Some(Class::Num));
+        assert_eq!(Class::lookup("Monoid"), None);
     }
 
     #[test]

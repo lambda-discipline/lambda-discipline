@@ -1,7 +1,7 @@
 -- `eq`, `lt`, `compare`, `sort` and `show` work on every type without
 -- functions or actions in it, including data types.
 type Suit = Clubs | Diamonds | Hearts | Spades
-type Card = Card Number Suit
+type Card = Card Int Suit
 type Tree<a> = Leaf | Node Tree<a> a Tree<a>
 
 member : Eq<a> => a -> List<a> -> Bool = \x. \xs. (foldr \y. \found. (or (eq x y) found) False xs)

@@ -4,8 +4,8 @@ file = "multiple_errors.lbd"
 exit_code = 1
 stdout = ""
 stderr_contains = [
-    "list elements must all have the same type: expected `Number`, found `String`",
-    "Error: unknown type `Float`",
-    "numbers have type `Number`",
-    "expected `Bool`, found `Number`",
+    "list elements must all have the same type: expected `Int`, found `String`",
+    "Error: unknown type `Integer`",
+    "integers have type `Int`",
+    "expected `Bool`, found `Int`",
 ]
