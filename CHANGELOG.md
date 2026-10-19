@@ -106,3 +106,5 @@ All notable changes to this project are documented here. The format follows
   and types nested more than 10,000 levels are reported as an error, and
   showing, comparing and freeing deeply nested values no longer uses the
   native stack (#31).
+- Infix operators such as `+` and `==` now suggest the prefix builtin to use
+  (#47).

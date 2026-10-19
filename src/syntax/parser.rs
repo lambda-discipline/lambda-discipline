@@ -966,6 +966,14 @@ mod tests {
         assert_eq!(roundtrip("x : Int = 1"), "x : Int = 1\n");
         assert_eq!(roundtrip("x = 1"), "x = 1\n");
         assert_eq!(
+            roundtrip("xs : List<Number>= [1, 2]"),
+            "xs : List<Number> = [1, 2]\n"
+        );
+        assert_eq!(
+            roundtrip("xs : List<List<Number>>= [[1]]"),
+            "xs : List<List<Number>> = [[1]]\n"
+        );
+        assert_eq!(
             roundtrip(r"apply : (a -> b) -> a -> b = \f. \x. (f x)"),
             "apply : (a -> b) -> a -> b = (\\f. (\\x. (f x)))\n"
         );
