@@ -264,7 +264,7 @@ impl Repl {
             self.out,
             "{} : {}\n    {}",
             builtin.name(),
-            builtin.display_signature(),
+            builtin.signature(),
             builtin.doc()
         );
     }

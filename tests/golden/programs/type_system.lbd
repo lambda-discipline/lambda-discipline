@@ -10,7 +10,7 @@ double : Int -> Int = \x. (mul x 2)
 -- Unannotated definitions get their most general type.
 swap = \f. \x. \y. (f y x)
 
-(println (identity 42))
-(println (apply double 21))
-(println (factorial 5))
-(println (swap sub 1 10))
+(println (show (identity 42)))
+(println (show (apply double 21)))
+(println (show (factorial 5)))
+(println (show (swap sub 1 10)))

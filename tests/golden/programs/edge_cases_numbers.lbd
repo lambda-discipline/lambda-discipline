@@ -5,9 +5,9 @@ zero : Float = 0.0
 negativeNumber : Float = -42.0
 largeNumber : Float = 999999.0
 
-(println (abs zero))
-(println (abs negativeNumber))
-(println (add (mul largeNumber 2.0) 1.0))
-(println (fdiv 1.0 3.0))
-(println (fdiv 1.0 0.0))
-(println 1e21 " " 2.5e-3)
+(println (show (abs zero)))
+(println (show (abs negativeNumber)))
+(println (show (add (mul largeNumber 2.0) 1.0)))
+(println (show (fdiv 1.0 3.0)))
+(println (show (fdiv 1.0 0.0)))
+(println (join "" [(show 1e21), " ", (show 2.5e-3)]))

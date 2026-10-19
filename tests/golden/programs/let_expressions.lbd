@@ -14,6 +14,6 @@ collatz : Int -> Int = \start.
             (go (if (eq (mod n 2) 0) (div n 2) (add (mul 3 n) 1)) (add steps 1)))
     in (go start 0)
 
-(println result)
-(println pairs)
-(println (collatz 27))
+(println (show result))
+(println (show pairs))
+(println (show (collatz 27)))

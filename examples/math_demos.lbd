@@ -13,7 +13,7 @@ isPrime : Int -> Bool = \n.
     let check = \d. (if (gt (mul d d) n) True (if (divides d) False (check (add d 1)))) in
     (and (gt n 1) (check 2))
 
-(println "fibonacci 10 = " (fibonacci 10))
-(println "factorial 10 = " (factorial 10))
-(println "gcd 1071 462 = " (gcd 1071 462))
-(println "primes below 30: " (filter isPrime (range 0 30)))
+(println (concat "fibonacci 10 = " (show (fibonacci 10))))
+(println (concat "factorial 10 = " (show (factorial 10))))
+(println (concat "gcd 1071 462 = " (show (gcd 1071 462))))
+(println (concat "primes below 30: " (show (filter isPrime (range 0 30)))))

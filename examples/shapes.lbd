@@ -12,5 +12,5 @@ area : Shape -> Float = \shape. match shape
 -- A cylinder is a circle raised to a height.
 volumeOfCylinder : Float -> Float -> Float = \r. \h. (mul (area (Circle r)) h)
 
-(println "Areas: " (map area [(Circle 1.0), (Rect 2.0 3.0)]))
-(println "Volume of cylinder is: " (volumeOfCylinder 5.0 10.0))
+(println (concat "Areas: " (show (map area [(Circle 1.0), (Rect 2.0 3.0)]))))
+(println (concat "Volume of cylinder is: " (show (volumeOfCylinder 5.0 10.0))))

@@ -1,22 +1,22 @@
 -- `Int` is exact up to 64 bits; `Float` is a double.
-(println 123456789012345678 " " 9007199254740993)
-(println (mul 3037000499 3037000499))
-(println (pow 2 62) " " (pow 1.5 2))
+(println (join "" [(show 123456789012345678), " ", (show 9007199254740993)]))
+(println (show (mul 3037000499 3037000499)))
+(println (join "" [(show (pow 2 62)), " ", (show (pow 1.5 2))]))
 
 -- `div` and `mod` round toward negative infinity; `fdiv` divides floats.
-(println [(div 7 2), (div -7 2), (mod -7 2), (mod 7 -2)])
-(println (fdiv 7.0 2.0) " " (fdiv 1.0 3.0))
+(println (show [(div 7 2), (div -7 2), (mod -7 2), (mod 7 -2)]))
+(println (join "" [(show (fdiv 7.0 2.0)), " ", (show (fdiv 1.0 3.0))]))
 
 -- Conversions are explicit.
 mean : List<Int> -> Float = \xs. (fdiv (toFloat (sum xs)) (toFloat (length xs)))
-(println (mean [1, 2, 3, 4]))
-(println [(floor 2.7), (ceil 2.1), (round -2.5)])
-(println (add (unwrapOk (parseInt "40")) 2) " " (unwrapOk (parseFloat "2")))
+(println (show (mean [1, 2, 3, 4])))
+(println (show [(floor 2.7), (ceil 2.1), (round -2.5)]))
+(println (join "" [(show (add (unwrapOk (parseInt "40")) 2)), " ", (show (unwrapOk (parseFloat "2")))]))
 
 -- `Num` functions work on both types.
 square : Num<a> => a -> a = \x. (mul x x)
-(println (square 12) " " (square 0.5) " " (map square [1, 2, 3]))
+(println (join "" [(show (square 12)), " ", (show (square 0.5)), " ", (show (map square [1, 2, 3]))]))
 
 -- Whole floats keep their `.0`, so `show` reads back as the same type.
-(println (show [1.0, 2.5, 1e21]) " " (show [1, 2]))
-(println (compare 1 2) " " (unwrap (get (sub __LINE__ 21) ["a", "b", "c"])))
+(println (join "" [(show [1.0, 2.5, 1e21]), " ", (show [1, 2])]))
+(println (join "" [(show (compare 1 2)), " ", (unwrap (get (sub __LINE__ 21) ["a", "b", "c"]))]))

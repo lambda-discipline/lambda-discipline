@@ -7,6 +7,6 @@ double : Int -> Int = \x. (mul x 2)
 pipeline : Int -> Int = (pipe addFive double)
 quadruple : Int -> Int = (twice double)
 
-(println (pipeline 3))
-(println (quadruple 3))
+(println (show (pipeline 3)))
+(println (show (quadruple 3)))
 (println ((pipe show (concat "value: ")) 7))

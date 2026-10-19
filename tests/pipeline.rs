@@ -14,7 +14,7 @@ fn session_evaluates_and_reports_types() {
     let evaluated = session
         .eval(
             "<test>",
-            "square = \\x. (mul x x)\n(println (square 4))\n(map square [1, 2])",
+            "square = \\x. (mul x x)\n(println (show (square 4)))\n(map square [1, 2])",
         )
         .unwrap();
     assert_eq!(evaluated.definitions[0].0.as_ref(), "square");

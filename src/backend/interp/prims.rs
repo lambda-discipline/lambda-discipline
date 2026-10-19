@@ -46,7 +46,7 @@ pub(super) fn strictness(builtin: Builtin, index: usize) -> Strictness {
         B::WithDefault if index == 0 => Lazy,
         B::Eq | B::Neq | B::Lt | B::Le | B::Gt | B::Ge | B::Compare | B::Sort => Deep,
         B::Min | B::Max => Deep,
-        B::Show | B::Print | B::Println => Deep,
+        B::Show => Deep,
         B::Join | B::Sum | B::Transpose => Elements,
         _ => Shallow,
     }

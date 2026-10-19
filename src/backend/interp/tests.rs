@@ -171,9 +171,10 @@ fn list_operations() {
 #[test]
 fn printing() {
     assert_eq!(
-        output(r#"(print "a" 1 [2] "\n") (println "b" True)"#),
-        "a1[2]\nbTrue\n"
+        output(r#"(print "a") (print "\n") (println "b")"#),
+        "a\nb\n"
     );
+    assert_eq!(output(r#"(sequence (map println ["c", "d"]))"#), "c\nd\n");
 }
 
 #[test]
@@ -282,7 +283,7 @@ fn foldr_stops_when_its_function_ignores_the_rest() {
     let program = r#"(foldr \x. \acc. (or (eq x 1) acc) False [1, (error "never needed")])"#;
     assert_eq!(eval(program), "True");
     assert_eq!(
-        output(r#"(println (unwrap (head [1, (error "boom")])))"#),
+        output(r#"(println (show (unwrap (head [1, (error "boom")]))))"#),
         "1\n"
     );
     // A function that uses the rest still sees every element, in order.
@@ -305,7 +306,7 @@ fn inspecting_a_list_evaluates_its_elements() {
         "compared"
     );
     assert_eq!(
-        output("(println (map (map (add 1)) [[1, 2], [3]]))"),
+        output("(println (show (map (map (add 1)) [[1, 2], [3]])))"),
         "[[2, 3], [4]]\n"
     );
     assert_eq!(eval("(sort (map neg [1, 3, 2]))"), "[-3, -2, -1]");
@@ -343,14 +344,14 @@ fn let_binds_the_results_of_actions() {
         output(
             r#"let a <- (pure 2) in
                let b = (mul a 10) in
-               let _ <- (print "a = " a ", ") in
-               (println "b = " b)"#
+               let _ <- (print (join "" ["a = ", (show a), ", "])) in
+               (println (concat "b = " (show b)))"#
         ),
         "a = 2, b = 20\n"
     );
     // The action is not in scope of its own binder.
     assert_eq!(
-        output(r#"x = 1  (let x <- (pure (add x 1)) in (println x))"#),
+        output(r#"x = 1  (let x <- (pure (add x 1)) in (println (show x)))"#),
         "2\n"
     );
     // The result of `pure` is passed on without being evaluated.
@@ -451,7 +452,10 @@ fn definitions_persist_across_inputs() {
     session.eval("<3>", "useDouble = (double 1)").unwrap();
     session.eval("<4>", r"double = \x. x").unwrap();
     session
-        .eval("<5>", r"(println useDouble (double 1))")
+        .eval(
+            "<5>",
+            r"(println (concat (show useDouble) (show (double 1))))",
+        )
         .unwrap();
     assert_eq!(out.contents(), "21\n");
 }
@@ -464,7 +468,9 @@ fn redefined_types_are_new_types() {
     // The old value still has the old type, so it cannot pass for the new one.
     let errors = session.eval("<3>", "same = (eq old new)").unwrap_err();
     assert_eq!(errors[0].message, "mismatched types");
-    session.eval("<4>", "(println old \" \" new)").unwrap();
+    session
+        .eval("<4>", "(println (join \" \" [(show old), (show new)]))")
+        .unwrap();
     assert_eq!(out.contents(), "A (C 1)\n");
     assert!(
         session.eval("<5>", "x = A").is_ok(),

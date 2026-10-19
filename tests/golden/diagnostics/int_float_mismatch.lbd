@@ -1,3 +1,3 @@
 -- Indices are `Int`, so a fractional index is a type error.
-(println (get 1.5 [1, 2]))
-(println (add 1 1.5))
+(println (show (get 1.5 [1, 2])))
+(println (show (add 1 1.5)))

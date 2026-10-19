@@ -7,6 +7,6 @@ result1 : Int = (identity 42)
 result2 : String = (passthrough "test")
 result3 : Int = (selectFirst 100 "ignored")
 
-(println result1)
+(println (show result1))
 (println result2)
-(println result3)
+(println (show result3))

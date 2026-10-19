@@ -121,7 +121,7 @@ pub fn run(cli: Cli) -> ExitCode {
                 println!(
                     "{} : {}\n    {}",
                     builtin.name(),
-                    builtin.display_signature(),
+                    builtin.signature(),
                     builtin.doc()
                 );
                 ExitCode::SUCCESS

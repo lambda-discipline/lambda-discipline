@@ -2,9 +2,9 @@ use "std.lbd"
 
 p : (Int, String) = (1, "one")
 
-(println p)
-(println (fst p) " is " (snd p))
-(println (swap p))
-(println ((uncurry add) (2, 3)))
+(println (show p))
+(println (join "" [(show (fst p)), " is ", (snd p)]))
+(println (show (swap p)))
+(println (show ((uncurry add) (2, 3))))
 -- A lambda can take a pair apart in its parameter.
-(println (map \(n, name). (concat name (show n)) [p, (2, "two")]))
+(println (show (map \(n, name). (concat name (show n)) [p, (2, "two")])))

@@ -1,21 +1,21 @@
 p : (Int, String) = (1, "one")
 swap : (a, b) -> (b, a) = \(x, y). (y, x)
 
-(println p)
-(println (fst p) " " (snd p))
-(println (swap p))
+(println (show p))
+(println (join "" [(show (fst p)), " ", (snd p)]))
+(println (show (swap p)))
 -- A component can be an application without its own parentheses.
-(println (add 1 2, (1, 2.5, [True]), ((), Some "x")))
+(println (show (add 1 2, (1, 2.5, [True]), ((), Some "x"))))
 
 -- Tuples are compared and ordered component by component.
-(println (eq p (1, "one")) " " (lt (1, "b") (1, "c")) " " (compare (2, 0) (1, 9)))
-(println (sort [(2, "b"), (1, "z"), (2, "a")]))
+(println (join "" [(show (eq p (1, "one"))), " ", (show (lt (1, "b") (1, "c"))), " ", (show (compare (2, 0) (1, 9)))]))
+(println (show (sort [(2, "b"), (1, "z"), (2, "a")])))
 
 -- Patterns take tuples apart in `match`, lambdas and `let`.
-(println (match (Some (3, 4)) | Some (x, 0) -> x | Some (x, y) -> (mul x y) | None -> 0))
-(println (map \(k, v). (concat k v) [("a", "b"), ("c", "d")]))
+(println (show (match (Some (3, 4)) | Some (x, 0) -> x | Some (x, y) -> (mul x y) | None -> 0)))
+(println (show (map \(k, v). (concat k v) [("a", "b"), ("c", "d")])))
 (println (let (n, name) = p in (concat name (show n))))
-let (x, y) <- (pure (5, 6)) in (println (add x y))
+let (x, y) <- (pure (5, 6)) in (println (show (add x y)))
 
 -- Components are lazy.
-(println (fst (1, (error "never evaluated"))))
+(println (show (fst (1, (error "never evaluated")))))

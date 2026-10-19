@@ -1,2 +1,2 @@
 counter : Int = (add counter 1)
-(println counter)
+(println (show counter))

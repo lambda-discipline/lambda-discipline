@@ -558,11 +558,7 @@ impl Interpreter {
                 self.apply(applied.func.clone(), all, span)
             }
             &Value::Builtin(builtin) => {
-                let arity = if builtin.is_variadic() {
-                    args.len()
-                } else {
-                    builtin.arity()
-                };
+                let arity = builtin.arity();
                 if args.len() < arity {
                     return Ok(partial(Value::Builtin(builtin), args));
                 }
@@ -654,7 +650,7 @@ impl Interpreter {
                 false => self.tail(args.swap_remove(1)),
             },
             B::Print | B::Println => {
-                let mut text: String = values.iter().map(Value::display).collect();
+                let mut text = prims::string_of(&values[0])?.to_string();
                 if builtin == B::Println {
                     text.push('\n');
                 }

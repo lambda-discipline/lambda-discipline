@@ -59,6 +59,10 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- `print` and `println` take a single `String`, like Haskell's `putStr` and
+  `putStrLn`, instead of any number of values: write
+  `(println (concat "total: " (show n)))`. They are now ordinary functions,
+  so `(map println lines)` and `(forEach println names)` typecheck (#9).
 - `head`, `tail` and `get` return an `Option` instead of stopping the
   program on an empty list or an index out of bounds, and `parseInt` and
   `parseFloat` return a `Result` with a message instead of failing, so the

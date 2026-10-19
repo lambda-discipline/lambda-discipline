@@ -1,4 +1,4 @@
 nums : List<Int> = [1, 2, 3, 4]
 square : Int -> Int = \x. (mul x x)
-(println (map square nums))
-(println (map show nums))
+(println (show (map square nums)))
+(println (show (map show nums)))

@@ -1,1 +1,1 @@
-(print (add 1 2 3))
+(print (show (add 1 2 3)))

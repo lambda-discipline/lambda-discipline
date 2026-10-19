@@ -1,2 +1,2 @@
 double : Monoid<a> => a -> a = \x. x
-(println (double 1))
+(println (show (double 1)))

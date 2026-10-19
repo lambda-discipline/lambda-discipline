@@ -10,6 +10,6 @@ areaOfCircle : Float -> Float = \r. (mul pi (square r))
 -- Volume of a cylinder
 volumeOfCylinder : Float -> Float -> Float = \r. \h. (mul (areaOfCircle r) h)
 
-(println "Volume of cylinder is: " (volumeOfCylinder 5.0 10.0))
-(println "Rounded: " (round (volumeOfCylinder 5.0 10.0)))
-(println "Square of an Int: " (square 12))
+(println (concat "Volume of cylinder is: " (show (volumeOfCylinder 5.0 10.0))))
+(println (concat "Rounded: " (show (round (volumeOfCylinder 5.0 10.0)))))
+(println (concat "Square of an Int: " (show (square 12))))
