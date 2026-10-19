@@ -3,5 +3,5 @@ fibonacci : Int -> Int = \n.
         n
         (add (fibonacci (sub n 1)) (fibonacci (sub n 2))))
 
-(println (fibonacci 10))
-(println (map fibonacci (range 0 10)))
+(println (show (fibonacci 10)))
+(println (show (map fibonacci (range 0 10))))

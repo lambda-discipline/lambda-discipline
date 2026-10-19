@@ -23,9 +23,9 @@ area : Shape -> Float = \s. match s
     | Circle r -> (mul 3.14 (mul r r))
     | Rect w h -> (mul w h)
 
-(println (map fibonacci (range 0 10)))   -- [0, 1, 1, 2, 3, 5, 8, 13, 21, 34]
-(println ((compose show (mul 2)) 21))   -- 42
-(println (map area [(Circle 1.0), (Rect 2.0 3.0)]))   -- [3.14, 6.0]
+(println (show (map fibonacci (range 0 10))))   -- [0, 1, 1, 2, 3, 5, 8, 13, 21, 34]
+(println ((compose show (mul 2)) 21))           -- 42
+(println (show (map area [(Circle 1.0), (Rect 2.0 3.0)])))   -- [3.14, 6.0]
 ```
 
 ## Getting started
@@ -73,11 +73,11 @@ Diagnostics are rendered with [ariadne](https://crates.io/crates/ariadne):
 
 ```text
 Error: mismatched types
-   ╭─[ examples/demo.lbd:1:17 ]
+   ╭─[ examples/demo.lbd:1:23 ]
    │
- 1 │ (println (add 1 1.5))
-   │                 ─┬─
-   │                  ╰─── expected `Int`, found `Float`
+ 1 │ (println (show (add 1 1.5)))
+   │                       ─┬─
+   │                        ╰─── expected `Int`, found `Float`
    │
    │ Help: `Int` and `Float` are not converted implicitly: write a float literal such as `1.0`, or convert with `(toFloat n)` or `(floor x)`
    │
@@ -133,8 +133,9 @@ Full Hindley-Milner inference with let-polymorphism:
 * Type variables in lambda annotations scope over the whole definition, so
   `apply : (a -> b) -> a -> b = \f: (a -> b). \x: a. (f x)` works.
 * Mutually recursive definitions are inferred together, then generalized.
-* `print` and `println` take any number of arguments of any types in `Show`
-  and must be called directly. They return `IO<Unit>`.
+* `print` and `println` take a `String` and return `IO<Unit>`. Turn other
+  values into text with `show`, and join pieces with `concat` or `join`:
+  `(println (concat "total: " (show n)))`.
 
 ### Data types
 
@@ -154,8 +155,8 @@ orZero : Option<Int> -> Int = \o. match o
     | Some x -> x
     | None -> 0
 
-(println (depth (Node Leaf 1 (Node Leaf 2 Leaf))))   -- 2
-(println (map Some [1, 2]))                          -- [(Some 1), (Some 2)]
+(println (show (depth (Node Leaf 1 (Node Leaf 2 Leaf)))))   -- 2
+(println (show (map Some [1, 2])))                         -- [(Some 1), (Some 2)]
 ```
 
 * Type parameters are written in angle brackets, as in `List<a>`. Types may
@@ -178,7 +179,7 @@ orZero : Option<Int> -> Int = \o. match o
   is `1`.
 * `eq`, `lt`, `compare`, `sort` and `show` work on data structurally (see
   "Type classes"). Values are ordered by constructor, in declaration order,
-  then by their fields. `show` and `print` write them as code:
+  then by their fields. `show` writes them as code:
   `(Some (Node Leaf 1 Leaf))`.
 * `Bool`, `Option` and `Result` are built-in data types (see "Missing values
   and errors"), so they can be matched like any other:
@@ -197,10 +198,10 @@ Patterns take tuples apart, also in a lambda's parameter and in `let`:
 p : (Int, String) = (1, "one")
 swap : (a, b) -> (b, a) = \(x, y). (y, x)
 
-(println p (swap p))                              -- (1, "one")("one", 1)
-(println (fst p) " " (snd p))                     -- 1 one
+(println (show (p, (swap p))))                            -- ((1, "one"), ("one", 1))
+(println (join " " [(show (fst p)), (snd p)]))             -- 1 one
 (println (let (n, name) = p in (concat name (show n))))   -- one1
-(println (sort [(2, "b"), (1, "z"), (2, "a")]))   -- [(1, "z"), (2, "a"), (2, "b")]
+(println (show (sort [(2, "b"), (1, "z"), (2, "a")])))    -- [(1, "z"), (2, "a"), (2, "b")]
 ```
 
 * A tuple has 2 to 7 components; a larger group of values reads better as a
@@ -230,9 +231,9 @@ report : String -> String = \line. match (parseInt line)
     | Ok n -> (concat "number " (show n))
     | Err e -> (concat "bad input: " e)
 
-(println (report "4x2"))                     -- bad input: cannot parse "4x2" as an `Int`
-(println (withDefault 0 (get 5 [1, 2])))     -- 0
-(println (mapOption (mul 2) (head [21])))    -- (Some 42)
+(println (report "4x2"))                            -- bad input: cannot parse "4x2" as an `Int`
+(println (show (withDefault 0 (get 5 [1, 2]))))     -- 0
+(println (show (mapOption (mul 2) (head [21]))))    -- (Some 42)
 ```
 
 * `withDefault`, `mapOption`, `mapResult` and `toOption` cover the common
@@ -282,7 +283,7 @@ rather than a runtime error:
 | `Eq` | `eq neq` | `Int`, `Float`, `String`, `Unit`, `Bool`, and lists and data types whose elements and fields are in it |
 | `Ord` | `lt le gt ge compare sort min max` | the same as `Eq`; `Ord<a>` implies `Eq<a>` |
 | `Num` | `add sub mul neg abs pow` | `Int` and `Float` |
-| `Show` | `show`, and the arguments of `print` and `println` | the same as `Eq` |
+| `Show` | `show` | the same as `Eq` |
 
 ```haskell
 member : Eq<a> => a -> List<a> -> Bool =
@@ -291,7 +292,7 @@ member : Eq<a> => a -> List<a> -> Bool =
 -- inferred: Ord<a> => List<a> -> Option<a>
 largest = \xs. (mapOption \first. (foldl max first xs) (head xs))
 
-(println (sort [(Some 3), None, (Some 1)]))   -- [None, (Some 1), (Some 3)]
+(println (show (sort [(Some 3), None, (Some 1)])))   -- [None, (Some 1), (Some 3)]
 ```
 
 * Types get these classes automatically: there is no `deriving` clause, and
@@ -322,7 +323,7 @@ return new lists in `O(log n)` and never change their argument. A list's
 length is fixed when it is built, but its elements are lazy like arguments:
 `(head [1, (error "boom")])` is `(Some 1)`, `map` and `zipWith` compute an element
 only when it is used, and `foldr` stops as soon as its function ignores the
-rest of the list. Comparing, showing, printing or summing a list evaluates
+rest of the list. Comparing, showing or summing a list evaluates
 the elements it inspects. Lists are always finite.
 
 ### Input and output
@@ -353,7 +354,7 @@ with `__DIR__`, the directory of the file it is written in (`.` in the REPL):
 
 ```haskell
 let input <- (readFile (concat __DIR__ "/input.txt")) in   -- works from any directory
-(println (length (lines input)))
+(println (show (length (lines input))))
 ```
 
 `lbd run` performs the program's top-level expressions in source order, and

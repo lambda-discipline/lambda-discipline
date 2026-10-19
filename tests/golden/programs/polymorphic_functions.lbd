@@ -6,5 +6,5 @@ double : Int -> Int = \x. (mul x 2)
 doubleThenInc : Int -> Int = (compose inc double)
 describe : Int -> String = (compose (concat "n = ") show)
 
-(println (doubleThenInc 5))
+(println (show (doubleThenInc 5)))
 (println (describe 5))

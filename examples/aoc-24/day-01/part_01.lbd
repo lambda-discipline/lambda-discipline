@@ -15,4 +15,4 @@ distance : String -> Int = \input.
 -- Reading the input is an action; `<-` names its result. `__DIR__` is
 -- this file's directory, so the input is found from any working directory.
 let input <- (readFile (concat __DIR__ "/input.txt")) in
-(println "Answer: " (distance input))
+(println (concat "Answer: " (show (distance input))))

@@ -39,7 +39,7 @@ fn version() {
 
 #[test]
 fn run_prints_program_output() {
-    let (_dir, path) = program("(println (add 1 2))");
+    let (_dir, path) = program("(println (show (add 1 2)))");
     lbd()
         .arg("run")
         .arg(&path)
@@ -51,7 +51,7 @@ fn run_prints_program_output() {
 
 #[test]
 fn run_reports_type_errors_without_running() {
-    let (_dir, path) = program("(println \"runs?\")\n(println (add 1 \"x\"))");
+    let (_dir, path) = program("(println \"runs?\")\n(println (show (add 1 \"x\")))");
     lbd()
         .arg("run")
         .arg(&path)
@@ -98,7 +98,7 @@ fn check_succeeds_silently_or_reports() {
 
 #[test]
 fn emit_every_stage() {
-    let (_dir, path) = program("twice = \\f. \\x. (f (f x))\n(println (twice (add 1) 0))");
+    let (_dir, path) = program("twice = \\f. \\x. (f (f x))\n(println (show (twice (add 1) 0)))");
     lbd()
         .args(["check", "--emit", "tokens"])
         .arg(&path)
@@ -132,7 +132,7 @@ fn emit_prints_numbers_like_run() {
     let (_dir, path) = program(
         "big = 1e300
 small = 1e-7
-(println big small)",
+(println (concat (show big) (show small)))",
     );
     lbd()
         .args(["check", "--emit", "ast"])
@@ -262,7 +262,7 @@ read : String -> IO<Unit> = \path. let text <- (readFile path) in (print text)
 (read (concat __DIR__ "/data.txt"))
 (read libData)
 (println libFile)
-(println "lib line " libLine ", main line " __LINE__)
+(println (join "" ["lib line ", (show libLine), ", main line ", (show __LINE__)]))
 "#,
     )
     .unwrap();

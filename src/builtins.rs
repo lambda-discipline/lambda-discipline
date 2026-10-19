@@ -169,8 +169,8 @@ builtins! {
     Bind => "bind" : "IO<a> -> (a -> IO<b>) -> IO<b>", Io, "`(bind action f)` runs `action`, then the action `f` returns for its result. `let x <- action in body` is `(bind action \\x. body)`.";
     Then => "then" : "IO<a> -> IO<b> -> IO<b>", Io, "`(then first second)` runs `first`, discards its result, then runs `second`.";
     Sequence => "sequence" : "List<IO<a>> -> IO<List<a>>", Io, "Runs a list of actions in order and collects their results.";
-    Print => "print" : "Show<a> => a -> IO<Unit>", Io, "An action that prints its arguments without separators. Takes any number of arguments, of any types in `Show`; strings are printed without quotes.";
-    Println => "println" : "Show<a> => a -> IO<Unit>", Io, "Like `print`, followed by a newline.";
+    Print => "print" : "String -> IO<Unit>", Io, "An action that prints a string. Build other output with `show`, `concat` and `join`: `(println (concat \"total: \" (show n)))`.";
+    Println => "println" : "String -> IO<Unit>", Io, "Like `print`, followed by a newline.";
     ReadFile => "readFile" : "String -> IO<String>", Io, "An action that reads a whole file. A relative path is relative to the working directory, like a path typed on the command line; start it with `__DIR__` to read a file that sits next to the program.";
     Error => "error" : "String -> a", Io, "Stops the program with an error message when it is evaluated. Not an action: it can occur anywhere.";
 
@@ -182,12 +182,6 @@ builtins! {
 impl Builtin {
     pub fn lookup(name: &str) -> Option<Builtin> {
         Builtin::ALL.iter().copied().find(|b| b.name() == name)
-    }
-
-    /// Variadic builtins accept any number of arguments of independent types
-    /// and must be called directly; they cannot be passed around as values.
-    pub fn is_variadic(self) -> bool {
-        matches!(self, Builtin::Print | Builtin::Println)
     }
 
     /// Builtins that build an `IO` action. Applying one only describes the
@@ -203,15 +197,6 @@ impl Builtin {
                 | Builtin::Println
                 | Builtin::ReadFile
         )
-    }
-
-    /// How the signature is shown to users.
-    pub fn display_signature(self) -> String {
-        if self.is_variadic() {
-            "Show<a> => a... -> IO<Unit>".to_owned()
-        } else {
-            self.signature().to_owned()
-        }
     }
 
     /// Number of arguments the primitive consumes before it runs. Constants
@@ -272,7 +257,7 @@ pub fn reference() -> String {
             out.push_str(&format!(
                 "{} : {}\n    {}\n",
                 builtin.name(),
-                builtin.display_signature(),
+                builtin.signature(),
                 builtin.doc()
             ));
         }
@@ -283,7 +268,7 @@ pub fn reference() -> String {
 
 /// Renders the reference as JSON for tools such as the website generator:
 /// `{"version", "modules": [{"name", "title", "builtins": [...]}]}`, where
-/// each builtin has `name`, `signature`, `arity`, `variadic` and `doc`.
+/// each builtin has `name`, `signature`, `arity` and `doc`.
 pub fn reference_json() -> String {
     let modules: Vec<String> = Module::ALL
         .iter()
@@ -312,11 +297,10 @@ impl Builtin {
     /// This builtin as a one-line JSON object.
     pub fn to_json(self) -> String {
         format!(
-            "{{\"name\": {}, \"signature\": {}, \"arity\": {}, \"variadic\": {}, \"doc\": {}}}",
+            "{{\"name\": {}, \"signature\": {}, \"arity\": {}, \"doc\": {}}}",
             json_string(self.name()),
-            json_string(&self.display_signature()),
+            json_string(self.signature()),
             self.arity(),
-            self.is_variadic(),
             json_string(self.doc())
         )
     }
@@ -400,7 +384,7 @@ mod tests {
         }
         assert!(text.contains("-- Lists\n"));
         assert!(text.contains("type Result<e, a> = Ok a | Err e\n"));
-        assert!(text.contains("print : Show<a> => a... -> IO<Unit>"));
+        assert!(text.contains("println : String -> IO<Unit>"));
         assert!(text.contains("eq : Eq<a> => a -> a -> Bool"));
     }
 
@@ -412,8 +396,8 @@ mod tests {
             assert!(json.contains(&builtin.to_json()), "{builtin}");
         }
         assert!(json.contains(r#""title": "Lists""#));
-        assert!(json.contains(
-            r#""signature": "Show<a> => a... -> IO<Unit>", "arity": 1, "variadic": true"#
-        ));
+        assert!(
+            json.contains(r#""name": "println", "signature": "String -> IO<Unit>", "arity": 1"#)
+        );
     }
 }

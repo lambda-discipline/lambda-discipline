@@ -24,5 +24,5 @@ maximum : Ord<a> => List<a> -> Option<a> = \xs. (mapOption \first. (foldl max fi
 minimum : Ord<a> => List<a> -> Option<a> = \xs. (mapOption \first. (foldl min first xs) (head xs))
 
 -- Actions
--- Performs `action` on every element in order: `(forEach \x. (println x) xs)`.
+-- Performs `action` on every element in order: `(forEach println names)`.
 forEach : (a -> IO<b>) -> List<a> -> IO<Unit> = \action. \xs. (foldr \x. \rest. (then (action x) rest) (pure ()) xs)

@@ -2,4 +2,4 @@
 -- `__DIR__` is what finds the file next to this program.
 let text <- (readFile (concat __DIR__ "/source_location.txt")) in
 (print text)
-(println "line " __LINE__)
+(println (concat "line " (show __LINE__)))

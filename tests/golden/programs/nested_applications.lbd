@@ -4,4 +4,4 @@ decrement : Int -> Int = \x. (add x -1)
 
 complex : Int = (increment (triple (decrement (increment 5))))
 
-(println complex)
+(println (show complex))

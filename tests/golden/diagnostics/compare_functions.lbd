@@ -1,1 +1,1 @@
-(println (eq \x. x \y. y))
+(println (show (eq \x. x \y. y)))

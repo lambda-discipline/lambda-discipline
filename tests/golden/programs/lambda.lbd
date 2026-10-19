@@ -1,2 +1,2 @@
 add2 : Int -> Int -> Int = \x. \y. (add x y)
-(println (add2 5 7))
+(println (show (add2 5 7)))

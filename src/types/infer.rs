@@ -1044,7 +1044,7 @@ impl<'a> Checker<'a> {
                         .at(body.expr.span)
                         .with_label(format!("this has type `{found}`"))
                         .with_note("a program runs its top-level actions in source order; any other value would be discarded")
-                        .with_help("print it with `(println ...)`, or name it with a definition"),
+                        .with_help("print it with `(println (show ...))`, or name it with a definition"),
                 );
             }
         }
@@ -1070,17 +1070,6 @@ impl<'a> Checker<'a> {
                 GlobalType::Pending(ty) => ty,
             },
             ExprKind::Builtin(builtin) => {
-                if builtin.is_variadic() {
-                    self.error(
-                        ctx,
-                        Diagnostic::error(format!("`{builtin}` must be called directly"))
-                            .at(expr.span)
-                            .with_label("used as a value here")
-                            .with_note(format!("`{builtin}` takes any number of arguments, so it has no single function type"))
-                            .with_help(format!("wrap it in a lambda, e.g. `\\x. ({builtin} x)`")),
-                    );
-                    return self.fresh();
-                }
                 let scheme = builtin_scheme(*builtin);
                 self.instantiate_at(&scheme, expr.span)
             }
@@ -1224,21 +1213,6 @@ impl<'a> Checker<'a> {
     }
 
     fn infer_app(&mut self, func: &hir::Expr, args: &[hir::Expr], ctx: &mut BodyCtx) -> Type {
-        if matches!(&func.kind, ExprKind::Builtin(builtin) if builtin.is_variadic()) {
-            for arg in args {
-                let ty = self.infer(arg, ctx);
-                let origin = Some(func.span);
-                if let Err((class, culprit)) = self.require(Classes::of(Class::Show), &ty, origin) {
-                    let mismatch = Mismatch {
-                        expected: ty,
-                        found: culprit,
-                        reason: MismatchReason::NoInstance(class, origin),
-                    };
-                    self.report(ctx, mismatch, arg.span, |_, _| String::new());
-                }
-            }
-            return Type::io(Type::unit());
-        }
         let mut current = self.infer(func, ctx);
         for (index, arg) in args.iter().enumerate() {
             let (param, result) = match self.shallow(&current) {
@@ -1869,12 +1843,13 @@ mod tests {
     }
 
     #[test]
-    fn variadic_builtins() {
-        assert_eq!(type_of_entry(r#"(print 1 "a" [True])"#), "IO<Unit>");
-        let errors = errors_of("(map print [1])");
-        assert_eq!(errors[0].message, "`print` must be called directly");
-        let errors = errors_of(r"(print 1 \x. x)");
-        assert_eq!(errors[0].message, "functions cannot be shown");
+    fn print_is_an_ordinary_function() {
+        assert_eq!(type_of_entry(r#"(print "a")"#), "IO<Unit>");
+        assert_eq!(
+            type_of_entry(r#"(map println ["a", "b"])"#),
+            "List<IO<Unit>>"
+        );
+        assert!(!errors_of("(println 1)").is_empty());
     }
 
     #[test]
@@ -2069,7 +2044,7 @@ mod tests {
     #[test]
     fn program_top_level_expressions_must_be_actions() {
         assert!(
-            program_errors(r#"x = 1  (println x)  (pure ())  (bind (pure 1) pure)"#).is_empty()
+            program_errors(r#"x = "a"  (println x)  (pure ())  (bind (pure 1) pure)"#).is_empty()
         );
         let errors = program_errors(r#"(add 1 2)  [(println "a")]"#);
         let messages: Vec<_> = errors.iter().map(|e| e.message.as_str()).collect();

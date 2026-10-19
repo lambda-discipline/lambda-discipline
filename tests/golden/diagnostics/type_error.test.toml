@@ -5,8 +5,8 @@ exit_code = 1
 stdout = ""
 stderr_contains = [
     "Error: values of type `String` cannot be used in arithmetic",
-    "type_error.lbd:1:13",
-    "(print (add \"hello\" 5))",
+    "type_error.lbd:1:19",
+    "(print (show (add \"hello\" 5)))",
     "this has type `String`",
     "this needs `Num<String>`",
     "only `Int` and `Float` are numbers",

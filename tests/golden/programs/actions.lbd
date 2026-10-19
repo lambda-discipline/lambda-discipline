@@ -9,7 +9,7 @@ never = (print "never printed")
 
 -- A list of actions is just a list until `sequence` runs it.
 greetings : List<IO<Unit>> = [(println "a"), (println "b")]
-(println (length greetings) " actions")
+(println (concat (show (length greetings)) " actions"))
 (sequence greetings)
 
 -- Performing one action twice runs it twice.
@@ -20,17 +20,17 @@ twice : IO<a> -> IO<a> = \action. (then action action)
 countdown : Int -> IO<Int> = \n.
     (if (eq n 0)
         (pure 0)
-        let _ <- (print n " ") in
+        let _ <- (print (concat (show n) " ")) in
         let rest <- (countdown (sub n 1)) in
         let total = (add n rest) in
         (pure total))
 
 let total <- (countdown 3) in
-(println "total " total)
+(println (concat "total " (show total)))
 
 -- `sequence` collects the results of its actions.
 let results <- (sequence [(pure 1), (countdown 2)]) in
-(println results)
+(println (show results))
 
 -- The same with the builtins `let x <- action in` stands for.
-(bind (pure 2) \x. (then (print x) (println "!")))
+(bind (pure 2) \x. (then (print (show x)) (println "!")))

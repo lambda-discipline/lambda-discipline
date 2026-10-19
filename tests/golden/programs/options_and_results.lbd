@@ -3,7 +3,7 @@
 inner = \x. (head x)
 middle = \x. match (tail x) | Some rest -> (inner rest) | None -> None
 outer = \x. match (tail x) | Some rest -> (middle rest) | None -> None
-(println (outer [1, 2]) " " (outer [1, 2, 3]))
+(println (join "" [(show (outer [1, 2])), " ", (show (outer [1, 2, 3]))]))
 
 -- `match` takes a `Result` apart.
 report : String -> String = \line. match (parseInt line)
@@ -13,8 +13,8 @@ report : String -> String = \line. match (parseInt line)
 (println (report "4x2"))
 
 -- Combinators cover the common cases.
-(println (withDefault 0 (get 5 [1, 2])) " " (mapOption (mul 2) (get 1 [1, 2])))
-(println (mapResult (add 1) (parseInt "1")) " " (toOption (parseFloat "x")))
+(println (join "" [(show (withDefault 0 (get 5 [1, 2]))), " ", (show (mapOption (mul 2) (get 1 [1, 2])))]))
+(println (join "" [(show (mapResult (add 1) (parseInt "1"))), " ", (show (toOption (parseFloat "x")))]))
 
 -- `unwrap` and `unwrapOk` are for scripts that know the value is there.
-(println (add (unwrap (head [40])) (unwrapOk (parseInt "2"))))
+(println (show (add (unwrap (head [40])) (unwrapOk (parseInt "2")))))

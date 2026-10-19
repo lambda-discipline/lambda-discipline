@@ -3,8 +3,8 @@ identity : a -> a = \x. x
 singleElement : List<Int> = [42]
 twoElements : List<Int> = [1, 2]
 
-(println (length singleElement))
-(println (length twoElements))
-(println (map identity singleElement))
-(println (map identity []))
-(println [[], [[]]])
+(println (show (length singleElement)))
+(println (show (length twoElements)))
+(println (show (map identity singleElement)))
+(println (show (map identity [])))
+(println (show [[], [[]]]))

@@ -601,12 +601,12 @@ mod tests {
 
     #[test]
     fn entries_and_globals_are_kept_in_order() {
-        let module = lower_text("a = 1\n(print a)\nb = 2\n(print b)");
+        let module = lower_text("a = \"x\"\n(print a)\nb = \"y\"\n(print b)");
         assert_eq!(module.globals.len(), 2);
         assert_eq!(module.entries.len(), 2);
         assert_eq!(
             module.to_string(),
-            "@0 a [frame=0] = 1\n@1 b [frame=0] = 2\nentry [frame=0] = (print @0)\nentry [frame=0] = (print @1)\n"
+            "@0 a [frame=0] = \"x\"\n@1 b [frame=0] = \"y\"\nentry [frame=0] = (print @0)\nentry [frame=0] = (print @1)\n"
         );
     }
 

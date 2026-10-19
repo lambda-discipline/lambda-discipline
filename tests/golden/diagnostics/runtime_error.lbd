@@ -1,3 +1,3 @@
 firstOrFail : List<a> -> a = \xs. (unwrap (head xs))
-(println (firstOrFail [1, 2]))
-(println (firstOrFail []))
+(println (show (firstOrFail [1, 2])))
+(println (show (firstOrFail [])))

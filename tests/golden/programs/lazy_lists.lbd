@@ -1,15 +1,15 @@
 -- List elements are evaluated only when used, like arguments.
-(println (unwrap (head [1, (error "boom")])))
-(println (length [(error "a"), (error "b")]))
+(println (show (unwrap (head [1, (error "boom")]))))
+(println (show (length [(error "a"), (error "b")])))
 
 -- `map` and `zipWith` compute an element only when it is used.
-(println (unwrap (get 1 (map (div 6) [(error "not needed"), 3]))))
-(println (unwrap (head (zipWith add [1, (error "not needed")] [2, 3]))))
+(println (show (unwrap (get 1 (map (div 6) [(error "not needed"), 3])))))
+(println (show (unwrap (head (zipWith add [1, (error "not needed")] [2, 3])))))
 
 -- `foldr` stops as soon as its function ignores the rest of the list.
 hasOne : List<Int> -> Bool = \xs.
     (foldr \x. \acc. (or (eq x 1) acc) False xs)
-(println (hasOne [1, (error "never needed")]))
+(println (show (hasOne [1, (error "never needed")])))
 
 -- A fold that uses every element still sees them all, in order.
 (println (foldr \x. \acc. (concat x acc) "" ["a", "b", "c"]))

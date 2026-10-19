@@ -1,20 +1,20 @@
 -- Lists are immutable values: every operation returns a new list.
 a : List<String> = []
-(println "list: " a)
+(println (concat "list: " (show a)))
 
 b : List<String> = (push "Hello" a)
-(println "list: " b)
-(println "list size: " (length b))
+(println (concat "list: " (show b)))
+(println (concat "list size: " (show (length b))))
 
 c : List<String> = (push "World" b)
-(println "list: " c)
+(println (concat "list: " (show c)))
 -- Reading an index that may be out of bounds gives an `Option`.
-(println "list[1]: " (get 1 c))
-(println "list[5]: " (get 5 c))
-(println "list[5] or a default: " (withDefault "none" (get 5 c)))
+(println (concat "list[1]: " (show (get 1 c))))
+(println (concat "list[5]: " (show (get 5 c))))
+(println (concat "list[5] or a default: " (withDefault "none" (get 5 c))))
 
 d : List<String> = (push "Foo" c)
-(println "list: " d)
-(println "without index 2: " (remove 2 d))
-(println "without index 5: " (remove 5 d))
-(println "unchanged: " d)
+(println (concat "list: " (show d)))
+(println (concat "without index 2: " (show (remove 2 d))))
+(println (concat "without index 5: " (show (remove 5 d))))
+(println (concat "unchanged: " (show d)))

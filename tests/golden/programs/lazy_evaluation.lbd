@@ -7,6 +7,6 @@ safeDivide : Int -> Int -> Int = \dividend. \divisor.
 
 const : a -> b -> a = \x. \unused. x
 
-(println (safeDivide 10 0))
-(println (safeDivide 10 2))
-(println (const 1 (divide 1 0)))
+(println (show (safeDivide 10 0)))
+(println (show (safeDivide 10 2)))
+(println (show (const 1 (divide 1 0))))
