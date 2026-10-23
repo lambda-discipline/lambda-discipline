@@ -112,9 +112,24 @@ impl SourceFile {
         self.base_dir().map_or_else(|| ".".to_owned(), display_path)
     }
 
+    /// 0-based index of the line containing a byte offset.
+    pub fn line_index(&self, offset: usize) -> usize {
+        self.line_starts.partition_point(|&start| start <= offset) - 1
+    }
+
+    /// Byte range of a 0-based line, including its line break.
+    pub fn line_range(&self, line: usize) -> Range<usize> {
+        let end = self
+            .line_starts
+            .get(line + 1)
+            .copied()
+            .unwrap_or(self.text.len());
+        self.line_starts[line]..end
+    }
+
     /// 1-based `(line, column)` of a byte offset; columns count characters.
     pub fn line_col(&self, offset: usize) -> (usize, usize) {
-        let line = self.line_starts.partition_point(|&start| start <= offset) - 1;
+        let line = self.line_index(offset);
         let start = self.line_starts[line];
         let end = offset.min(self.text.len());
         let column = self
@@ -198,6 +213,17 @@ mod tests {
         // `λ` is two bytes but one column.
         assert_eq!(file.line_col(5), (2, 2));
         assert_eq!(file.line_col(7), (3, 1));
+    }
+
+    #[test]
+    fn line_ranges_include_the_line_break() {
+        let mut map = SourceMap::new();
+        let id = map.add_virtual("t", "ab\ncd");
+        let file = map.get(id);
+        assert_eq!(file.line_index(2), 0);
+        assert_eq!(file.line_index(3), 1);
+        assert_eq!(file.line_range(0), 0..3);
+        assert_eq!(file.line_range(1), 3..5);
     }
 
     #[test]

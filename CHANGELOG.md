@@ -115,3 +115,7 @@ All notable changes to this project are documented here. The format follows
   and types nested more than 10,000 levels are reported as an error, and
   showing, comparing and freeing deeply nested values no longer uses the
   native stack (#31).
+- Diagnostics on very long lines show only the part of the line around each
+  label, with `…` for the rest, instead of the whole line. A program with
+  1,000 warnings on one line now checks in a fraction of a second instead of
+  over a minute (#84).
