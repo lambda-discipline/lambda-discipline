@@ -95,10 +95,12 @@ impl Repl {
             return self.command(command);
         }
         self.last_program_byte.set(None);
-        match self.session.eval("<repl>", input) {
+        let result = self.session.eval("<repl>", input);
+        self.session.flush();
+        self.end_program_line();
+        self.warn();
+        match result {
             Ok(evaluated) => {
-                self.session.flush();
-                self.end_program_line();
                 for (name, scheme) in &evaluated.definitions {
                     let _ = writeln!(self.out, "{name} : {scheme}");
                 }
@@ -108,15 +110,17 @@ impl Repl {
                     }
                 }
             }
-            Err(diagnostics) => {
-                self.session.flush();
-                self.end_program_line();
-                self.session.render(&diagnostics, &mut self.err, self.color);
-            }
+            Err(diagnostics) => self.session.render(&diagnostics, &mut self.err, self.color),
         }
         let _ = self.out.flush();
         let _ = self.err.flush();
         Control::Continue
+    }
+
+    /// Prints the warnings of the last input.
+    fn warn(&mut self) {
+        let warnings = self.session.take_warnings();
+        self.session.render(&warnings, &mut self.err, self.color);
     }
 
     /// Starts a new line if the program left the cursor mid-line.
@@ -198,6 +202,7 @@ impl Repl {
         let result = self.session.load(&path);
         self.session.flush();
         self.end_program_line();
+        self.warn();
         match result {
             Ok(evaluated) => {
                 let count = evaluated.definitions.len();

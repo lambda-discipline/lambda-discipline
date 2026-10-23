@@ -31,6 +31,9 @@ pub enum Command {
     Run {
         /// The program to run
         file: PathBuf,
+        /// Treat warnings as errors, and do not run a program with any
+        #[arg(long)]
+        deny_warnings: bool,
     },
     /// Type-check a program without running it
     Check {
@@ -39,6 +42,9 @@ pub enum Command {
         /// Print an intermediate representation instead
         #[arg(long, value_enum)]
         emit: Option<Stage>,
+        /// Treat warnings as errors
+        #[arg(long)]
+        deny_warnings: bool,
     },
     /// Start an interactive session (the default when no command is given)
     Repl,
@@ -76,22 +82,38 @@ pub fn run(cli: Cli) -> ExitCode {
         (None, _) => Command::Repl,
     };
     match command {
-        Command::Run { file } => {
+        Command::Run {
+            file,
+            deny_warnings,
+        } => {
             let mut session = Session::new(Box::new(io::stdout()));
-            let result = session.run_file(&file);
+            session.set_deny_warnings(deny_warnings);
+            // Warnings come before anything the program prints.
+            let result = session.check_file(&file).and_then(|compiled| {
+                warn(&mut session, color);
+                session.run(&compiled)
+            });
             session.flush();
             report(&session, result.map(drop), color)
         }
-        Command::Check { file, emit: None } => {
+        Command::Check {
+            file,
+            emit: None,
+            deny_warnings,
+        } => {
             let mut session = Session::new(Box::new(io::sink()));
+            session.set_deny_warnings(deny_warnings);
             let result = session.check_file(&file);
+            warn(&mut session, color);
             report(&session, result.map(drop), color)
         }
         Command::Check {
             file,
             emit: Some(stage),
+            deny_warnings,
         } => {
             let mut session = Session::new(Box::new(io::sink()));
+            session.set_deny_warnings(deny_warnings);
             let result = session.emit(&file, stage);
             if let Ok(text) = &result {
                 print!("{text}");
@@ -132,6 +154,12 @@ pub fn run(cli: Cli) -> ExitCode {
             }
         },
     }
+}
+
+/// Prints the warnings compiling has produced so far.
+fn warn(session: &mut Session, color: bool) {
+    let warnings = session.take_warnings();
+    session.render(&warnings, &mut io::stderr(), color);
 }
 
 fn report(

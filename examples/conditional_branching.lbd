@@ -8,8 +8,8 @@ describe : Int -> String = \n.
 (println (describe 7))
 
 -- Booleans can also be built from lambdas alone (Church encoding).
-churchTrue : a -> a -> a = \x. \y. x
-churchFalse : a -> a -> a = \x. \y. y
+churchTrue : a -> a -> a = \x. \_. x
+churchFalse : a -> a -> a = \_. \y. y
 churchToString : (String -> String -> String) -> String = \bool. (bool "true" "false")
 
 (println (churchToString churchTrue))

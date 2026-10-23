@@ -1,8 +1,8 @@
 //! The compiler driver: runs the pipeline and keeps state across units.
 //!
 //! ```text
-//! text ─lex/parse─▶ AST ─use expansion─▶ items ─resolve─▶ HIR ─infer─▶ types
-//!                                                         └──lower──▶ Core ─▶ Backend
+//! text ─lex/parse─▶ AST ─use expansion─▶ items ─resolve─▶ HIR ─infer─▶ types ─lint─▶ warnings
+//!                                                      └──lower──▶ Core ─▶ Backend
 //! ```
 //!
 //! A [`Session`] remembers every global defined so far, so the REPL can feed
@@ -17,8 +17,9 @@ use std::rc::Rc;
 use crate::backend::Backend;
 use crate::backend::interp::{Interpreter, Value};
 use crate::core::{self, lower_unit};
-use crate::diagnostics::{Diagnostic, Diagnostics};
+use crate::diagnostics::{Diagnostic, Diagnostics, Severity};
 use crate::hir::{GlobalId, Unit};
+use crate::lint::{self, lint};
 use crate::loader::{self, Loaded};
 use crate::resolve::{GlobalScope, resolve};
 use crate::source::{SourceMap, Span};
@@ -66,6 +67,9 @@ pub struct Session {
     by_name: HashMap<Rc<str>, GlobalId>,
     types: TypeEnv,
     interpreter: Interpreter,
+    /// Warnings of the units compiled since [`Session::take_warnings`].
+    warnings: Diagnostics,
+    deny_warnings: bool,
 }
 
 impl Session {
@@ -77,6 +81,8 @@ impl Session {
             by_name: HashMap::new(),
             types: TypeEnv::new(),
             interpreter: Interpreter::new(out),
+            warnings: Vec::new(),
+            deny_warnings: false,
         }
     }
 
@@ -115,11 +121,34 @@ impl Session {
         &self.types
     }
 
-    /// Runs the pipeline up to Core and records the unit's globals.
+    /// Makes warnings errors, so a unit with warnings fails to compile.
+    pub fn set_deny_warnings(&mut self, deny: bool) {
+        self.deny_warnings = deny;
+    }
+
+    /// The warnings of the units compiled since the last call. A unit's
+    /// warnings are kept even when running it fails.
+    pub fn take_warnings(&mut self) -> Diagnostics {
+        std::mem::take(&mut self.warnings)
+    }
+
+    /// Runs the pipeline up to Core and records the unit's globals. Its
+    /// warnings are kept for [`Session::take_warnings`].
     pub fn compile(
         &mut self,
         loaded: Loaded,
         top_level: TopLevel,
+    ) -> Result<Compiled, Diagnostics> {
+        self.compile_unit(loaded, top_level, false)
+    }
+
+    /// [`Session::compile`]; a `program` also reports the definitions of
+    /// its root file that nothing uses, as no later unit can use them.
+    fn compile_unit(
+        &mut self,
+        loaded: Loaded,
+        top_level: TopLevel,
+        program: bool,
     ) -> Result<Compiled, Diagnostics> {
         if !loaded.diagnostics.is_empty() {
             return Err(loaded.diagnostics);
@@ -132,6 +161,15 @@ impl Session {
         if !diagnostics.is_empty() {
             return Err(diagnostics);
         }
+        let options = lint::Options {
+            top_level,
+            program_root: loaded.root.filter(|_| program),
+        };
+        let warnings = lint(&resolved.unit, &typed.entry_schemes, &typed.types, options);
+        if self.deny_warnings && !warnings.is_empty() {
+            return Err(denied(warnings));
+        }
+        self.warnings.extend(warnings);
         let module = lower_unit(&resolved.unit, &self.sources, &typed.types);
         self.types = typed.types;
         for (def, scheme) in resolved.unit.defs.iter().zip(&typed.def_schemes) {
@@ -159,24 +197,28 @@ impl Session {
         top_level: TopLevel,
     ) -> Result<(Compiled, Vec<Value>), Diagnostics> {
         let compiled = self.compile(loaded, top_level)?;
-        let values = self
-            .interpreter
-            .run(&compiled.module)
-            .map_err(|error| vec![error.into_diagnostic()])?;
+        let values = self.run(&compiled)?;
         Ok((compiled, values))
+    }
+
+    /// Runs a compiled unit, returning the values of its top-level
+    /// expressions.
+    pub fn run(&mut self, compiled: &Compiled) -> Result<Vec<Value>, Diagnostics> {
+        self.interpreter
+            .run(&compiled.module)
+            .map_err(|error| vec![error.into_diagnostic()])
     }
 
     /// Runs a program file: performs its top-level actions in source order.
     pub fn run_file(&mut self, path: &Path) -> Result<Vec<Value>, Diagnostics> {
-        let loaded = loader::load_file(&mut self.sources, path);
-        self.execute(loaded, TopLevel::Actions)
-            .map(|(_, values)| values)
+        let compiled = self.check_file(path)?;
+        self.run(&compiled)
     }
 
     /// Type-checks a program file without running it.
     pub fn check_file(&mut self, path: &Path) -> Result<Compiled, Diagnostics> {
         let loaded = loader::load_file(&mut self.sources, path);
-        self.compile(loaded, TopLevel::Actions)
+        self.compile_unit(loaded, TopLevel::Actions, true)
     }
 
     /// Evaluates source text as a new unit (REPL input). `use` paths are
@@ -349,6 +391,21 @@ impl fmt::Debug for Session {
             .field("globals", &self.globals.len())
             .finish_non_exhaustive()
     }
+}
+
+/// Turns warnings into the errors `--deny-warnings` asks for.
+fn denied(warnings: Diagnostics) -> Diagnostics {
+    let mut errors: Diagnostics = warnings
+        .into_iter()
+        .map(|warning| Diagnostic {
+            severity: Severity::Error,
+            ..warning
+        })
+        .collect();
+    errors[0]
+        .notes
+        .push("warnings are errors because of `--deny-warnings`".into());
+    errors
 }
 
 /// The type of what running a top-level expression produced: an action's
