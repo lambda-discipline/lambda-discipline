@@ -31,7 +31,7 @@ jobs:
     name: Format and Clippy (fuzz)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # Only running the targets needs nightly.
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -52,7 +52,7 @@ jobs:
     env:
       SECONDS_PER_TARGET: ${{ inputs.seconds || (github.event_name == 'schedule' && '1800') || '60' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@nightly
       - uses: Swatinem/rust-cache@v2
         with:
@@ -60,7 +60,7 @@ jobs:
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-fuzz
-      - uses: actions/cache/restore@v4
+      - uses: actions/cache/restore@v6
         with:
           path: fuzz/corpus/${{ matrix.target }}
           key: fuzz-corpus-${{ matrix.target }}-${{ github.run_id }}
@@ -77,12 +77,12 @@ jobs:
       - name: Minimize the corpus
         if: success() && github.event_name != 'pull_request'
         run: cargo +nightly fuzz cmin --target x86_64-unknown-linux-gnu ${{ matrix.target }} fuzz/corpus/${{ matrix.target }}
-      - uses: actions/cache/save@v4
+      - uses: actions/cache/save@v6
         if: success() && github.event_name != 'pull_request'
         with:
           path: fuzz/corpus/${{ matrix.target }}
           key: fuzz-corpus-${{ matrix.target }}-${{ github.run_id }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: fuzz-artifacts-${{ matrix.target }}
