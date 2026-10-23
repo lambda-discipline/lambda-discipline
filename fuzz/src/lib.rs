@@ -49,16 +49,18 @@ pub fn assert_diagnostics_valid(sources: &SourceMap, diagnostics: &[Diagnostic])
 }
 
 /// Runs the whole compiler except evaluation on `text`, with `use` unable to
-/// read any file, then renders every diagnostic it reports.
-pub fn check(text: &str) {
+/// read any file, then renders every diagnostic it reports. Returns whether
+/// the program was accepted.
+pub fn check(text: &str) -> bool {
     let mut session = Session::new(Box::new(std::io::sink()));
     let loaded = load_text_from(&mut session.sources, &MemoryFiles::new(), "<fuzz>", text);
-    let mut diagnostics = match session.compile(loaded, TopLevel::Any) {
-        Ok(_) => Vec::new(),
-        Err(errors) => errors,
+    let (accepted, mut diagnostics) = match session.compile(loaded, TopLevel::Any) {
+        Ok(_) => (true, Vec::new()),
+        Err(errors) => (false, errors),
     };
     diagnostics.extend(session.take_warnings());
     assert_diagnostics_valid(&session.sources, &diagnostics);
     let mut rendered = Vec::new();
     session.render(&diagnostics, &mut rendered, false);
+    accepted
 }

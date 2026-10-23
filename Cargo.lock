@@ -62,6 +62,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "arbitrary"
+version = "1.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3bc62ac97cc33321f50863d514c3bc38a453947a8f9e781137e47c7401020aed"
+
+[[package]]
+name = "arbtest"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2a3be567977128c0f71ad1462d9624ccda712193d124e944252f0c5789a06d46"
+dependencies = [
+ "arbitrary",
+]
+
+[[package]]
 name = "archery"
 version = "1.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -328,10 +343,13 @@ checksum = "a6cb138bb79a146c1bd460005623e142ef0181e3d0219cb493e02f7d08a35695"
 name = "lambda-discipline"
 version = "0.1.0"
 dependencies = [
+ "arbitrary",
+ "arbtest",
  "ariadne",
  "assert_cmd",
  "clap",
  "imbl",
+ "lbd-smith",
  "logos",
  "mimalloc",
  "predicates",
@@ -341,6 +359,13 @@ dependencies = [
  "tempfile",
  "thiserror",
  "toml",
+]
+
+[[package]]
+name = "lbd-smith"
+version = "0.0.0"
+dependencies = [
+ "arbitrary",
 ]
 
 [[package]]

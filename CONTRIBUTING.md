@@ -44,11 +44,11 @@ cargo fmt --all --check
 ```
 
 ```bash
-cargo clippy --all-targets -- -D warnings
+cargo clippy --workspace --all-targets -- -D warnings
 ```
 
 ```bash
-cargo test
+cargo test --workspace
 ```
 
 ```bash
@@ -56,7 +56,7 @@ cargo deny check
 ```
 
 ```bash
-cargo +1.85 test
+cargo +1.85 test --workspace
 ```
 
 Keep pull requests focused, describe the user-visible change, and add tests:
@@ -112,6 +112,30 @@ programs that should fail, with their messages and `file:line:column`
 locations, in `tests/golden/diagnostics/`. Golden files are compared byte for
 byte, so keep them LF-terminated (`.gitattributes` does this for you).
 
+## Property tests
+
+`tests/properties.rs` checks laws the compiler must obey for every program,
+on random programs from `crates/lbd-smith`. That generator builds programs
+that are well-typed by construction and records the type it meant each
+definition to have. The laws: printing a parsed program and parsing it again
+gives the same tree; number literals read back exactly; generated programs
+type-check with and without annotations; inferred types written back as
+annotations are accepted; renaming variables and reordering definitions
+doesn't change any type; ill-typed mutants are rejected; Core is
+well-scoped; `match` exhaustiveness agrees with brute-force enumeration;
+and `eq` and `compare` obey the laws of equality and a total order.
+
+They run with `cargo test` on every platform, for about 100 ms each. To
+look harder, raise the budget:
+
+```bash
+ARBTEST_BUDGET_MS=60000 cargo test --release --test properties
+```
+
+A failure prints the program and a seed. `ARBTEST_SEED=<seed>` reruns
+exactly that case. Once you've fixed the bug, add the program as a golden
+test.
+
 ## Fuzzing
 
 `fuzz/` holds [cargo-fuzz](https://rust-fuzz.github.io/book/cargo-fuzz.html)
@@ -122,6 +146,9 @@ panics, hangs or reports a location outside the file:
 * `parse`: the parser and the AST printer.
 * `check`: every stage before evaluation, then diagnostic rendering. `use`
   reads from an empty in-memory file set, so inputs never touch the disk.
+* `check_gen`: the input drives `lbd-smith`, so every program reaches the
+  type checker. Well-typed programs must be accepted and their ill-typed
+  mutants rejected.
 
 CI runs each target for a minute on every pull request and for half an hour
 each night, keeping the corpus between runs. Running them yourself needs

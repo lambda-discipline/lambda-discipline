@@ -10,6 +10,8 @@ cargo-fuzz = true
 [dependencies]
 libfuzzer-sys = "0.4.10"
 lambda-discipline = { path = ".." }
+lbd-smith = { path = "../crates/lbd-smith" }
+arbitrary = "1.4.1"
 
 # Not part of the main workspace: fuzzing needs nightly.
 [workspace]
@@ -32,6 +34,13 @@ bench = false
 [[bin]]
 name = "check"
 path = "fuzz_targets/check.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "check_gen"
+path = "fuzz_targets/check_gen.rs"
 test = false
 doc = false
 bench = false

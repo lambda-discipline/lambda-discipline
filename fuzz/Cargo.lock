@@ -291,8 +291,17 @@ dependencies = [
 name = "lbd-fuzz"
 version = "0.0.0"
 dependencies = [
+ "arbitrary",
  "lambda-discipline",
+ "lbd-smith",
  "libfuzzer-sys",
+]
+
+[[package]]
+name = "lbd-smith"
+version = "0.0.0"
+dependencies = [
+ "arbitrary",
 ]
 
 [[package]]

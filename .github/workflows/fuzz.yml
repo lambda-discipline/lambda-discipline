@@ -48,7 +48,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [lex, parse, check]
+        target: [lex, parse, check, check_gen]
     env:
       SECONDS_PER_TARGET: ${{ inputs.seconds || (github.event_name == 'schedule' && '1800') || '60' }}
     steps:

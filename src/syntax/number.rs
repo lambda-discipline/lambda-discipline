@@ -6,7 +6,8 @@
 /// `0.000001`) and with an exponent outside that range (`1e+21`, `1e-7`,
 /// `-2.5e+300`), as JavaScript prints them. A whole float keeps a `.0`
 /// (`42.0`) so that it reads back as a `Float`, not an `Int`. Negative zero
-/// prints as `0.0`.
+/// keeps its sign (`-0.0`), as in Haskell, OCaml and Python, since
+/// `(fdiv 1.0 -0.0)` is `-Infinity`.
 pub fn format_float(n: f64) -> String {
     if n.is_nan() {
         return "NaN".into();
@@ -15,7 +16,7 @@ pub fn format_float(n: f64) -> String {
         return if n > 0.0 { "Infinity" } else { "-Infinity" }.into();
     }
     if n == 0.0 {
-        return "0.0".into();
+        return if n.is_sign_negative() { "-0.0" } else { "0.0" }.into();
     }
     // `{:e}` writes the shortest round-trip digits as `d.ddde<exp>`.
     let scientific = format!("{n:e}");
@@ -55,7 +56,7 @@ mod tests {
 
     #[test]
     fn negative_zero_prints_as_zero() {
-        assert_eq!(format_float(-0.0), "0.0");
+        assert_eq!(format_float(-0.0), "-0.0");
         assert_eq!(format_float(0.0), "0.0");
     }
 
