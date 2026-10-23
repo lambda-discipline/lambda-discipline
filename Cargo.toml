@@ -9,7 +9,7 @@ repository = "https://github.com/lambda-discipline/lambda-discipline"
 readme = "README.md"
 keywords = ["lambda-calculus", "functional", "interpreter", "language", "hindley-milner"]
 categories = ["compilers", "command-line-utilities"]
-exclude = [".github/", "examples/aoc-24/"]
+exclude = [".github/", "examples/aoc-24/", "fuzz/"]
 
 [dependencies]
 ariadne = "0.6.0"

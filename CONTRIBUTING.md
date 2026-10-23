@@ -112,6 +112,37 @@ programs that should fail, with their messages and `file:line:column`
 locations, in `tests/golden/diagnostics/`. Golden files are compared byte for
 byte, so keep them LF-terminated (`.gitattributes` does this for you).
 
+## Fuzzing
+
+`fuzz/` holds [cargo-fuzz](https://rust-fuzz.github.io/book/cargo-fuzz.html)
+targets that feed arbitrary text to the compiler and check that it never
+panics, hangs or reports a location outside the file:
+
+* `lex`: the lexer. Tokens must tile the input in order.
+* `parse`: the parser and the AST printer.
+* `check`: every stage before evaluation, then diagnostic rendering. `use`
+  reads from an empty in-memory file set, so inputs never touch the disk.
+
+CI runs each target for a minute on every pull request and for half an hour
+each night, keeping the corpus between runs. Running them yourself needs
+nightly Rust and Linux or macOS (on Windows, use WSL):
+
+```bash
+cargo install cargo-fuzz
+```
+
+```bash
+mkdir -p fuzz/corpus/check
+cargo +nightly fuzz run check fuzz/corpus/check examples tests/golden -- -dict=fuzz/lbd.dict
+```
+
+The first directory collects new inputs; the examples and golden programs
+only seed it. When a target fails, libFuzzer saves the input under
+`fuzz/artifacts/<target>/` (CI uploads it as an artifact). Shrink it with
+`cargo +nightly fuzz tmin <target> <file>`, fix the bug, and add the shrunk
+program as a golden test (in `tests/golden/diagnostics/` if it must be
+rejected), so the fix is checked by `cargo test` on every platform.
+
 ## Commit messages
 
 Write the subject as `prefix: message (#N)`, where `#N` is the issue the

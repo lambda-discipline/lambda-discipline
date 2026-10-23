@@ -1,0 +1,90 @@
+name: Fuzz
+
+# Runs the cargo-fuzz targets in `fuzz/`: briefly on every pull request and
+# push, for half an hour each night. The corpus is kept between runs in the
+# Actions cache, and an input that crashes a target is uploaded as an
+# artifact (see "Fuzzing" in CONTRIBUTING.md).
+on:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+    inputs:
+      seconds:
+        description: Seconds to fuzz each target
+        default: "1800"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  lint:
+    name: Format and Clippy (fuzz)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Only running the targets needs nightly.
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: fuzz
+      - run: cargo fmt --all --check --manifest-path fuzz/Cargo.toml
+      - run: cargo clippy --all-targets --locked --manifest-path fuzz/Cargo.toml -- -D warnings
+
+  fuzz:
+    name: Fuzz (${{ matrix.target }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [lex, parse, check]
+    env:
+      SECONDS_PER_TARGET: ${{ inputs.seconds || (github.event_name == 'schedule' && '1800') || '60' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: fuzz
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-fuzz
+      - uses: actions/cache/restore@v4
+        with:
+          path: fuzz/corpus/${{ matrix.target }}
+          key: fuzz-corpus-${{ matrix.target }}-${{ github.run_id }}
+          restore-keys: fuzz-corpus-${{ matrix.target }}-
+      - name: Fuzz
+        run: |
+          mkdir -p fuzz/corpus/${{ matrix.target }}
+          # The examples and golden programs seed the corpus (read only).
+          # The prebuilt cargo-fuzz is a musl binary and would default to
+          # building the targets for musl, which the sanitizers don't support.
+          cargo +nightly fuzz run --target x86_64-unknown-linux-gnu ${{ matrix.target }} \
+            fuzz/corpus/${{ matrix.target }} examples tests/golden -- \
+            -dict=fuzz/lbd.dict -max_total_time=$SECONDS_PER_TARGET -timeout=10
+      - name: Minimize the corpus
+        if: success() && github.event_name != 'pull_request'
+        run: cargo +nightly fuzz cmin --target x86_64-unknown-linux-gnu ${{ matrix.target }} fuzz/corpus/${{ matrix.target }}
+      - uses: actions/cache/save@v4
+        if: success() && github.event_name != 'pull_request'
+        with:
+          path: fuzz/corpus/${{ matrix.target }}
+          key: fuzz-corpus-${{ matrix.target }}-${{ github.run_id }}
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: fuzz-artifacts-${{ matrix.target }}
+          path: fuzz/artifacts/${{ matrix.target }}
+          if-no-files-found: ignore

@@ -56,7 +56,8 @@ impl Span {
 /// `use` paths inside it are resolved.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FileOrigin {
-    /// A file on disk, stored as a canonical path.
+    /// A file read by path (from disk, or from in-memory files), stored as
+    /// the canonical path the loader resolved.
     Disk(PathBuf),
     /// In-memory text (REPL input, tests). The string is a display name.
     Virtual(String),
