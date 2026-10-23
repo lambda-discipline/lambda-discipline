@@ -2,10 +2,10 @@
 -- of evaluation, so the output does not depend on evaluation order.
 
 -- A definition is never performed on its own.
-never = (print "never printed")
+_never = (print "never printed")
 
 -- An unused binding is never performed either.
-(let unused = (println "never printed either") in (println "only this line"))
+(let _unused = (println "never printed either") in (println "only this line"))
 
 -- A list of actions is just a list until `sequence` runs it.
 greetings : List<IO<Unit>> = [(println "a"), (println "b")]

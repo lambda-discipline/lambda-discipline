@@ -1,8 +1,8 @@
-sum : Int -> Int = \n. (if (eq n 0) 0 (add n (sum (sub n 1))))
+sumTo : Int -> Int = \n. (if (eq n 0) 0 (add n (sumTo (sub n 1))))
 
 -- A tail-recursive loop runs in constant space.
 countDown : Int -> Int = \n. (if (eq n 0) 0 (countDown (sub n 1)))
 
-(println (show (sum 10)))
-(println (show (sum 100000)))
+(println (show (sumTo 10)))
+(println (show (sumTo 100000)))
 (println (show (countDown 1000000)))

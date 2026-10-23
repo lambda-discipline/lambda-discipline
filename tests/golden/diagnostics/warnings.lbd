@@ -1,0 +1,13 @@
+-- Each of these is accepted, but probably a mistake.
+map = 3
+helper = \x. \y. x
+_kept = 1
+
+describe = \o. match o
+    | Some n -> (show n)
+    | None -> "none"
+    | Some 1 -> "one"
+
+(println (show map))
+(println (describe (Some map)))
+(pure 42)

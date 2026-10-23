@@ -17,6 +17,8 @@ use crate::syntax::parse_module;
 /// The items of a compilation unit, with every `use` already expanded.
 #[derive(Debug, Default)]
 pub struct Loaded {
+    /// The file the unit was loaded from, unless it could not be read.
+    pub root: Option<FileId>,
     pub items: Vec<Item>,
     pub diagnostics: Vec<Diagnostic>,
 }
@@ -25,7 +27,10 @@ pub struct Loaded {
 pub fn load_file(sources: &mut SourceMap, path: &Path) -> Loaded {
     let mut loader = Loader::new(sources);
     match loader.read(path, None) {
-        Ok(file) => loader.expand(file),
+        Ok(file) => {
+            loader.loaded.root = Some(file);
+            loader.expand(file);
+        }
         Err(diagnostic) => loader.loaded.diagnostics.push(*diagnostic),
     }
     loader.loaded
@@ -35,6 +40,7 @@ pub fn load_file(sources: &mut SourceMap, path: &Path) -> Loaded {
 pub fn load_text(sources: &mut SourceMap, name: &str, text: &str) -> Loaded {
     let file = sources.add_virtual(name, text);
     let mut loader = Loader::new(sources);
+    loader.loaded.root = Some(file);
     loader.expand(file);
     loader.loaded
 }

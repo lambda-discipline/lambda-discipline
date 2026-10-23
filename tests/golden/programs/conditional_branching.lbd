@@ -1,6 +1,6 @@
 -- Church-encoded booleans: a boolean chooses one of two values.
-churchTrue : a -> a -> a = \x. \y. x
-churchFalse : a -> a -> a = \x. \y. y
+churchTrue : a -> a -> a = \x. \_. x
+churchFalse : a -> a -> a = \_. \y. y
 
 churchIf : (a -> a -> a) -> a -> a -> a = \condition. \thenClause. \elseClause.
     (condition thenClause elseClause)

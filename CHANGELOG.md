@@ -56,6 +56,12 @@ All notable changes to this project are documented here. The format follows
   (`\(x, y). (y, x)`) and in `let (x, y) = p in ...`, and such a pattern
   must match every value. Tuples are compared, ordered and shown
   structurally, and `fst` and `snd` take pairs apart (#6).
+- Warnings for code that compiles but is probably a mistake: unused
+  variables, definitions a program never uses, unreachable `match` arms,
+  definitions that shadow a builtin, and top-level actions whose result is
+  thrown away. They do not change the exit code; `--deny-warnings` on
+  `lbd run` and `lbd check` makes them errors, and a name starting with `_`
+  is never reported as unused (#44).
 
 ### Changed
 

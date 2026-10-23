@@ -48,6 +48,7 @@ cargo build --release
 | --- | --- |
 | `lbd run <file>` | Type-check and run a program. Exit code 1 on any error. |
 | `lbd check <file>` | Type-check only. |
+| `lbd run\|check <file> --deny-warnings` | Treat warnings (unused names, unreachable `match` arms, shadowed builtins, discarded results) as errors, e.g. in CI. Prefix a name with `_` to mark it as unused on purpose. |
 | `lbd check <file> --emit tokens\|ast\|types\|core` | Print an intermediate representation. |
 | `lbd repl` (or just `lbd`) | Interactive session. Without a terminal (pipes, Jupyter, editor modes) it reads stdin without prompts. `--repl` is accepted for the Emacs mode. |
 | `lbd docs [name] [--json]` | Reference for the builtins (`--json` for tools). |

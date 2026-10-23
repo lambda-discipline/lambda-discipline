@@ -279,3 +279,50 @@ read : String -> IO<Unit> = \path. let text <- (readFile path) in (print text)
         ))
         .stderr("");
 }
+
+#[test]
+fn warnings_are_printed_before_the_program_runs() {
+    let (_dir, path) = program("x = 1\n(println \"runs\")");
+    lbd()
+        .arg("run")
+        .arg(&path)
+        .assert()
+        .success()
+        .stdout("runs\n")
+        .stderr(predicate::str::contains(
+            "Warning: `x` is defined but never used",
+        ));
+    lbd()
+        .arg("check")
+        .arg(&path)
+        .assert()
+        .success()
+        .stderr(predicate::str::contains(
+            "Warning: `x` is defined but never used",
+        ));
+}
+
+#[test]
+fn deny_warnings_fails_without_running() {
+    let (_dir, path) = program("x = 1\n(println \"runs?\")");
+    for command in ["run", "check"] {
+        lbd()
+            .args([command, "--deny-warnings"])
+            .arg(&path)
+            .assert()
+            .code(1)
+            .stdout("")
+            .stderr(
+                predicate::str::contains("Error: `x` is defined but never used")
+                    .and(predicate::str::contains("because of `--deny-warnings`")),
+            );
+    }
+    let (_dir, path) = program("_x = 1\n(println \"runs\")");
+    lbd()
+        .args(["run", "--deny-warnings"])
+        .arg(&path)
+        .assert()
+        .success()
+        .stdout("runs\n")
+        .stderr("");
+}

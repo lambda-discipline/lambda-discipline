@@ -1,0 +1,21 @@
+file = "warnings.lbd"
+
+# Warnings do not stop the program or change its exit code.
+[expect]
+exit_code = 0
+stdout = """
+3
+3
+"""
+stderr_contains = [
+    "Warning: `map` shadows the builtin `map`",
+    "warnings.lbd:2:1",
+    "Warning: `helper` is defined but never used",
+    "rename it to `_helper` to keep it",
+    "Warning: unused variable `y`",
+    "warnings.lbd:3:15",
+    "Warning: unreachable `match` arm",
+    "warnings.lbd:9:7",
+    "Warning: the result of this action is discarded",
+    "this produces a value of type `Int`",
+]

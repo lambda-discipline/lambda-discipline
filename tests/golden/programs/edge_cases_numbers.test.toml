@@ -10,3 +10,4 @@ stdout = """
 Infinity
 1e+21 0.0025
 """
+stderr_contains = ["Warning: `abs` shadows the builtin `abs`"]

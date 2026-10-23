@@ -9,6 +9,7 @@
 //! * [`loader`]: expands `use` items.
 //! * [`resolve`] to [`hir`]: name resolution.
 //! * [`types`]: Hindley-Milner type inference.
+//! * [`lint`]: warnings about code that type-checks.
 //! * [`core`]: the closure-converted, uncurried IR that backends consume.
 //! * [`backend`]: the [`backend::Backend`] trait and the lazy interpreter.
 //! * [`builtins`]: the primitive operations, shared by every stage.
@@ -20,6 +21,7 @@ pub mod cli;
 pub mod core;
 pub mod diagnostics;
 pub mod hir;
+pub mod lint;
 pub mod loader;
 pub mod output;
 pub mod repl;

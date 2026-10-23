@@ -40,6 +40,22 @@ pub fn missing(env: &TypeEnv, arms: &[&hir::Pattern]) -> Option<String> {
     Some(out)
 }
 
+/// The indices of the arms no value can reach, because the arms before
+/// them match everything they do.
+pub fn unreachable(env: &TypeEnv, arms: &[&hir::Pattern]) -> Vec<usize> {
+    let checker = Checker { env };
+    let mut rows: Vec<Vec<Pat>> = Vec::new();
+    let mut found = Vec::new();
+    for (i, arm) in arms.iter().enumerate() {
+        let row = vec![simplify(arm)];
+        if checker.useful(&rows, &row).is_none() {
+            found.push(i);
+        }
+        rows.push(row);
+    }
+    found
+}
+
 fn simplify(pattern: &hir::Pattern) -> Pat {
     match &pattern.kind {
         PatternKind::Con { con, args } => Pat::Con(*con, args.iter().map(simplify).collect()),
