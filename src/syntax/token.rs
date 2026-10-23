@@ -63,6 +63,14 @@ pub enum TokenKind {
     #[token("]")]
     RBracket,
 
+    /// Multi-character infix operators rejected by logos as a single error; never produced.
+    #[token("==", |_| false)]
+    #[token("!=", |_| false)]
+    #[token("<=", |_| false)]
+    #[token("&&", |_| false)]
+    #[token("||", |_| false)]
+    InvalidInfix,
+
     /// Synthesized by [`lex`] at the end of input; never produced by logos.
     Eof,
 }
@@ -95,6 +103,7 @@ impl TokenKind {
             TokenKind::RParen => "`)`",
             TokenKind::LBracket => "`[`",
             TokenKind::RBracket => "`]`",
+            TokenKind::InvalidInfix => "operator",
             TokenKind::Eof => "end of input",
         }
     }
@@ -120,10 +129,12 @@ pub fn lex(file: FileId, text: &str) -> (Vec<Token>, Vec<Diagnostic>) {
     let mut errors = Vec::new();
     let mut lexer = TokenKind::lexer(text);
     while let Some(result) = lexer.next() {
-        let span = Span::new(file, lexer.span());
+        let span_range = lexer.span();
+        let preceding = text[..span_range.start].chars().next_back();
+        let span = Span::new(file, span_range);
         match result {
             Ok(kind) => tokens.push(Token { kind, span }),
-            Err(()) => errors.push(lex_error(lexer.slice(), lexer.remainder(), span)),
+            Err(()) => errors.push(lex_error(lexer.slice(), lexer.remainder(), preceding, span)),
         }
     }
     tokens.push(Token {
@@ -133,7 +144,7 @@ pub fn lex(file: FileId, text: &str) -> (Vec<Token>, Vec<Diagnostic>) {
     (tokens, errors)
 }
 
-fn lex_error(slice: &str, remainder: &str, span: Span) -> Diagnostic {
+fn lex_error(slice: &str, remainder: &str, preceding: Option<char>, span: Span) -> Diagnostic {
     if slice.starts_with('"') {
         let end = span.end as usize + remainder.len();
         return Diagnostic::error("unterminated string literal")
@@ -141,16 +152,32 @@ fn lex_error(slice: &str, remainder: &str, span: Span) -> Diagnostic {
             .with_label("this string is never closed")
             .with_help("add a closing `\"`");
     }
-    let shown = slice
-        .chars()
-        .next()
-        .map_or_else(String::new, |c| c.escape_debug().to_string());
-    let diagnostic = Diagnostic::error(format!("unexpected character `{shown}`"))
+    let shown = slice.escape_debug().to_string();
+    let kind = if slice.chars().count() > 1 {
+        "operator"
+    } else {
+        "character"
+    };
+    let diagnostic = Diagnostic::error(format!("unexpected {kind} `{shown}`"))
         .at(span)
         .with_label("not valid here");
+    let starts_token = matches!(preceding, None | Some('(' | '[' | ','))
+        || preceding.is_some_and(char::is_whitespace);
     match slice {
         ";" => diagnostic.with_help("statements are not terminated by `;`"),
         "-" => diagnostic.with_help("use `(sub a b)` or `(neg x)`; `-` only starts a negative number literal or `--` comment"),
+        "+" if starts_token && remainder.starts_with(|c: char| c.is_ascii_digit()) => {
+            diagnostic.with_help("number literals do not take a leading `+`")
+        }
+        "+" => diagnostic.with_help("use `(add a b)`"),
+        "*" => diagnostic.with_help("use `(mul a b)`"),
+        "/" => diagnostic.with_help("use `(div a b)` for Int or `(fdiv a b)` for Float"),
+        "%" => diagnostic.with_help("use `(mod a b)`"),
+        "==" => diagnostic.with_help("use `(eq a b)`"),
+        "!=" => diagnostic.with_help("use `(neq a b)`"),
+        "<=" => diagnostic.with_help("use `(le a b)`"),
+        "&&" => diagnostic.with_help("use `(and a b)`"),
+        "||" => diagnostic.with_help("use `(or a b)`"),
         _ => diagnostic,
     }
 }
@@ -320,5 +347,57 @@ mod tests {
         assert_eq!(unescape(r#""plain""#).unwrap(), "plain");
         assert!(unescape(r#""bad \q""#).is_err());
         assert!(unescape(r#""bad \u{zz}""#).is_err());
+    }
+
+    #[test]
+    fn infix_operators_suggest_prefix_builtins() {
+        let operators = [
+            ("+", "unexpected character `+`", "use `(add a b)`"),
+            ("*", "unexpected character `*`", "use `(mul a b)`"),
+            (
+                "/",
+                "unexpected character `/`",
+                "use `(div a b)` for Int or `(fdiv a b)` for Float",
+            ),
+            ("%", "unexpected character `%`", "use `(mod a b)`"),
+            ("==", "unexpected operator `==`", "use `(eq a b)`"),
+            ("!=", "unexpected operator `!=`", "use `(neq a b)`"),
+            ("<=", "unexpected operator `<=`", "use `(le a b)`"),
+            ("&&", "unexpected operator `&&`", "use `(and a b)`"),
+            ("||", "unexpected operator `||`", "use `(or a b)`"),
+        ];
+
+        let mut map = SourceMap::new();
+        for (op, expected_message, expected_help) in operators {
+            let text = format!("1 {op} 2");
+            let file = map.add_virtual("t", text.as_str());
+            let (_tokens, errors) = lex(file, &text);
+            assert_eq!(errors.len(), 1, "expected 1 error for {op}");
+            assert_eq!(errors[0].message, expected_message);
+            assert_eq!(errors[0].help.as_deref(), Some(expected_help));
+            assert_eq!(errors[0].span.unwrap().range(), 2..(2 + op.len()));
+        }
+
+        for input in ["+2", "(+2)", "[+2]", "(1, +2)", "(le 1 +2)"] {
+            let file = map.add_virtual("t", input);
+            let (_tokens, errors) = lex(file, input);
+            assert_eq!(errors.len(), 1, "expected leading + error for {input}");
+            assert_eq!(
+                errors[0].help.as_deref(),
+                Some("number literals do not take a leading `+`")
+            );
+        }
+
+        let file = map.add_virtual("t", "1+2");
+        let (_tokens, errors) = lex(file, "1+2");
+        assert_eq!(errors.len(), 1);
+        assert_eq!(errors[0].message, "unexpected character `+`");
+        assert_eq!(errors[0].help.as_deref(), Some("use `(add a b)`"));
+
+        let file = map.add_virtual("t", "(println (add 1+2))");
+        let (_tokens, errors) = lex(file, "(println (add 1+2))");
+        assert_eq!(errors.len(), 1);
+        assert_eq!(errors[0].message, "unexpected character `+`");
+        assert_eq!(errors[0].help.as_deref(), Some("use `(add a b)`"));
     }
 }

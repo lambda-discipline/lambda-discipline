@@ -1,0 +1,15 @@
+file = "infix_operator.lbd"
+
+[expect]
+exit_code = 1
+stdout = ""
+stderr_contains = [
+    "Error: unexpected character `+`",
+    "infix_operator.lbd:1:12",
+    "(println 1 + 2)",
+    "use `(add a b)`",
+    "Error: unexpected operator `==`",
+    "infix_operator.lbd:2:12",
+    "(println 1 == 2)",
+    "use `(eq a b)`",
+]
