@@ -25,13 +25,13 @@ repos:
         types: [rust]
       - id: cargo-clippy
         name: cargo clippy
-        entry: cargo clippy --all-targets --locked -- -D warnings
+        entry: cargo clippy --workspace --all-targets --locked -- -D warnings
         language: system
         types: [rust]
         pass_filenames: false
       - id: cargo-test
         name: cargo test
-        entry: cargo test --locked
+        entry: cargo test --workspace --locked
         language: system
         files: \.(rs|lbd|toml)$
         pass_filenames: false

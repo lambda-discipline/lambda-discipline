@@ -92,6 +92,9 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- Negative zero keeps its sign when printed: `(show -0.0)` is `-0.0`, as in
+  Haskell, OCaml and Python, and `lbd check --emit ast` no longer turns
+  `(fdiv 1.0 -0.0)`, which is `-Infinity`, into `(fdiv 1.0 0.0)` (#51).
 - Type errors no longer print an inferred type variable with the same name as
   an annotation's: checking `f : a -> Int = \x. (length x)` now reports
   that the definition has type `List<b> -> Int`, not `List<a> -> Int`

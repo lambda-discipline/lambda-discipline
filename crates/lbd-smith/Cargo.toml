@@ -1,0 +1,11 @@
+[package]
+name = "lbd-smith"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.85"
+publish = false
+description = "Random Lambda Discipline programs for fuzzing and property tests"
+license = "MIT"
+
+[dependencies]
+arbitrary = "1.4.1"
