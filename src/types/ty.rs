@@ -10,6 +10,28 @@ use crate::hir::TyConId;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct TyVar(pub u32);
 
+/// The identity of a rigid (skolem) type variable, unique within one
+/// type-checking run.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct SkolemId(pub u32);
+
+/// A rigid type variable: the `a` of an annotation such as `id : a -> a`.
+/// Two skolems are the same when their ids are, whatever their names; the
+/// name is kept only for printing, as in GHC and OCaml.
+#[derive(Debug, Clone)]
+pub struct Skolem {
+    pub id: SkolemId,
+    pub name: Rc<str>,
+}
+
+impl PartialEq for Skolem {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+
+impl Eq for Skolem {}
+
 /// A type constructor: a built-in type such as `Int` or `List`, or a
 /// declared data type. Two constructors are the same when their ids are,
 /// whatever their names.
@@ -45,7 +67,7 @@ pub enum Type {
     Gen(u32),
     /// A rigid (skolem) variable from a user annotation, such as the `a` in
     /// `id : a -> a`; it only unifies with itself.
-    Rigid(Rc<str>),
+    Rigid(Skolem),
     /// A type constructor applied to arguments: `Int`, `List<a>`.
     Con(TyCon, Vec<Type>),
     /// A function type.
@@ -259,10 +281,6 @@ impl Scheme {
     }
 }
 
-/// Assigns readable names (`a`, `b`, ..., `z`, `t26`, ...) to variables in
-/// order of first appearance, so the same type always prints the same way.
-/// Names that rigid variables already use are skipped, so an inferred
-/// variable never prints like an annotation's `a`.
 /// The `n`th type variable name: `a` to `z`, then `t26`, `t27` and so on.
 pub fn var_name(n: usize) -> String {
     match u8::try_from(n) {
@@ -271,23 +289,54 @@ pub fn var_name(n: usize) -> String {
     }
 }
 
+/// Assigns readable names (`a`, `b`, ..., `z`, `t26`, ...) to variables in
+/// order of first appearance, so the same type always prints the same way.
+/// Rigid variables keep their annotation's names, and inferred variables
+/// skip those names, so an inferred variable never prints like an
+/// annotation's `a`. Distinct rigid variables that share a name get a
+/// number (`a`, `a1`), so they never print alike either.
 struct Namer {
     vars: HashMap<TyVar, String>,
     gens: HashMap<u32, String>,
-    reserved: HashSet<Rc<str>>,
+    rigids: HashMap<SkolemId, String>,
+    reserved: HashSet<String>,
     next: usize,
 }
 
 impl Namer {
-    /// A namer for printing `types` together, reserving their rigid names.
+    /// A namer for printing `types` together, naming their rigid variables
+    /// first.
     fn new(types: &[&Type]) -> Self {
-        let mut reserved = HashSet::new();
+        let mut skolems = Vec::new();
         for ty in types {
-            ty.collect_rigid(&mut reserved);
+            ty.collect_rigid(&mut skolems);
+        }
+        // A numbered name never takes another annotation's plain name, so
+        // `a1` stays `a1` next to two distinct `a`s.
+        let mut reserved: HashSet<String> = skolems
+            .iter()
+            .map(|skolem| skolem.name.to_string())
+            .collect();
+        let mut taken = HashSet::new();
+        let mut rigids = HashMap::new();
+        for skolem in skolems {
+            if rigids.contains_key(&skolem.id) {
+                continue;
+            }
+            let mut name = skolem.name.to_string();
+            let mut number = 0;
+            while taken.contains(&name) || (number > 0 && reserved.contains(&name)) {
+                number += 1;
+                name = format!("{}{number}", skolem.name);
+            }
+            reserved.insert(name.clone());
+            taken.insert(name.clone());
+            rigids.insert(skolem.id, name);
         }
         Namer {
             vars: HashMap::new(),
             gens: HashMap::new(),
+            rigids,
             reserved,
             next: 0,
         }
@@ -298,7 +347,7 @@ impl Namer {
             let n = self.next;
             self.next += 1;
             let name = var_name(n);
-            if !self.reserved.contains(name.as_str()) {
+            if !self.reserved.contains(&name) {
                 return name;
             }
         }
@@ -320,7 +369,7 @@ impl Namer {
                 }
                 out.push_str(&self.gens[g]);
             }
-            Type::Rigid(name) => out.push_str(name),
+            Type::Rigid(skolem) => out.push_str(&self.rigids[&skolem.id]),
             Type::Con(con, args) if con.id.tuple_arity().is_some() => {
                 out.push('(');
                 for (i, arg) in args.iter().enumerate() {
@@ -360,15 +409,14 @@ impl Namer {
 }
 
 impl Type {
-    fn collect_rigid(&self, names: &mut HashSet<Rc<str>>) {
+    /// The rigid variables of the type, in order of appearance.
+    fn collect_rigid<'a>(&'a self, skolems: &mut Vec<&'a Skolem>) {
         match self {
-            Type::Rigid(name) => {
-                names.insert(name.clone());
-            }
-            Type::Con(_, args) => args.iter().for_each(|arg| arg.collect_rigid(names)),
+            Type::Rigid(skolem) => skolems.push(skolem),
+            Type::Con(_, args) => args.iter().for_each(|arg| arg.collect_rigid(skolems)),
             Type::Fun(from, to) => {
-                from.collect_rigid(names);
-                to.collect_rigid(names);
+                from.collect_rigid(skolems);
+                to.collect_rigid(skolems);
             }
             Type::Var(_) | Type::Gen(_) => {}
         }
@@ -431,6 +479,13 @@ pub fn display_together(types: &[&Type]) -> Vec<String> {
 mod tests {
     use super::*;
 
+    fn rigid(id: u32, name: &str) -> Type {
+        Type::Rigid(Skolem {
+            id: SkolemId(id),
+            name: name.into(),
+        })
+    }
+
     #[test]
     fn variable_names_continue_past_z() {
         assert_eq!(var_name(0), "a");
@@ -454,19 +509,36 @@ mod tests {
     fn variables_are_named_in_order_of_appearance() {
         let ty = Type::fun(Type::Var(TyVar(7)), Type::Var(TyVar(3)));
         assert_eq!(ty.to_string(), "a -> b");
-        let rigid = Type::fun(Type::Rigid("x".into()), Type::int());
-        assert_eq!(rigid.to_string(), "x -> Int");
+        let annotated = Type::fun(rigid(0, "x"), Type::int());
+        assert_eq!(annotated.to_string(), "x -> Int");
     }
 
     #[test]
     fn inferred_variables_skip_rigid_names() {
-        let annotation = Type::fun(Type::Rigid("a".into()), Type::int());
+        let annotation = Type::fun(rigid(0, "a"), Type::int());
         let found = Type::fun(Type::list(Type::Var(TyVar(0))), Type::int());
         let shown = display_together(&[&annotation, &found]);
         assert_eq!(shown, ["a -> Int", "List<b> -> Int"]);
         // A rigid name that appears after the variable is reserved too.
-        let ty = Type::fun(Type::Var(TyVar(0)), Type::Rigid("a".into()));
+        let ty = Type::fun(Type::Var(TyVar(0)), rigid(0, "a"));
         assert_eq!(ty.to_string(), "b -> a");
+    }
+
+    #[test]
+    fn distinct_rigid_variables_never_print_alike() {
+        // Two annotations' `a`s are different variables.
+        let shown = display_together(&[&rigid(0, "a"), &rigid(1, "a")]);
+        assert_eq!(shown, ["a", "a1"]);
+        // The same variable keeps its name wherever it appears.
+        let same = Type::fun(rigid(3, "a"), rigid(3, "a"));
+        assert_eq!(same.to_string(), "a -> a");
+        // A number never takes another annotation's name, and inferred
+        // variables skip all of them.
+        let ty = Type::curried(
+            [rigid(0, "a"), rigid(1, "a1"), rigid(2, "a")],
+            Type::Var(TyVar(0)),
+        );
+        assert_eq!(ty.to_string(), "a -> a1 -> a2 -> b");
     }
 
     #[test]

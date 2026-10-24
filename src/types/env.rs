@@ -8,7 +8,7 @@ use crate::hir::{ConId, TyConId};
 use crate::index::to_u32;
 use crate::source::Span;
 
-use super::ty::{CLASS_COUNT, Class, Scheme, TyCon, Type};
+use super::ty::{CLASS_COUNT, Class, Scheme, Skolem, SkolemId, TyCon, Type};
 
 /// A type's instance of one class: `None` when the type does not belong to
 /// it, otherwise the indices of the parameters that must belong to it too
@@ -338,7 +338,18 @@ impl TypeEnv {
             let params: Vec<&str> = info.params.iter().map(AsRef::as_ref).collect();
             out.push_str(&format!("<{}>", params.join(", ")));
         }
-        let names: Vec<Type> = info.params.iter().map(|p| Type::Rigid(p.clone())).collect();
+        // The parameters print as rigid variables with their declared names.
+        let names: Vec<Type> = info
+            .params
+            .iter()
+            .enumerate()
+            .map(|(i, name)| {
+                Type::Rigid(Skolem {
+                    id: SkolemId(to_u32(i)),
+                    name: name.clone(),
+                })
+            })
+            .collect();
         for (i, &con) in info.constructors.iter().enumerate() {
             let con = self.constructor(con);
             out.push_str(if i == 0 { " = " } else { " | " });
@@ -364,10 +375,12 @@ impl TypeEnv {
 /// Replaces quantified variables by the parameter names they stand for.
 fn name_params(ty: &Type, names: &[Type]) -> Type {
     match ty {
-        Type::Gen(i) => names
-            .get(*i as usize)
-            .cloned()
-            .unwrap_or_else(|| Type::Rigid(Rc::from("?"))),
+        Type::Gen(i) => names.get(*i as usize).cloned().unwrap_or_else(|| {
+            Type::Rigid(Skolem {
+                id: SkolemId(u32::MAX),
+                name: Rc::from("?"),
+            })
+        }),
         Type::Con(con, args) => Type::Con(
             con.clone(),
             args.iter().map(|a| name_params(a, names)).collect(),
