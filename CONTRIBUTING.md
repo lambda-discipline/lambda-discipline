@@ -120,6 +120,23 @@ cargo test --test golden -- programs/fibonacci
 cargo test --test golden -- diagnostics/
 ```
 
+When a change alters output on purpose, such as a reworded diagnostic, bless
+the golden files instead of editing them by hand:
+
+```sh
+cargo test --test golden -- --bless
+cargo test --test golden -- --bless diagnostics/
+```
+
+Setting `BLESS=1` in the environment does the same. Blessing rewrites the
+`exit_code`, `stdout` and `stderr` a manifest already sets to what the
+program now produces, and leaves the rest of the file alone. For a new
+program, write a manifest with an empty `[expect]` table and bless it to fill
+in `exit_code` and `stdout`. Fragments in `stdout_contains` and
+`stderr_contains` are never rewritten, so a lost fragment still fails. Review
+the diff before committing it: a blessed golden file is only as right as the
+output it recorded.
+
 ## Property tests
 
 `tests/properties.rs` checks laws the compiler must obey for every program,
