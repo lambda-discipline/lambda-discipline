@@ -263,6 +263,14 @@ impl Scheme {
 /// order of first appearance, so the same type always prints the same way.
 /// Names that rigid variables already use are skipped, so an inferred
 /// variable never prints like an annotation's `a`.
+/// The `n`th type variable name: `a` to `z`, then `t26`, `t27` and so on.
+pub fn var_name(n: usize) -> String {
+    match u8::try_from(n) {
+        Ok(n @ 0..26) => char::from(b'a' + n).to_string(),
+        _ => format!("t{n}"),
+    }
+}
+
 struct Namer {
     vars: HashMap<TyVar, String>,
     gens: HashMap<u32, String>,
@@ -289,11 +297,7 @@ impl Namer {
         loop {
             let n = self.next;
             self.next += 1;
-            let name = if n < 26 {
-                ((b'a' + n as u8) as char).to_string()
-            } else {
-                format!("t{n}")
-            };
+            let name = var_name(n);
             if !self.reserved.contains(name.as_str()) {
                 return name;
             }
@@ -426,6 +430,14 @@ pub fn display_together(types: &[&Type]) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn variable_names_continue_past_z() {
+        assert_eq!(var_name(0), "a");
+        assert_eq!(var_name(25), "z");
+        assert_eq!(var_name(26), "t26");
+        assert_eq!(var_name(300), "t300");
+    }
 
     #[test]
     fn displays_nested_function_types_with_parentheses() {

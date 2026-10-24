@@ -39,7 +39,7 @@ use crate::syntax::ast::{Constraint, TypeExpr, TypeExprKind, TypeScheme};
 
 use super::env::{ConInfo, TypeEnv, TypeInfo};
 use super::exhaustive;
-use super::ty::{Class, Classes, Scheme, TyCon, TyVar, Type, display_together};
+use super::ty::{Class, Classes, Scheme, TyCon, TyVar, Type, display_together, var_name};
 
 /// The result of checking one unit.
 #[derive(Debug, Default)]
@@ -772,10 +772,7 @@ impl<'a> Checker<'a> {
                                 _ => format!(
                                     "write `{}<{}>`",
                                     name.name,
-                                    (0..arity)
-                                        .map(|i| ((b'a' + i as u8) as char).to_string())
-                                        .collect::<Vec<_>>()
-                                        .join(", ")
+                                    (0..arity).map(var_name).collect::<Vec<_>>().join(", ")
                                 ),
                             }),
                         );
