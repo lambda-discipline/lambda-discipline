@@ -624,3 +624,37 @@ fn options_and_results() {
         "[True, True, True]"
     );
 }
+
+/// Sets the session's interrupt flag after a short delay, from another thread.
+fn interrupt_soon(session: &Session) -> std::thread::JoinHandle<()> {
+    let flag = session.interrupt_flag();
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        flag.store(true, std::sync::atomic::Ordering::Relaxed);
+    })
+}
+
+#[test]
+fn an_interrupt_stops_a_loop_and_keeps_the_session() {
+    let (mut session, _) = session();
+    let definitions = "spin = \\n. (spin (add n 1))\nstuck = (spin 0)";
+    if let Err(diagnostics) = session.eval("<test>", definitions) {
+        panic!("{}", render(&session, &diagnostics));
+    }
+    // Forcing `stuck` twice checks that the interrupt left it re-runnable.
+    for _ in 0..2 {
+        let setter = interrupt_soon(&session);
+        let diagnostics = session
+            .eval("<test>", "stuck")
+            .expect_err("the loop is interrupted");
+        setter.join().unwrap();
+        assert_eq!(diagnostics.len(), 1);
+        assert_eq!(diagnostics[0].message, "interrupted");
+    }
+    let evaluated = session
+        .eval("<test>", "(add 1 2)")
+        .unwrap_or_else(|diagnostics| {
+            panic!("{}", render(&session, &diagnostics));
+        });
+    assert_eq!(evaluated.values[0].0.show(), "3");
+}

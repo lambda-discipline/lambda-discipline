@@ -13,6 +13,8 @@ use std::fmt;
 use std::io::Write;
 use std::path::Path;
 use std::rc::Rc;
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 
 use crate::backend::Backend;
 use crate::backend::interp::{Interpreter, Value};
@@ -68,6 +70,8 @@ pub struct Session {
     by_name: HashMap<Rc<str>, GlobalId>,
     types: TypeEnv,
     interpreter: Interpreter,
+    /// Stops the running evaluation when set; kept across [`Session::reset`].
+    interrupt: Arc<AtomicBool>,
     /// Warnings of the units compiled since [`Session::take_warnings`].
     warnings: Diagnostics,
     deny_warnings: bool,
@@ -76,12 +80,16 @@ pub struct Session {
 impl Session {
     /// A session whose programs print to `out`.
     pub fn new(out: Box<dyn Write>) -> Self {
+        let interrupt = Arc::new(AtomicBool::new(false));
+        let mut interpreter = Interpreter::new(out);
+        interpreter.set_interrupt(interrupt.clone());
         Self {
             sources: SourceMap::new(),
             globals: Vec::new(),
             by_name: HashMap::new(),
             types: TypeEnv::new(),
-            interpreter: Interpreter::new(out),
+            interpreter,
+            interrupt,
             warnings: Vec::new(),
             deny_warnings: false,
         }
@@ -94,6 +102,7 @@ impl Session {
         self.by_name.clear();
         self.types = TypeEnv::new();
         self.interpreter = Interpreter::new(self.take_output());
+        self.interpreter.set_interrupt(self.interrupt.clone());
     }
 
     fn take_output(&mut self) -> Box<dyn Write> {
@@ -350,6 +359,12 @@ impl Session {
     /// Limits the interpreter's evaluation stack (see [`Interpreter::set_max_frames`]).
     pub fn set_max_frames(&mut self, max_frames: usize) {
         self.interpreter.set_max_frames(max_frames);
+    }
+
+    /// The flag that stops the running evaluation with an `interrupted`
+    /// error. The REPL's Ctrl-C handler sets it.
+    pub fn interrupt_flag(&self) -> Arc<AtomicBool> {
+        self.interrupt.clone()
     }
 
     /// Renders diagnostics against this session's sources.

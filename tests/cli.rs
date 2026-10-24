@@ -326,3 +326,41 @@ fn deny_warnings_fails_without_running() {
         .stdout("runs\n")
         .stderr("");
 }
+
+#[cfg(unix)]
+#[test]
+fn ctrl_c_interrupts_evaluation_in_the_repl() {
+    use std::io::Write as _;
+    use std::process::Stdio;
+    use std::time::Duration;
+
+    let mut child = std::process::Command::new(assert_cmd::cargo::cargo_bin("lbd"))
+        .arg("repl")
+        .env("NO_COLOR", "1")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let mut stdin = child.stdin.take().unwrap();
+    stdin
+        .write_all(b"spin = \\n. (spin (add n 1))\n(spin 0)\n")
+        .unwrap();
+    stdin.flush().unwrap();
+    // Give the REPL time to install its handler and start the loop.
+    std::thread::sleep(Duration::from_millis(500));
+    let status = std::process::Command::new("kill")
+        .args(["-INT", &child.id().to_string()])
+        .status()
+        .unwrap();
+    assert!(status.success());
+    stdin.write_all(b"(add 2 2)\n").unwrap();
+    drop(stdin);
+    let output = child.wait_with_output().unwrap();
+    assert!(output.status.success());
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        "spin : Int -> a\n=> 4 : Int\n"
+    );
+    assert!(String::from_utf8_lossy(&output.stderr).contains("interrupted"));
+}

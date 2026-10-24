@@ -21,6 +21,8 @@ All notable changes to this project are documented here. The format follows
 - `lbd run`, `lbd check [--emit tokens|ast|types|core]`, `lbd repl`, `lbd docs [--json]`.
 - REPL with GHCi-style commands (`:type`, `:info`, `:load`, `:reload`, `:env`,
   `:docs`, `:reset`), multi-line input and tab completion.
+- Ctrl-C in the REPL stops the running evaluation with an `interrupted`
+  error and keeps every definition; `lbd run` still exits on Ctrl-C (#36).
 - Diagnostics rendered with `ariadne`.
 - `__FILE__`, `__DIR__` and `__LINE__`: the path, directory and line where
   they are written. `(readFile (concat __DIR__ "/input.txt"))` reads a file

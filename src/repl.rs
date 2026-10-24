@@ -10,6 +10,7 @@ use std::cell::{Cell, RefCell};
 use std::io::{self, BufRead, IsTerminal, Write};
 use std::path::PathBuf;
 use std::rc::Rc;
+use std::sync::atomic::Ordering;
 
 use rustyline::completion::{Completer, FilenameCompleter, Pair};
 use rustyline::error::ReadlineError;
@@ -91,6 +92,10 @@ impl Repl {
         if trimmed.is_empty() {
             return Control::Continue;
         }
+        // A Ctrl-C pressed while nothing ran must not stop this input.
+        self.session
+            .interrupt_flag()
+            .store(false, Ordering::Relaxed);
         if let Some(command) = trimmed.strip_prefix(':') {
             return self.command(command);
         }
@@ -339,6 +344,11 @@ pub fn run(color: bool) -> io::Result<()> {
         Box::new(io::stderr()),
         color,
     );
+    // Ctrl-C stops the running evaluation instead of killing the process
+    // and every definition with it. While rustyline reads a line, the
+    // terminal is in raw mode and Ctrl-C reaches it as a key instead.
+    let interrupt = repl.session().interrupt_flag();
+    let _ = ctrlc::set_handler(move || interrupt.store(true, Ordering::Relaxed));
     if interactive {
         run_interactive(&mut repl, color)
     } else {
@@ -566,6 +576,30 @@ mod tests {
         assert_eq!(h.out.take(), "\n");
         h.repl.handle(r#"(println "hi")"#);
         assert_eq!(h.out.take(), "");
+    }
+
+    #[test]
+    fn an_interrupt_ends_the_input_but_not_the_session() {
+        let mut h = harness();
+        h.repl.handle(r"spin = \n. (spin (add n 1))");
+        h.out.take();
+        // Left over from a Ctrl-C while nothing ran: must not stop the next input.
+        h.repl
+            .session()
+            .interrupt_flag()
+            .store(true, Ordering::Relaxed);
+        h.repl.handle("(add 1 1)");
+        assert_eq!(h.out.take(), "=> 2 : Int\n");
+        let flag = h.repl.session().interrupt_flag();
+        let setter = std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(50));
+            flag.store(true, Ordering::Relaxed);
+        });
+        h.repl.handle("(spin 0)");
+        setter.join().unwrap();
+        assert!(h.err.take().contains("interrupted"));
+        h.repl.handle("(add 2 2)");
+        assert_eq!(h.out.take(), "=> 4 : Int\n");
     }
 
     #[test]
