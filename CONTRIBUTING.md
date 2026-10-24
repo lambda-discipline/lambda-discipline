@@ -112,6 +112,14 @@ programs that should fail, with their messages and `file:line:column`
 locations, in `tests/golden/diagnostics/`. Golden files are compared byte for
 byte, so keep them LF-terminated (`.gitattributes` does this for you).
 
+Each manifest is its own test, named by its path without `.test.toml`, so you
+can run one program, or every program whose name matches, on its own:
+
+```sh
+cargo test --test golden -- programs/fibonacci
+cargo test --test golden -- diagnostics/
+```
+
 ## Property tests
 
 `tests/properties.rs` checks laws the compiler must obey for every program,

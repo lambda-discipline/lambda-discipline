@@ -9,11 +9,16 @@
 //! stdout = "exact output\n"
 //! stderr_contains = ["a fragment", "another"]
 //! ```
+//!
+//! Each manifest is its own test, so failures are reported one by one and a
+//! filter such as `cargo test --test golden -- programs/fibonacci` runs one.
 
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::process::ExitCode;
 
 use assert_cmd::Command;
+use libtest_mimic::{Arguments, Failed, Trial};
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
@@ -97,34 +102,24 @@ fn check(manifest_path: &Path) -> Result<(), String> {
     }
 }
 
-fn run_suite(dir: &str) {
+/// One test per manifest, named by its path under `tests/golden` without the
+/// `.test.toml` suffix, for example `programs/fibonacci`.
+fn main() -> ExitCode {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/golden");
     let mut found = Vec::new();
-    manifests(&Path::new(env!("CARGO_MANIFEST_DIR")).join(dir), &mut found);
+    manifests(&root, &mut found);
     found.sort();
-    assert!(!found.is_empty(), "no manifests under {dir}");
-    let failures: Vec<String> = found
-        .iter()
-        .filter_map(|path| {
-            check(path)
-                .err()
-                .map(|e| format!("=== {}\n{e}", path.display()))
+    assert!(!found.is_empty(), "no manifests under {}", root.display());
+    let tests = found
+        .into_iter()
+        .map(|path| {
+            let relative = path.strip_prefix(&root).unwrap().to_string_lossy();
+            let name = relative
+                .strip_suffix(".test.toml")
+                .unwrap()
+                .replace('\\', "/");
+            Trial::test(name, move || check(&path).map_err(Failed::from))
         })
         .collect();
-    assert!(
-        failures.is_empty(),
-        "{} of {} failed:\n{}",
-        failures.len(),
-        found.len(),
-        failures.join("\n")
-    );
-}
-
-#[test]
-fn programs() {
-    run_suite("tests/golden/programs");
-}
-
-#[test]
-fn diagnostics() {
-    run_suite("tests/golden/diagnostics");
+    libtest_mimic::run(&Arguments::from_args(), tests).exit_code()
 }

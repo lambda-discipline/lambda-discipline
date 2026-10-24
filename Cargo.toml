@@ -26,6 +26,7 @@ arbitrary = "1.4.1"
 arbtest = "0.3.2"
 lbd-smith = { path = "crates/lbd-smith" }
 assert_cmd = "2.2.2"
+libtest-mimic = "0.8.2"
 predicates = "3.1.4"
 serde = { version = "1.0.229", features = ["derive"] }
 tempfile = "3.27.0"
@@ -37,3 +38,8 @@ members = ["crates/lbd-smith"]
 [[bin]]
 name = "lbd"
 path = "src/main.rs"
+
+# Golden tests list one test per manifest, so they bring their own harness.
+[[test]]
+name = "golden"
+harness = false
