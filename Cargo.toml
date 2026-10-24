@@ -14,6 +14,7 @@ exclude = [".github/", "examples/aoc-24/", "fuzz/"]
 [dependencies]
 ariadne = "0.6.0"
 clap = { version = "4.6.7", features = ["derive"] }
+ctrlc = "3.5.2"
 imbl = "7.0.2"
 logos = "0.16.1"
 mimalloc = "0.1.52"

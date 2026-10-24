@@ -13,6 +13,9 @@
 //! * Deep non-tail recursion costs one small heap frame per level instead of
 //!   a native stack frame; it is bounded by [`Interpreter::set_max_frames`] and
 //!   reported as an error rather than crashing.
+//! * Every few thousand steps the machine checks an interrupt flag (see
+//!   [`Interpreter::set_interrupt`]), so a runaway loop can be stopped
+//!   without losing the session.
 //! * Lists have a strict spine but lazy elements: a list literal suspends
 //!   its elements, `map` and `zipWith` build suspended calls, and `foldr`
 //!   passes the fold of the rest of the list as an unevaluated argument, so
@@ -36,6 +39,8 @@ pub mod value;
 
 use std::io::Write;
 use std::rc::Rc;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use imbl::Vector;
 
@@ -52,12 +57,19 @@ pub use value::{Action, Closure, Env, Partial, Thunk, ThunkState, Value};
 /// Default limit on continuation frames (each is a few dozen bytes).
 pub const DEFAULT_MAX_FRAMES: usize = 10_000_000;
 
+/// Machine steps between two checks of the interrupt flag.
+const INTERRUPT_INTERVAL: u32 = 4096;
+
 pub struct Interpreter {
     /// One thunk per global, indexed by [`GlobalId`]; grows as units load.
     globals: Vec<Option<Thunk>>,
     stack: Vec<Frame>,
     max_frames: usize,
     out: Box<dyn Write>,
+    /// Set from outside (a Ctrl-C handler) to stop the running evaluation.
+    interrupt: Arc<AtomicBool>,
+    /// Steps until the next check of `interrupt`.
+    countdown: u32,
 }
 
 /// The machine's next move.
@@ -170,6 +182,8 @@ impl Interpreter {
             stack: Vec::new(),
             max_frames: DEFAULT_MAX_FRAMES,
             out,
+            interrupt: Arc::new(AtomicBool::new(false)),
+            countdown: INTERRUPT_INTERVAL,
         }
     }
 
@@ -181,6 +195,12 @@ impl Interpreter {
     /// Limits how deep non-tail recursion may go before it is reported as an error.
     pub fn set_max_frames(&mut self, max_frames: usize) {
         self.max_frames = max_frames;
+    }
+
+    /// Uses `flag` to stop evaluation: once it is set, the running
+    /// evaluation fails with an `interrupted` error and the flag is cleared.
+    pub fn set_interrupt(&mut self, flag: Arc<AtomicBool>) {
+        self.interrupt = flag;
     }
 
     /// Registers a unit's globals without running anything.
@@ -279,6 +299,10 @@ impl Interpreter {
                 }
             };
             control = match step {
+                Ok(_) if self.interrupted() => {
+                    self.unwind(base);
+                    return Err(RuntimeError::interrupted());
+                }
                 Ok(next) if self.stack.len() <= self.max_frames => next,
                 Ok(_) => {
                     self.unwind(base);
@@ -293,6 +317,17 @@ impl Interpreter {
                 }
             };
         }
+    }
+
+    /// Counts a step and, every [`INTERRUPT_INTERVAL`] steps, takes the
+    /// interrupt flag.
+    fn interrupted(&mut self) -> bool {
+        self.countdown -= 1;
+        if self.countdown > 0 {
+            return false;
+        }
+        self.countdown = INTERRUPT_INTERVAL;
+        self.interrupt.swap(false, Ordering::Relaxed)
     }
 
     /// Drops frames after an error, making half-forced thunks re-runnable.

@@ -41,6 +41,11 @@ impl RuntimeError {
         }
     }
 
+    /// The error of an evaluation stopped by the user (Ctrl-C).
+    pub fn interrupted() -> Self {
+        Self::new("interrupted")
+    }
+
     pub fn at(mut self, span: Span) -> Self {
         self.span = Some(span);
         self
