@@ -92,6 +92,9 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- A source file larger than 4 GiB is rejected with "source files are limited
+  to 4 GiB" instead of being loaded with wrapped-around spans, which pointed
+  diagnostics at the wrong place (#59).
 - Negative zero keeps its sign when printed: `(show -0.0)` is `-0.0`, as in
   Haskell, OCaml and Python, and `lbd check --emit ast` no longer turns
   `(fdiv 1.0 -0.0)`, which is `-Infinity`, into `(fdiv 1.0 0.0)` (#51).

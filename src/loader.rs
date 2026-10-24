@@ -15,7 +15,7 @@ use std::io;
 use std::path::{Component, Path, PathBuf};
 
 use crate::diagnostics::Diagnostic;
-use crate::source::{FileId, FileOrigin, SourceMap, Span};
+use crate::source::{FileId, FileOrigin, MAX_FILE_LEN, SourceMap, Span, too_large};
 use crate::syntax::ast::Item;
 use crate::syntax::parse_module;
 
@@ -140,8 +140,13 @@ pub fn load_text_from(
     name: &str,
     text: &str,
 ) -> Loaded {
-    let file = sources.add_virtual(name, text);
     let mut loader = Loader::new(sources, provider);
+    if text.len() > MAX_FILE_LEN {
+        let diagnostic = Diagnostic::error(too_large(name));
+        loader.loaded.diagnostics.push(diagnostic);
+        return loader.loaded;
+    }
+    let file = loader.sources.add_virtual(name, text);
     loader.loaded.root = Some(file);
     loader.expand(file);
     loader.loaded
@@ -190,6 +195,9 @@ impl<'a> Loader<'a> {
             .provider
             .read(&canonical)
             .map_err(|e| fail(format!("cannot read `{shown}`: {e}")))?;
+        if text.len() > MAX_FILE_LEN {
+            return Err(fail(too_large(&shown)));
+        }
         self.included.insert(canonical.clone());
         Ok(self.sources.add(FileOrigin::Disk(canonical), text))
     }
