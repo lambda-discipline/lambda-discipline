@@ -40,7 +40,9 @@ use crate::syntax::ast::{Constraint, TypeExpr, TypeExprKind, TypeScheme};
 
 use super::env::{ConInfo, TypeEnv, TypeInfo};
 use super::exhaustive;
-use super::ty::{Class, Classes, Scheme, TyCon, TyVar, Type, display_together, var_name};
+use super::ty::{
+    Class, Classes, Scheme, Skolem, SkolemId, TyCon, TyVar, Type, display_together, var_name,
+};
 
 /// The result of checking one unit.
 #[derive(Debug, Default)]
@@ -246,9 +248,8 @@ struct Rigid {
     scheme: Scheme,
     /// The annotation with its variables as [`Type::Rigid`].
     ty: Type,
-    names: Vec<Rc<str>>,
-    /// The classes the context gives each of `names`.
-    classes: Vec<Classes>,
+    /// The annotation's variables, in the order of the scheme's.
+    skolems: Vec<Skolem>,
 }
 
 #[derive(Debug, Clone)]
@@ -259,6 +260,16 @@ enum GlobalType {
     Pending(Type),
 }
 
+/// What the checker knows about a rigid variable, indexed by [`SkolemId`].
+#[derive(Debug, Clone, Copy)]
+struct SkolemInfo {
+    /// The level of the annotation that quantifies it. A unification
+    /// variable from a lower level must not be bound to it.
+    level: u32,
+    /// The classes the annotation's context gives it.
+    classes: Classes,
+}
+
 #[derive(Debug, Clone)]
 enum VarState {
     Unbound { level: u32, classes: Classes },
@@ -266,6 +277,8 @@ enum VarState {
 }
 
 /// Per-body state: local types and annotation type variables in scope.
+/// Type variable names are looked up only here, when converting
+/// annotations; types refer to rigid variables by [`SkolemId`].
 #[derive(Default)]
 struct BodyCtx {
     locals: HashMap<LocalId, Scheme>,
@@ -280,9 +293,7 @@ struct Checker<'a> {
     globals: HashMap<GlobalId, GlobalType>,
     vars: Vec<VarState>,
     level: u32,
-    rigid_levels: HashMap<Rc<str>, u32>,
-    /// The classes each rigid variable's annotation declares.
-    rigid_classes: HashMap<Rc<str>, Classes>,
+    skolems: Vec<SkolemInfo>,
     /// Where the classes of a variable were first required (the use of
     /// `eq` that made a variable need `Eq`), for error messages.
     class_origins: HashMap<TyVar, Span>,
@@ -315,8 +326,7 @@ impl<'a> Checker<'a> {
             globals: HashMap::new(),
             vars: Vec::new(),
             level: 0,
-            rigid_levels: HashMap::new(),
-            rigid_classes: HashMap::new(),
+            skolems: Vec::new(),
             class_origins: HashMap::new(),
             diagnostics: Vec::new(),
         }
@@ -336,6 +346,24 @@ impl<'a> Checker<'a> {
             classes,
         });
         Type::Var(var)
+    }
+
+    /// A new rigid variable named `name`, quantified at the current level.
+    /// The classes are set once the annotation's context is converted.
+    fn fresh_skolem(&mut self, name: &Rc<str>) -> Skolem {
+        let id = SkolemId(to_u32(self.skolems.len()));
+        self.skolems.push(SkolemInfo {
+            level: self.level,
+            classes: Classes::NONE,
+        });
+        Skolem {
+            id,
+            name: name.clone(),
+        }
+    }
+
+    fn skolem(&mut self, skolem: &Skolem) -> &mut SkolemInfo {
+        &mut self.skolems[skolem.id.0 as usize]
     }
 
     fn enter(&mut self) {
@@ -420,19 +448,14 @@ impl<'a> Checker<'a> {
         let VarState::Unbound { level, classes } = self.vars[var.0 as usize] else {
             unreachable!("bind is only called on unbound variables");
         };
-        let escapes = match ty {
-            Type::Rigid(name) => self
-                .rigid_levels
-                .get(name)
-                .is_some_and(|&rigid| level < rigid),
-            _ => false,
-        };
-        if let (true, Type::Rigid(name)) = (escapes, ty) {
-            return Err(Mismatch {
-                expected: expected.clone(),
-                found: found.clone(),
-                reason: MismatchReason::Escape(name.clone()),
-            });
+        if let Type::Rigid(skolem) = ty {
+            if level < self.skolem(skolem).level {
+                return Err(Mismatch {
+                    expected: expected.clone(),
+                    found: found.clone(),
+                    reason: MismatchReason::Escape(skolem.name.clone()),
+                });
+            }
         }
         if self.occurs_and_adjust(var, level, ty) {
             return Err(Mismatch {
@@ -481,10 +504,10 @@ impl<'a> Checker<'a> {
                 }
                 Ok(())
             }
-            Type::Rigid(name) => {
-                let declared = self.rigid_classes.get(&name).copied().unwrap_or_default();
+            Type::Rigid(skolem) => {
+                let declared = self.skolem(&skolem).classes;
                 match classes.minus(declared).shown().next() {
-                    Some(class) => Err((class, Type::Rigid(name))),
+                    Some(class) => Err((class, Type::Rigid(skolem))),
                     None => Ok(()),
                 }
             }
@@ -555,7 +578,7 @@ impl<'a> Checker<'a> {
         &self,
         ty: &Type,
         vars: &mut HashMap<TyVar, u32>,
-        rigids: &HashMap<Rc<str>, u32>,
+        rigids: &HashMap<SkolemId, u32>,
     ) -> Type {
         match ty {
             Type::Var(v) => match self.vars[v.0 as usize] {
@@ -565,8 +588,8 @@ impl<'a> Checker<'a> {
                 }
                 _ => ty.clone(),
             },
-            Type::Rigid(name) => rigids
-                .get(name)
+            Type::Rigid(skolem) => rigids
+                .get(&skolem.id)
                 .map_or_else(|| ty.clone(), |&g| Type::Gen(g)),
             Type::Con(name, args) => Type::Con(
                 name.clone(),
@@ -610,39 +633,43 @@ impl<'a> Checker<'a> {
     /// Converts an annotation whose free variables are all quantified.
     /// Reports ill-formed types and returns `None` for them.
     fn annotation_scheme(&mut self, ann: &TypeScheme) -> Option<Rigid> {
-        let mut names: Vec<Rc<str>> = Vec::new();
+        let mut skolems: Vec<Skolem> = Vec::new();
         let mut ok = true;
         let ty = self.convert(
             &ann.ty,
-            &mut |name, _| {
-                let index = names.iter().position(|n| n == name).unwrap_or_else(|| {
-                    names.push(name.clone());
-                    names.len() - 1
-                });
-                Some(Type::Rigid(names[index].clone()))
-            },
+            &mut |name, this| Some(Type::Rigid(skolem_named(&mut skolems, name, this))),
             &mut ok,
         )?;
         if !ok {
             return None;
         }
+        let names: Vec<Rc<str>> = skolems.iter().map(|s| s.name.clone()).collect();
         let classes = self.context(&ann.context, &names, |_| false)?;
-        let rigids: HashMap<Rc<str>, u32> = names
-            .iter()
-            .enumerate()
-            .map(|(i, n)| (n.clone(), to_u32(i)))
-            .collect();
-        let scheme = Scheme {
-            arity: to_u32(names.len()),
-            bounds: classes.clone(),
-            ty: self.generalize_in(&ty, &mut HashMap::new(), &rigids),
-        };
+        let scheme = self.quantify(&ty, &skolems, classes);
         Some(Rigid {
             scheme,
             ty,
-            names,
-            classes,
+            skolems,
         })
+    }
+
+    /// The scheme of an annotation `ty` that quantifies `skolems`, which
+    /// belong to `classes`. Records the classes for checking the body.
+    fn quantify(&mut self, ty: &Type, skolems: &[Skolem], classes: Vec<Classes>) -> Scheme {
+        for (skolem, &classes) in skolems.iter().zip(&classes) {
+            self.skolem(skolem).classes = classes;
+        }
+        let rigids: HashMap<SkolemId, u32> = skolems
+            .iter()
+            .enumerate()
+            .map(|(i, skolem)| (skolem.id, to_u32(i)))
+            .collect();
+        let ty = self.zonk(ty);
+        Scheme {
+            arity: to_u32(skolems.len()),
+            bounds: classes,
+            ty: self.generalize_in(&ty, &mut HashMap::new(), &rigids),
+        }
     }
 
     /// Converts a context to the classes of each of `names`, the variables
@@ -991,11 +1018,12 @@ impl<'a> Checker<'a> {
             let mut ctx = BodyCtx::default();
             let expected = match annotations.get(&def.id) {
                 Some(Some(rigid)) => {
-                    for (name, &classes) in rigid.names.iter().zip(&rigid.classes) {
-                        self.rigid_levels.insert(name.clone(), self.level);
-                        self.rigid_classes.insert(name.clone(), classes);
+                    // The annotation was converted before any group, so its
+                    // variables move to the group's level.
+                    for skolem in &rigid.skolems {
+                        self.skolem(skolem).level = self.level;
                         ctx.type_vars
-                            .insert(name.clone(), Type::Rigid(name.clone()));
+                            .insert(skolem.name.clone(), Type::Rigid(skolem.clone()));
                     }
                     rigid.ty.clone()
                 }
@@ -1118,22 +1146,21 @@ impl<'a> Checker<'a> {
                     Some(ann) => self.let_annotation(ann, ctx),
                     None => None,
                 };
-                let (scheme, mono, new_names) =
-                    if let Some((scheme, rigid_ty, new_names)) = &expected {
-                        (scheme.clone(), rigid_ty.clone(), new_names.clone())
-                    } else {
-                        let ty = self.fresh();
-                        (Scheme::mono(ty.clone()), ty, Vec::new())
-                    };
+                let (scheme, mono, skolems) = if let Some((scheme, rigid_ty, skolems)) = &expected {
+                    (scheme.clone(), rigid_ty.clone(), skolems.clone())
+                } else {
+                    let ty = self.fresh();
+                    (Scheme::mono(ty.clone()), ty, Vec::new())
+                };
                 ctx.locals.insert(*local, scheme);
                 // The annotation's own variables are in scope inside the value.
-                for name in &new_names {
+                for skolem in &skolems {
                     ctx.type_vars
-                        .insert(name.clone(), Type::Rigid(name.clone()));
+                        .insert(skolem.name.clone(), Type::Rigid(skolem.clone()));
                 }
                 let found = self.infer(value, ctx);
-                for name in &new_names {
-                    ctx.type_vars.remove(name);
+                for skolem in &skolems {
+                    ctx.type_vars.remove(&skolem.name);
                 }
                 if let Err(mismatch) = self.unify(&mono, &found) {
                     self.report(ctx, mismatch, value.span, |expected, found| {
@@ -1155,24 +1182,22 @@ impl<'a> Checker<'a> {
         &mut self,
         ann: &TypeScheme,
         ctx: &mut BodyCtx,
-    ) -> Option<(Scheme, Type, Vec<Rc<str>>)> {
+    ) -> Option<(Scheme, Type, Vec<Skolem>)> {
         let mut ok = true;
-        let mut new_names: Vec<Rc<str>> = Vec::new();
-        let level = self.level;
+        let mut skolems: Vec<Skolem> = Vec::new();
         let ty = self.convert(
             &ann.ty,
-            &mut |name, _| {
-                Some(ctx.type_vars.get(name).cloned().unwrap_or_else(|| {
-                    if !new_names.contains(name) {
-                        new_names.push(name.clone());
-                    }
-                    Type::Rigid(name.clone())
-                }))
+            &mut |name, this| {
+                Some(match ctx.type_vars.get(name) {
+                    Some(ty) => ty.clone(),
+                    None => Type::Rigid(skolem_named(&mut skolems, name, this)),
+                })
             },
             &mut ok,
         );
+        let names: Vec<Rc<str>> = skolems.iter().map(|s| s.name.clone()).collect();
         let classes = match ty {
-            Some(_) if ok => self.context(&ann.context, &new_names, |name| {
+            Some(_) if ok => self.context(&ann.context, &names, |name| {
                 ctx.type_vars.contains_key(name)
             }),
             _ => None,
@@ -1181,22 +1206,8 @@ impl<'a> Checker<'a> {
             ctx.failed = true;
             return None;
         };
-        for (name, &classes) in new_names.iter().zip(&classes) {
-            self.rigid_levels.insert(name.clone(), level);
-            self.rigid_classes.insert(name.clone(), classes);
-        }
-        let rigids: HashMap<Rc<str>, u32> = new_names
-            .iter()
-            .enumerate()
-            .map(|(i, n)| (n.clone(), to_u32(i)))
-            .collect();
-        let zonked = self.zonk(&ty);
-        let scheme = Scheme {
-            arity: to_u32(new_names.len()),
-            bounds: classes,
-            ty: self.generalize_in(&zonked, &mut HashMap::new(), &rigids),
-        };
-        Some((scheme, ty, new_names))
+        let scheme = self.quantify(&ty, &skolems, classes);
+        Some((scheme, ty, skolems))
     }
 
     fn global_type(&mut self, id: GlobalId) -> GlobalType {
@@ -1465,7 +1476,7 @@ fn no_instance(
     origin: Option<Span>,
 ) -> Diagnostic {
     let verb = class.verb();
-    if let Type::Rigid(name) = culprit {
+    if let Type::Rigid(Skolem { name, .. }) = culprit {
         // The use that needs the class is more useful than where the
         // annotation's variable met it, which may be the whole definition.
         return Diagnostic::error(format!("`{name}` cannot be {verb} here"))
@@ -1530,6 +1541,17 @@ fn mixes_int_and_float(a: &Type, b: &Type) -> bool {
         }
         _ => false,
     }
+}
+
+/// The rigid variable an annotation calls `name`: the one already in
+/// `skolems`, or a new one added to them.
+fn skolem_named(skolems: &mut Vec<Skolem>, name: &Rc<str>, checker: &mut Checker) -> Skolem {
+    if let Some(skolem) = skolems.iter().find(|skolem| skolem.name == *name) {
+        return skolem.clone();
+    }
+    let skolem = checker.fresh_skolem(name);
+    skolems.push(skolem.clone());
+    skolem
 }
 
 fn substitute_gens(ty: &Type, with: &[Type]) -> Type {
@@ -1761,6 +1783,56 @@ mod tests {
     #[test]
     fn rigid_variables_cannot_escape() {
         let errors = errors_of(r"f = \x. let g : a -> a = \y. x in g");
+        assert_eq!(
+            errors[0].message,
+            "type variable `a` would escape its scope"
+        );
+    }
+
+    #[test]
+    fn sibling_annotations_reuse_variable_names() {
+        // Each `let` quantifies its own `a`, with its own classes.
+        assert_eq!(
+            type_of_entry(
+                r#"let id : a -> a = \x. x in let k : a -> b -> a = \x. \y. x in [(k (id 1) "s"), (id 2)]"#
+            ),
+            "List<Int>"
+        );
+        assert_eq!(
+            type_of_entry(
+                r"let same : Eq<a> => a -> a -> Bool = \x. \y. (eq x y) in let id : a -> a = \x. x in (same (id 1) 2)"
+            ),
+            "Bool"
+        );
+        let errors = errors_of(
+            r"let same : Eq<a> => a -> a -> Bool = \x. \y. (eq x y) in let bad : a -> a -> Bool = \x. \y. (eq x y) in (bad 1 2)",
+        );
+        assert_eq!(errors[0].message, "`a` cannot be compared here");
+        // Top-level annotations quantify their own variables too.
+        assert_eq!(
+            types_of(r"f : a -> a = \x. x  g : Show<a> => a -> String = \x. (show (f x))"),
+            ["f : a -> a", "g : Show<a> => a -> String"]
+        );
+    }
+
+    #[test]
+    fn nested_annotations_share_variables_in_scope() {
+        // The inner annotations' `a` and `b` are the outer ones.
+        assert_eq!(
+            types_of(
+                r"f : a -> a = \x. let g : b -> a = \y. let h : b -> b = \z. z in (const x (h y)) in (g x)  const = \a. \b. a"
+            )[0],
+            "f : a -> a"
+        );
+        let errors = errors_of(r"f : a -> a = \x. let g : b -> b = \y. x in (g x)");
+        assert_eq!(
+            errors[0].message,
+            "type variable `b` would escape its scope"
+        );
+        // A sibling's variable of the same name is a different one, so it
+        // cannot escape through the outer scope either.
+        let errors =
+            errors_of(r"f = \x. let g : a -> a = \y. y in let h : a -> a = \y. x in (h (g x))");
         assert_eq!(
             errors[0].message,
             "type variable `a` would escape its scope"
