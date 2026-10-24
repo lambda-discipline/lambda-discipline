@@ -10,6 +10,15 @@ use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
+/// The largest source file the compiler accepts, in bytes: spans store
+/// offsets as `u32`. Loading a larger file is an error.
+pub const MAX_FILE_LEN: usize = u32::MAX as usize;
+
+/// The error message for a file longer than [`MAX_FILE_LEN`].
+pub fn too_large(name: &str) -> String {
+    format!("cannot load `{name}`: source files are limited to 4 GiB")
+}
+
 /// Identifies one file registered in a [`SourceMap`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct FileId(u32);

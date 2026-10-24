@@ -22,7 +22,7 @@ use crate::hir::{GlobalId, Unit};
 use crate::lint::{self, lint};
 use crate::loader::{self, Loaded};
 use crate::resolve::{GlobalScope, resolve};
-use crate::source::{SourceMap, Span};
+use crate::source::{MAX_FILE_LEN, SourceMap, Span, too_large};
 use crate::syntax::{parse_module, token};
 use crate::types::{Scheme, TopLevel, TypeEnv, check_expr, check_unit};
 
@@ -297,9 +297,11 @@ impl Session {
                         path.display()
                     ))]
                 })?;
-                let file = self
-                    .sources
-                    .add_virtual(path.display().to_string(), text.as_str());
+                let name = path.display().to_string();
+                if text.len() > MAX_FILE_LEN {
+                    return Err(vec![Diagnostic::error(too_large(&name))]);
+                }
+                let file = self.sources.add_virtual(name, text.as_str());
                 if stage == Stage::Tokens {
                     let (tokens, diagnostics) = token::lex(file, &text);
                     if !diagnostics.is_empty() {
