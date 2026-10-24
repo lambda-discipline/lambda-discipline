@@ -153,7 +153,9 @@ impl Expr {
             Expr::Var(name) => *name = f(name),
             Expr::App(func, args) => {
                 func.rename(f);
-                args.iter_mut().for_each(|a| a.rename(f));
+                for a in args.iter_mut() {
+                    a.rename(f);
+                }
             }
             Expr::Lambda { param, body, .. } => {
                 param.rename(f);
@@ -324,7 +326,7 @@ impl Program {
 
 /// The name of a data declaration's `i`th parameter.
 fn param_name(i: usize) -> String {
-    ((b'a' + i as u8) as char).to_string()
+    char::from(b"abcdefghijklmnopqrstuvwxyz"[i]).to_string()
 }
 
 /// Prints the program as source text.

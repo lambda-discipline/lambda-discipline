@@ -6,6 +6,7 @@
 use std::rc::Rc;
 
 use crate::builtins::Builtin;
+use crate::index::to_u32;
 use crate::source::Span;
 use crate::syntax::ast::{Ident, MAX_TUPLE_ARITY, TypeExpr, TypeScheme};
 
@@ -47,7 +48,7 @@ impl TyConId {
     /// [`MAX_TUPLE_ARITY`].
     pub fn tuple(arity: usize) -> TyConId {
         assert!((2..=MAX_TUPLE_ARITY).contains(&arity), "no {arity}-tuples");
-        TyConId(Self::PAIR.0 + arity as u32 - 2)
+        TyConId(Self::PAIR.0 + to_u32(arity) - 2)
     }
 
     /// The number of components, if this is a tuple type.
@@ -81,7 +82,7 @@ impl ConId {
     /// [`MAX_TUPLE_ARITY`].
     pub fn tuple(arity: usize) -> ConId {
         assert!((2..=MAX_TUPLE_ARITY).contains(&arity), "no {arity}-tuples");
-        ConId(Self::PAIR.0 + arity as u32 - 2)
+        ConId(Self::PAIR.0 + to_u32(arity) - 2)
     }
 
     /// The number of components, if this is a tuple constructor.

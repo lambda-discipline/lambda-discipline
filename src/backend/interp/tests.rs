@@ -351,7 +351,7 @@ fn let_binds_the_results_of_actions() {
     );
     // The action is not in scope of its own binder.
     assert_eq!(
-        output(r#"x = 1  (let x <- (pure (add x 1)) in (println (show x)))"#),
+        output(r"x = 1  (let x <- (pure (add x 1)) in (println (show x)))"),
         "2\n"
     );
     // The result of `pure` is passed on without being evaluated.
@@ -368,7 +368,7 @@ fn sequence_runs_a_list_of_actions_in_order() {
         "abc\n"
     );
     assert_eq!(
-        eval(r#"(sequence [(pure 1), (pure 2), (bind (pure 3) \x. (pure (mul x 10)))])"#),
+        eval(r"(sequence [(pure 1), (pure 2), (bind (pure 3) \x. (pure (mul x 10)))])"),
         "[1, 2, 30]"
     );
     assert_eq!(eval("(sequence [])"), "[]");
@@ -601,7 +601,7 @@ fn options_and_results() {
     // only when the new value is used.
     assert_eq!(eval(r#"(withDefault (error "boom") (Some 1))"#), "1");
     assert_eq!(
-        eval(r#"[(mapOption (add 1) (Some 1)), (mapOption (add 1) None)]"#),
+        eval(r"[(mapOption (add 1) (Some 1)), (mapOption (add 1) None)]"),
         "[(Some 2), None]"
     );
     assert_eq!(

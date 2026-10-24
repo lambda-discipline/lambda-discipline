@@ -222,9 +222,8 @@ fn ill_typed_mutants_are_rejected() {
         let mutant = lbd_smith::mutate(u, &program)?;
         let text = mutant.to_string();
         let (session, result) = compile(&text);
-        let errors = match result {
-            Ok(_) => panic!("accepted an ill-typed program:\n{text}"),
-            Err(errors) => errors,
+        let Err(errors) = result else {
+            panic!("accepted an ill-typed program:\n{text}");
         };
         assert!(errors.iter().any(|e| e.severity == Severity::Error));
         for error in &errors {

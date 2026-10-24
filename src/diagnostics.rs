@@ -11,6 +11,7 @@ use std::rc::Rc;
 
 use ariadne::{Color, Config, IndexType, Label, Report, ReportKind, Source};
 
+use crate::index::to_u32;
 use crate::source::{FileId, SourceMap, Span};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -273,8 +274,8 @@ impl Windows {
         let window = self.window(span.file);
         Span {
             file: span.file,
-            start: window.map(span.start as usize) as u32,
-            end: window.map(span.end as usize) as u32,
+            start: to_u32(window.map(span.start as usize)),
+            end: to_u32(window.map(span.end as usize)),
         }
     }
 
@@ -625,7 +626,7 @@ mod tests {
     fn labels_at_the_end_or_across_a_long_line() {
         let mut map = SourceMap::new();
         let text = long_line();
-        let id = map.add_virtual("long.lbd", format!("{}z", text));
+        let id = map.add_virtual("long.lbd", format!("{text}z"));
         let end = Span::new(id, text.len() + 1..text.len() + 1);
         let rendered = Diagnostic::error("unexpected end of input")
             .at(end)

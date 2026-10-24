@@ -78,8 +78,8 @@ impl Repl {
         let mut names: Vec<String> = Builtin::ALL.iter().map(|b| b.name().to_owned()).collect();
         names.extend(self.session.bindings().iter().map(|g| g.name.to_string()));
         let types = self.session.types();
-        names.extend(types.type_names().map(|n| n.to_string()));
-        names.extend(types.constructor_names().map(|n| n.to_string()));
+        names.extend(types.type_names().map(ToString::to_string));
+        names.extend(types.constructor_names().map(ToString::to_string));
         names.sort();
         names.dedup();
         names
@@ -394,7 +394,7 @@ fn run_interactive(repl: &mut Repl, color: bool) -> io::Result<()> {
                 }
                 *names.borrow_mut() = repl.completion_names();
             }
-            Err(ReadlineError::Interrupted) => continue,
+            Err(ReadlineError::Interrupted) => {}
             Err(ReadlineError::Eof) => break,
             Err(error) => return Err(io::Error::other(error)),
         }

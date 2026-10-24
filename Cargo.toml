@@ -36,6 +36,32 @@ toml_edit = "0.25.17"
 [workspace]
 members = ["crates/lbd-smith"]
 
+[lints]
+workspace = true
+
+# Shared by every crate in the workspace (`[lints] workspace = true`). CI runs
+# clippy with `-D warnings`, so every warning here fails the build.
+[workspace.lints.rust]
+unsafe_code = "forbid"
+unused_qualifications = "warn"
+
+[workspace.lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+# Most functions are internal even where they are `pub`; `#[must_use]` on all
+# of them would be noise rather than a guard.
+must_use_candidate = "allow"
+return_self_not_must_use = "allow"
+# The library is not a published API yet, so these sections would document
+# nothing a caller relies on.
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+# Checker and machine loops are long by nature; splitting them hurts reading.
+too_many_lines = "allow"
+# `write!` saves an allocation but reads worse, and none of these strings are
+# built on a hot path.
+format_collect = "allow"
+format_push_string = "allow"
+
 [[bin]]
 name = "lbd"
 path = "src/main.rs"

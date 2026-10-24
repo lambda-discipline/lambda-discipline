@@ -14,6 +14,7 @@ use std::rc::Rc;
 
 use crate::builtins::Builtin;
 use crate::hir::{self, ConId, ExprKind, LocalId, PatternKind};
+use crate::index::{to_i64, to_u32};
 use crate::source::{SourceMap, Span};
 use crate::types::TypeEnv;
 use crate::types::env::builtin_constructors;
@@ -141,7 +142,9 @@ impl Lowerer<'_> {
         // Captures occupy the first slots, so they are allocated before
         // anything else; `lambda` reserves them after lowering the body.
         frame.captures.push(outer);
-        let slot = CAPTURE_TAG | (frame.captures.len() as u32 - 1);
+        let index = to_u32(frame.captures.len() - 1);
+        assert!(index < CAPTURE_TAG, "too many captured variables");
+        let slot = CAPTURE_TAG | index;
         frame.slots.insert(local, slot);
         slot
     }
@@ -163,9 +166,9 @@ impl Lowerer<'_> {
             )),
             ExprKind::Builtin(Builtin::Line) => {
                 let file = self.sources.get(expr.span.file);
-                Expr::Lit(Literal::Int(
-                    file.line_col(expr.span.start as usize).0 as i64,
-                ))
+                Expr::Lit(Literal::Int(to_i64(
+                    file.line_col(expr.span.start as usize).0,
+                )))
             }
             ExprKind::Builtin(builtin) => Expr::Builtin(*builtin),
             ExprKind::Lambda { .. } => Expr::Lambda(Rc::new(self.lambda(expr))),
@@ -229,7 +232,7 @@ impl Lowerer<'_> {
                 Rc::new(Constructor {
                     id,
                     name: info.name.clone(),
-                    arity: info.arity as u32,
+                    arity: to_u32(info.arity),
                 })
             })
             .clone()
@@ -273,7 +276,7 @@ impl Lowerer<'_> {
             Expr::Local(slot) => (*slot, None),
             _ => (self.current().fresh(), Some(value)),
         };
-        let rows = arms
+        let rows: Vec<_> = arms
             .iter()
             .map(|arm| Row {
                 patterns: vec![Some(&arm.pattern)],
@@ -281,7 +284,7 @@ impl Lowerer<'_> {
                 body: &arm.body,
             })
             .collect();
-        let tree = self.compile(&[slot], rows, span);
+        let tree = self.compile(&[slot], &rows, span);
         match value {
             Some(value) => Rc::new(Expr::Let {
                 slot,
@@ -294,7 +297,7 @@ impl Lowerer<'_> {
 
     /// Compiles rows whose patterns test the values in `occurrences` (frame
     /// slots) into a decision tree.
-    fn compile(&mut self, occurrences: &[u32], rows: Vec<Row<'_>>, span: Span) -> Rc<Expr> {
+    fn compile(&mut self, occurrences: &[u32], rows: &[Row<'_>], span: Span) -> Rc<Expr> {
         let Some(first) = rows.first() else {
             // Exhaustiveness checking rules this out.
             return Rc::new(Expr::App {
@@ -324,7 +327,7 @@ impl Lowerer<'_> {
         let mut alts = Vec::new();
         let complete = if let PatternKind::Con { con, .. } = &head.kind {
             let mut heads: Vec<ConId> = Vec::new();
-            for row in &rows {
+            for row in rows {
                 if let Some(PatternKind::Con { con, .. }) = row.patterns[column].map(|p| &p.kind) {
                     if !heads.contains(con) {
                         heads.push(*con);
@@ -339,7 +342,7 @@ impl Lowerer<'_> {
                 let mut inner = occurrences[..column].to_vec();
                 inner.extend(&fields);
                 inner.extend(&occurrences[column + 1..]);
-                let specialized = rows
+                let specialized: Vec<_> = rows
                     .iter()
                     .filter_map(|row| {
                         let mut row = row.clone();
@@ -359,7 +362,7 @@ impl Lowerer<'_> {
                         Some(row)
                     })
                     .collect();
-                let body = self.compile(&inner, specialized, span);
+                let body = self.compile(&inner, &specialized, span);
                 alts.push(Alt {
                     pat: AltPat::Con {
                         con: constructor,
@@ -371,7 +374,7 @@ impl Lowerer<'_> {
             self.types.siblings(*con).len() == heads.len()
         } else {
             let mut heads: Vec<Literal> = Vec::new();
-            for row in &rows {
+            for row in rows {
                 if let Some(literal) = row.patterns[column].and_then(literal_of) {
                     if !heads.contains(&literal) {
                         heads.push(literal);
@@ -381,7 +384,7 @@ impl Lowerer<'_> {
             let mut rest = occurrences.to_vec();
             rest.remove(column);
             for head in heads {
-                let specialized = rows
+                let specialized: Vec<_> = rows
                     .iter()
                     .filter_map(|row| {
                         let mut row = row.clone();
@@ -398,7 +401,7 @@ impl Lowerer<'_> {
                         Some(row)
                     })
                     .collect();
-                let body = self.compile(&rest, specialized, span);
+                let body = self.compile(&rest, &specialized, span);
                 alts.push(Alt {
                     pat: AltPat::Lit(head),
                     body,
@@ -409,7 +412,7 @@ impl Lowerer<'_> {
         let default = (!complete).then(|| {
             let mut rest = occurrences.to_vec();
             rest.remove(column);
-            let defaults = rows
+            let defaults: Vec<_> = rows
                 .iter()
                 .filter(|row| !row.patterns[column].is_some_and(refutable))
                 .map(|row| {
@@ -422,7 +425,7 @@ impl Lowerer<'_> {
                     row
                 })
                 .collect();
-            self.compile(&rest, defaults, span)
+            self.compile(&rest, &defaults, span)
         });
         Rc::new(Expr::Case(Rc::new(Case {
             scrutinee: Rc::new(Expr::Local(slot)),
@@ -451,7 +454,7 @@ impl Lowerer<'_> {
         let lowered = self.expr(body);
         let frame = self.frames.pop().expect("the lambda frame");
         // Captured slots were tagged during lowering; move them in front.
-        let captured = frame.captures.len() as u32;
+        let captured = to_u32(frame.captures.len());
         let body = shift(&lowered, captured);
         Lambda {
             arity,
@@ -536,7 +539,11 @@ mod tests {
         let mut sources = SourceMap::new();
         let loaded = load_text(&mut sources, "<test>", text);
         let resolved = resolve(loaded.items, &EmptyScope);
-        assert!(resolved.diagnostics.is_empty());
+        assert!(
+            resolved.diagnostics.is_empty(),
+            "{:?}",
+            resolved.diagnostics
+        );
         let typed = crate::types::check_unit(
             &resolved.unit,
             &[],

@@ -10,6 +10,7 @@ use crate::backend::RuntimeError;
 use crate::builtins::Builtin;
 use crate::core::builtin_constructor;
 use crate::hir::ConId;
+use crate::index::to_i64;
 use crate::source::Span;
 use crate::syntax::number::format_float;
 
@@ -34,19 +35,29 @@ pub(super) enum Strictness {
 /// How much of argument `index` is evaluated before the builtin runs.
 pub(super) fn strictness(builtin: Builtin, index: usize) -> Strictness {
     use Builtin as B;
-    use Strictness::*;
+    use Strictness::{Deep, Elements, Lazy, Shallow};
     match builtin {
         B::If | B::And | B::Or if index > 0 => Lazy,
         // The accumulator is passed on to the folding function unevaluated.
         B::Foldl | B::Foldr if index == 1 => Lazy,
         // The new element is stored unevaluated, and so are the calls of
-        // the mapped function.
-        B::Cons | B::Push | B::Map | B::ZipWith | B::MapOption | B::MapResult if index == 0 => Lazy,
-        // The fallback is only evaluated for `None`.
-        B::WithDefault if index == 0 => Lazy,
-        B::Eq | B::Neq | B::Lt | B::Le | B::Gt | B::Ge | B::Compare | B::Sort => Deep,
-        B::Min | B::Max => Deep,
-        B::Show => Deep,
+        // the mapped function. The fallback is only evaluated for `None`.
+        B::Cons | B::Push | B::Map | B::ZipWith | B::MapOption | B::MapResult | B::WithDefault
+            if index == 0 =>
+        {
+            Lazy
+        }
+        B::Eq
+        | B::Neq
+        | B::Lt
+        | B::Le
+        | B::Gt
+        | B::Ge
+        | B::Compare
+        | B::Sort
+        | B::Min
+        | B::Max
+        | B::Show => Deep,
         B::Join | B::Sum | B::Transpose => Elements,
         _ => Shallow,
     }
@@ -71,6 +82,7 @@ pub(super) fn pure(
     thunks: &[Thunk],
     span: Option<Span>,
 ) -> Result<Value> {
+    use Builtin as B;
     let fail = |message: String| call_error(builtin, span, message);
     let int = |i: usize| int_of(&args[i]);
     let float = |i: usize| float_of(&args[i]);
@@ -78,7 +90,6 @@ pub(super) fn pure(
     let text = |i: usize| string_of(&args[i]);
     let list = |i: usize| list_of(&args[i]);
 
-    use Builtin as B;
     Ok(match builtin {
         B::Add | B::Sub | B::Mul => match (&args[0], &args[1]) {
             (Value::Int(a), Value::Int(b)) => {
@@ -119,9 +130,14 @@ pub(super) fn pure(
                     int_pow(*base, exponent)
                         .ok_or_else(|| fail(overflow(builtin, &[*base, exponent])))?,
                 ),
-                Value::Float(base) => Value::Float(
-                    i32::try_from(exponent).map_or(base.powf(exponent as f64), |e| base.powi(e)),
-                ),
+                Value::Float(base) => Value::Float(match i32::try_from(exponent) {
+                    Ok(exponent) => base.powi(exponent),
+                    #[expect(
+                        clippy::cast_precision_loss,
+                        reason = "beyond `i32` the result is 0, 1 or infinite either way"
+                    )]
+                    Err(_) => base.powf(exponent as f64),
+                }),
                 other => return Err(internal("number", other)),
             }
         }
@@ -148,6 +164,10 @@ pub(super) fn pure(
         }
         B::Fdiv => Value::Float(float(0)? / float(1)?),
         B::Sqrt => Value::Float(float(0)?.sqrt()),
+        #[expect(
+            clippy::cast_precision_loss,
+            reason = "toFloat rounds to the nearest Float, like fromIntegral"
+        )]
         B::ToFloat => Value::Float(int(0)? as f64),
         B::Floor | B::Ceil | B::Round => {
             let n = float(0)?;
@@ -163,7 +183,12 @@ pub(super) fn pure(
                     format_float(n)
                 )));
             }
-            Value::Int(whole as i64)
+            #[expect(
+                clippy::cast_possible_truncation,
+                reason = "`whole` is integral and in range, checked above"
+            )]
+            let whole = whole as i64;
+            Value::Int(whole)
         }
         B::Min | B::Max => {
             let ordering = args[0].compare(&args[1]).map_err(fail)?;
@@ -171,7 +196,7 @@ pub(super) fn pure(
                 B::Min => ordering.is_le(),
                 _ => ordering.is_gt(),
             };
-            args[if first { 0 } else { 1 }].clone()
+            args[usize::from(!first)].clone()
         }
 
         B::Eq | B::Neq => {
@@ -207,7 +232,7 @@ pub(super) fn pure(
                 None => err(format!("cannot parse {:?} as a `Float`", input.as_ref())),
             }
         }
-        B::StringLength => Value::Int(text(0)?.chars().count() as i64),
+        B::StringLength => Value::Int(to_i64(text(0)?.chars().count())),
         B::Chars => strings(text(0)?.chars().map(String::from)),
         B::Split => {
             let delimiter = text(0)?;
@@ -229,7 +254,7 @@ pub(super) fn pure(
         }
         B::Trim => Value::String(Rc::from(text(0)?.trim())),
 
-        B::Length => Value::Int(list(0)?.len() as i64),
+        B::Length => Value::Int(to_i64(list(0)?.len())),
         B::IsEmpty => Value::bool(list(0)?.is_empty()),
         B::Head => option(list(0)?.front().cloned()),
         B::Tail => {
@@ -305,7 +330,7 @@ pub(super) fn pure(
         }
         B::Sum => {
             let mut total: i64 = 0;
-            for item in list(0)?.iter() {
+            for item in &list(0)? {
                 total = total
                     .checked_add(int_of(&element_of(item)?)?)
                     .ok_or_else(|| {
@@ -621,10 +646,10 @@ mod tests {
         assert_eq!(run(Builtin::Ceil, &[f(-2.5)]), Ok("-2".into()));
         assert_eq!(run(Builtin::Round, &[f(-2.5)]), Ok("-3".into()));
         assert_eq!(
-            run(Builtin::Floor, &[f(-9.223372036854776e18)]),
+            run(Builtin::Floor, &[f(-9.223_372_036_854_776e18)]),
             Ok(i64::MIN.to_string())
         );
-        for n in [f64::NAN, f64::INFINITY, 9.223372036854776e18] {
+        for n in [f64::NAN, f64::INFINITY, 9.223_372_036_854_776e18] {
             assert!(run(Builtin::Floor, &[f(n)]).is_err(), "{n}");
         }
     }

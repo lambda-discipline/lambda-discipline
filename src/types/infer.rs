@@ -34,6 +34,7 @@ use crate::hir::{
     self, Body, ExprKind, GlobalDef, GlobalId, LocalId, MatchSource, PatternKind, TyConId, TypeDef,
     Unit,
 };
+use crate::index::to_u32;
 use crate::source::{SourceMap, Span};
 use crate::syntax::ast::{Constraint, TypeExpr, TypeExprKind, TypeScheme};
 
@@ -178,48 +179,6 @@ fn dependency_groups(unit: &Unit, first: usize) -> Vec<Vec<usize>> {
         })
         .collect();
 
-    struct Tarjan<'a> {
-        edges: &'a [Vec<usize>],
-        index: Vec<Option<usize>>,
-        low: Vec<usize>,
-        on_stack: Vec<bool>,
-        stack: Vec<usize>,
-        next: usize,
-        groups: Vec<Vec<usize>>,
-    }
-
-    impl Tarjan<'_> {
-        fn visit(&mut self, v: usize) {
-            self.index[v] = Some(self.next);
-            self.low[v] = self.next;
-            self.next += 1;
-            self.stack.push(v);
-            self.on_stack[v] = true;
-            for &w in &self.edges[v] {
-                match self.index[w] {
-                    None => {
-                        self.visit(w);
-                        self.low[v] = self.low[v].min(self.low[w]);
-                    }
-                    Some(index) if self.on_stack[w] => self.low[v] = self.low[v].min(index),
-                    Some(_) => {}
-                }
-            }
-            if Some(self.low[v]) == self.index[v] {
-                let mut group = Vec::new();
-                while let Some(w) = self.stack.pop() {
-                    self.on_stack[w] = false;
-                    group.push(w);
-                    if w == v {
-                        break;
-                    }
-                }
-                group.sort_unstable();
-                self.groups.push(group);
-            }
-        }
-    }
-
     let n = unit.defs.len();
     let mut tarjan = Tarjan {
         edges: &edges,
@@ -236,6 +195,49 @@ fn dependency_groups(unit: &Unit, first: usize) -> Vec<Vec<usize>> {
         }
     }
     tarjan.groups
+}
+
+/// Tarjan's strongly connected components algorithm, for [`dependency_groups`].
+struct Tarjan<'a> {
+    edges: &'a [Vec<usize>],
+    index: Vec<Option<usize>>,
+    low: Vec<usize>,
+    on_stack: Vec<bool>,
+    stack: Vec<usize>,
+    next: usize,
+    groups: Vec<Vec<usize>>,
+}
+
+impl Tarjan<'_> {
+    fn visit(&mut self, v: usize) {
+        self.index[v] = Some(self.next);
+        self.low[v] = self.next;
+        self.next += 1;
+        self.stack.push(v);
+        self.on_stack[v] = true;
+        for &w in &self.edges[v] {
+            match self.index[w] {
+                None => {
+                    self.visit(w);
+                    self.low[v] = self.low[v].min(self.low[w]);
+                }
+                Some(index) if self.on_stack[w] => self.low[v] = self.low[v].min(index),
+                Some(_) => {}
+            }
+        }
+        if Some(self.low[v]) == self.index[v] {
+            let mut group = Vec::new();
+            while let Some(w) = self.stack.pop() {
+                self.on_stack[w] = false;
+                group.push(w);
+                if w == v {
+                    break;
+                }
+            }
+            group.sort_unstable();
+            self.groups.push(group);
+        }
+    }
 }
 
 /// An annotation turned into a scheme, plus its rigid instantiation.
@@ -328,7 +330,7 @@ impl<'a> Checker<'a> {
 
     /// A fresh variable that must belong to `classes`.
     fn fresh_in(&mut self, classes: Classes) -> Type {
-        let var = TyVar(self.vars.len() as u32);
+        let var = TyVar(to_u32(self.vars.len()));
         self.vars.push(VarState::Unbound {
             level: self.level,
             classes,
@@ -379,13 +381,13 @@ impl<'a> Checker<'a> {
                 if n1 == n2 && args1.len() == args2.len() =>
             {
                 for (x, y) in args1.iter().zip(args2) {
-                    self.unify(x, y).map_err(|m| self.widen(m, &a, &b))?;
+                    self.unify(x, y).map_err(|m| Self::widen(m, &a, &b))?;
                 }
                 Ok(())
             }
             (Type::Fun(p1, r1), Type::Fun(p2, r2)) => {
-                self.unify(p1, p2).map_err(|m| self.widen(m, &a, &b))?;
-                self.unify(r1, r2).map_err(|m| self.widen(m, &a, &b))
+                self.unify(p1, p2).map_err(|m| Self::widen(m, &a, &b))?;
+                self.unify(r1, r2).map_err(|m| Self::widen(m, &a, &b))
             }
             _ => Err(Mismatch {
                 expected: a,
@@ -397,7 +399,7 @@ impl<'a> Checker<'a> {
 
     /// Reports a mismatch in terms of the outer types being unified, which
     /// reads better than the innermost conflicting pieces.
-    fn widen(&self, mismatch: Mismatch, expected: &Type, found: &Type) -> Mismatch {
+    fn widen(mismatch: Mismatch, expected: &Type, found: &Type) -> Mismatch {
         match mismatch.reason {
             MismatchReason::Different => Mismatch {
                 expected: expected.clone(),
@@ -543,7 +545,7 @@ impl<'a> Checker<'a> {
             }
         }
         Scheme {
-            arity: bounds.len() as u32,
+            arity: to_u32(bounds.len()),
             bounds,
             ty,
         }
@@ -558,7 +560,7 @@ impl<'a> Checker<'a> {
         match ty {
             Type::Var(v) => match self.vars[v.0 as usize] {
                 VarState::Unbound { level, .. } if level > self.level => {
-                    let next = (vars.len() + rigids.len()) as u32;
+                    let next = to_u32(vars.len() + rigids.len());
                     Type::Gen(*vars.entry(*v).or_insert(next))
                 }
                 _ => ty.clone(),
@@ -628,10 +630,10 @@ impl<'a> Checker<'a> {
         let rigids: HashMap<Rc<str>, u32> = names
             .iter()
             .enumerate()
-            .map(|(i, n)| (n.clone(), i as u32))
+            .map(|(i, n)| (n.clone(), to_u32(i)))
             .collect();
         let scheme = Scheme {
-            arity: names.len() as u32,
+            arity: to_u32(names.len()),
             bounds: classes.clone(),
             ty: self.generalize_in(&ty, &mut HashMap::new(), &rigids),
         };
@@ -914,7 +916,7 @@ impl<'a> Checker<'a> {
         }
         let result = Type::Con(
             self.env.ty(def.id).con.clone(),
-            (0..params.len() as u32).map(Type::Gen).collect(),
+            (0..to_u32(params.len())).map(Type::Gen).collect(),
         );
         for ctor in &def.constructors {
             // A field that fails to convert becomes a fresh quantified
@@ -925,9 +927,10 @@ impl<'a> Checker<'a> {
                 let mut ok = true;
                 let converted = self.convert(
                     field,
-                    &mut |name, this| match params.iter().position(|p| p == name) {
-                        Some(index) => Some(Type::Gen(index as u32)),
-                        None => {
+                    &mut |name, this| {
+                        if let Some(index) = params.iter().position(|p| p == name) {
+                            Some(Type::Gen(to_u32(index)))
+                        } else {
                             this.diagnostics.push(
                                 Diagnostic::error(format!(
                                     "the type variable `{name}` is not a parameter of `{}`",
@@ -940,7 +943,7 @@ impl<'a> Checker<'a> {
                                     def.name.name,
                                     params
                                         .iter()
-                                        .map(|p| p.as_ref())
+                                        .map(AsRef::as_ref)
                                         .chain([name.as_ref()])
                                         .collect::<Vec<_>>()
                                         .join(", ")
@@ -953,7 +956,7 @@ impl<'a> Checker<'a> {
                 );
                 fields.push(converted.filter(|_| ok).unwrap_or_else(|| {
                     extra += 1;
-                    Type::Gen((params.len() + extra - 1) as u32)
+                    Type::Gen(to_u32(params.len() + extra - 1))
                 }));
             }
             self.env.add_constructor(ConInfo {
@@ -961,7 +964,7 @@ impl<'a> Checker<'a> {
                 name: ctor.name.name.clone(),
                 ty: def.id,
                 scheme: Scheme::poly(
-                    (params.len() + extra) as u32,
+                    to_u32(params.len() + extra),
                     Type::curried(fields, result.clone()),
                 ),
                 arity: ctor.fields.len(),
@@ -1115,15 +1118,13 @@ impl<'a> Checker<'a> {
                     Some(ann) => self.let_annotation(ann, ctx),
                     None => None,
                 };
-                let (scheme, mono, new_names) = match &expected {
-                    Some((scheme, rigid_ty, new_names)) => {
+                let (scheme, mono, new_names) =
+                    if let Some((scheme, rigid_ty, new_names)) = &expected {
                         (scheme.clone(), rigid_ty.clone(), new_names.clone())
-                    }
-                    None => {
+                    } else {
                         let ty = self.fresh();
                         (Scheme::mono(ty.clone()), ty, Vec::new())
-                    }
-                };
+                    };
                 ctx.locals.insert(*local, scheme);
                 // The annotation's own variables are in scope inside the value.
                 for name in &new_names {
@@ -1187,11 +1188,11 @@ impl<'a> Checker<'a> {
         let rigids: HashMap<Rc<str>, u32> = new_names
             .iter()
             .enumerate()
-            .map(|(i, n)| (n.clone(), i as u32))
+            .map(|(i, n)| (n.clone(), to_u32(i)))
             .collect();
         let zonked = self.zonk(&ty);
         let scheme = Scheme {
-            arity: new_names.len() as u32,
+            arity: to_u32(new_names.len()),
             bounds: classes,
             ty: self.generalize_in(&zonked, &mut HashMap::new(), &rigids),
         };
@@ -1682,7 +1683,7 @@ mod tests {
     #[test]
     fn builtins_are_instantiated_freshly() {
         assert_eq!(type_of_entry("(map (add 1) [1, 2])"), "List<Int>");
-        assert_eq!(type_of_entry(r#"(map show [True])"#), "List<String>");
+        assert_eq!(type_of_entry(r"(map show [True])"), "List<String>");
         assert_eq!(type_of_entry("(foldr cons [] [1])"), "List<Int>");
     }
 
@@ -1846,7 +1847,10 @@ mod tests {
             type_of_entry(r#"(map println ["a", "b"])"#),
             "List<IO<Unit>>"
         );
-        assert!(!errors_of("(println 1)").is_empty());
+        assert!(
+            !errors_of("(println 1)").is_empty(),
+            "expected a type error"
+        );
     }
 
     #[test]
@@ -1913,7 +1917,7 @@ mod tests {
              c = \\f. (eq (tag f) (tag f))\n\
              d = \\x. (show (Odd x Zero))";
         let (_, typed) = check(ok);
-        let shown: Vec<String> = typed.def_schemes.iter().map(|s| s.to_string()).collect();
+        let shown: Vec<String> = typed.def_schemes.iter().map(ToString::to_string).collect();
         assert_eq!(
             shown,
             [
@@ -2021,12 +2025,12 @@ mod tests {
             "IO<List<Int>>"
         );
         assert_eq!(
-            type_of_entry(r#"let n: Int <- (pure 1) in (pure n)"#),
+            type_of_entry(r"let n: Int <- (pure 1) in (pure n)"),
             "IO<Int>"
         );
-        let errors = errors_of(r#"let x <- (add 1 2) in (println x)"#);
+        let errors = errors_of(r"let x <- (add 1 2) in (println x)");
         assert_eq!(errors[0].message, "mismatched types");
-        let errors = errors_of(r#"let x <- (pure 1) in x"#);
+        let errors = errors_of(r"let x <- (pure 1) in x");
         assert_eq!(errors[0].message, "mismatched types");
     }
 
@@ -2040,9 +2044,8 @@ mod tests {
 
     #[test]
     fn program_top_level_expressions_must_be_actions() {
-        assert!(
-            program_errors(r#"x = "a"  (println x)  (pure ())  (bind (pure 1) pure)"#).is_empty()
-        );
+        let errors = program_errors(r#"x = "a"  (println x)  (pure ())  (bind (pure 1) pure)"#);
+        assert!(errors.is_empty(), "{errors:?}");
         let errors = program_errors(r#"(add 1 2)  [(println "a")]"#);
         let messages: Vec<_> = errors.iter().map(|e| e.message.as_str()).collect();
         assert_eq!(
@@ -2081,8 +2084,6 @@ mod tests {
 
     #[test]
     fn prior_units_are_used() {
-        let mut sources = SourceMap::new();
-        let loaded = load_text(&mut sources, "<test>", "(f 1)");
         struct Scope;
         impl crate::resolve::GlobalScope for Scope {
             fn lookup(&self, name: &str) -> Option<GlobalId> {
@@ -2095,6 +2096,8 @@ mod tests {
                 1
             }
         }
+        let mut sources = SourceMap::new();
+        let loaded = load_text(&mut sources, "<test>", "(f 1)");
         let resolved = resolve(loaded.items, &Scope);
         let prior = [Scheme::poly(
             1,

@@ -19,6 +19,7 @@ use crate::backend::interp::{Interpreter, Value};
 use crate::core::{self, lower_unit};
 use crate::diagnostics::{Diagnostic, Diagnostics, Severity};
 use crate::hir::{GlobalId, Unit};
+use crate::index::to_u32;
 use crate::lint::{self, lint};
 use crate::loader::{self, Loaded};
 use crate::resolve::{GlobalScope, resolve};
@@ -367,7 +368,7 @@ impl GlobalScope for Session {
     }
 
     fn next_id(&self) -> u32 {
-        self.globals.len() as u32
+        to_u32(self.globals.len())
     }
 
     fn lookup_constructor(&self, name: &str) -> Option<crate::hir::ConId> {
