@@ -1,7 +1,7 @@
 //! REPL meta-commands.
 //!
-//! Commands start with `:`, the convention of GHCi, the OCaml and Scala
-//! REPLs, and other functional-language REPLs. As in GHCi, any prefix of a
+//! Commands start with `:`, the convention of `GHCi`, the OCaml and Scala
+//! REPLs, and other functional-language REPLs. As in `GHCi`, any prefix of a
 //! command's name works, and when a prefix fits several commands the one
 //! listed first wins, so the common ones get the shortest spellings
 //! (`:t`, `:l`, `:r`).

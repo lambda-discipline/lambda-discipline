@@ -9,3 +9,6 @@ license = "MIT"
 
 [dependencies]
 arbitrary = "1.4.1"
+
+[lints]
+workspace = true

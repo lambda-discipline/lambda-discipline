@@ -19,6 +19,7 @@ use crate::hir::{
     self, Body, ConId, CtorDef, GlobalDef, GlobalId, LocalId, LocalInfo, MatchSource, TyConId,
     TypeDef, Unit,
 };
+use crate::index::to_u32;
 use crate::source::Span;
 use crate::syntax::ast::{self, Item};
 use crate::syntax::parser::is_lower;
@@ -43,11 +44,11 @@ pub trait GlobalScope {
     }
     /// The id the next new type will receive.
     fn next_type_id(&self) -> u32 {
-        BUILTIN_TYPES.len() as u32
+        to_u32(BUILTIN_TYPES.len())
     }
     /// The id the next new constructor will receive.
     fn next_constructor_id(&self) -> u32 {
-        builtin_constructors().count() as u32
+        to_u32(builtin_constructors().count())
     }
 }
 
@@ -286,7 +287,7 @@ impl<'a> BodyResolver<'a> {
 
     /// A new local binder, not yet in scope.
     fn local(&mut self, name: Rc<str>, span: Span) -> LocalId {
-        let id = LocalId(self.locals.len() as u32);
+        let id = LocalId(to_u32(self.locals.len()));
         self.locals.push(LocalInfo { name, span });
         id
     }
@@ -602,7 +603,11 @@ mod tests {
     #[test]
     fn resolves_locals_globals_and_builtins() {
         let resolved = resolve_text(r"f = \x. (add x g)  g = 1");
-        assert!(resolved.diagnostics.is_empty());
+        assert!(
+            resolved.diagnostics.is_empty(),
+            "{:?}",
+            resolved.diagnostics
+        );
         let def = &resolved.unit.defs[0];
         assert_eq!(def.id, GlobalId(0));
         let ExprKind::Lambda { param, body, .. } = &def.body.expr.kind else {

@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use crate::hir::{ConId, TyConId};
+use crate::index::to_u32;
 use crate::source::Span;
 
 use super::ty::{CLASS_COUNT, Class, Scheme, TyCon, Type};
@@ -153,7 +154,7 @@ pub fn builtin_constructors() -> impl Iterator<Item = (ConId, &'static BuiltinCo
         .iter()
         .flat_map(|ty| ty.constructors)
         .enumerate()
-        .map(|(i, con)| (ConId(i as u32), con))
+        .map(|(i, con)| (ConId(to_u32(i)), con))
 }
 
 #[derive(Debug, Clone)]
@@ -215,14 +216,14 @@ impl TypeEnv {
         };
         let mut next_con = 0;
         for (index, builtin) in BUILTIN_TYPES.iter().enumerate() {
-            let con = TyCon::builtin(TyConId(index as u32));
+            let con = TyCon::builtin(TyConId(to_u32(index)));
             let arity = builtin.params.len();
             let params: Vec<Rc<str>> = builtin.params.iter().map(|&p| Rc::from(p)).collect();
             let constructors: Vec<ConId> = (0..builtin.constructors.len())
-                .map(|i| ConId(next_con + i as u32))
+                .map(|i| ConId(next_con + to_u32(i)))
                 .collect();
-            next_con += constructors.len() as u32;
-            let result = Type::Con(con.clone(), (0..arity as u32).map(Type::Gen).collect());
+            next_con += to_u32(constructors.len());
+            let result = Type::Con(con.clone(), (0..to_u32(arity)).map(Type::Gen).collect());
             for (&id, constructor) in constructors.iter().zip(builtin.constructors) {
                 let ty = constructor
                     .fields
@@ -233,7 +234,7 @@ impl TypeEnv {
                     id,
                     name: Rc::from(constructor.name),
                     ty: con.id,
-                    scheme: Scheme::poly(arity as u32, ty),
+                    scheme: Scheme::poly(to_u32(arity), ty),
                     arity: constructor.fields.len(),
                     span: None,
                 });
@@ -321,11 +322,11 @@ impl TypeEnv {
     }
 
     pub fn next_type_id(&self) -> u32 {
-        self.types.len() as u32
+        to_u32(self.types.len())
     }
 
     pub fn next_constructor_id(&self) -> u32 {
-        self.constructors.len() as u32
+        to_u32(self.constructors.len())
     }
 
     /// A type's declaration as it would be written:
@@ -334,7 +335,7 @@ impl TypeEnv {
         let info = self.ty(id);
         let mut out = format!("type {}", info.con.name);
         if !info.params.is_empty() {
-            let params: Vec<&str> = info.params.iter().map(|p| p.as_ref()).collect();
+            let params: Vec<&str> = info.params.iter().map(AsRef::as_ref).collect();
             out.push_str(&format!("<{}>", params.join(", ")));
         }
         let names: Vec<Type> = info.params.iter().map(|p| Type::Rigid(p.clone())).collect();
@@ -394,7 +395,7 @@ mod tests {
         assert_eq!(env.constructor(ConId::TRUE).scheme.to_string(), "Bool");
         for (index, builtin) in BUILTIN_TYPES.iter().enumerate() {
             assert_eq!(
-                env.ty(TyConId(index as u32)).con.name.as_ref(),
+                env.ty(TyConId(to_u32(index))).con.name.as_ref(),
                 builtin.name
             );
         }
@@ -452,7 +453,7 @@ mod tests {
             );
         }
         // Declared types and constructors come after the tuples.
-        assert_eq!(env.next_type_id(), BUILTIN_TYPES.len() as u32);
+        assert_eq!(env.next_type_id(), to_u32(BUILTIN_TYPES.len()));
         assert_eq!(TyConId(env.next_type_id()).tuple_arity(), None);
         assert_eq!(ConId(env.next_constructor_id()).tuple_arity(), None);
         assert_eq!(TyConId::RESULT.tuple_arity(), None);

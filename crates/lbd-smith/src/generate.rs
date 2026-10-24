@@ -79,7 +79,7 @@ impl<'a, 'b> Gen<'a, 'b> {
             let ty = self.ty(self.config.max_type_depth)?;
             defs.push((format!("f{i}"), ty));
         }
-        self.env = defs.clone();
+        self.env.clone_from(&defs);
         let mut out = Vec::new();
         for (name, ty) in defs {
             let body = self.expr(&ty, self.config.max_depth)?;

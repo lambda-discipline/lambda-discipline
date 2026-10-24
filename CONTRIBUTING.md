@@ -47,6 +47,13 @@ cargo fmt --all --check
 cargo clippy --workspace --all-targets -- -D warnings
 ```
 
+The `[workspace.lints]` table in `Cargo.toml` turns on `clippy::pedantic`
+for every crate and lists the few lints it allows. Fix a new warning rather
+than silencing it. Where the code is right as written, such as an exact float
+comparison, put `#[expect(clippy::lint_name, reason = "...")]` on the
+smallest item that needs it, so the exception says why and is reported once
+it is no longer needed.
+
 ```bash
 cargo test --workspace
 ```

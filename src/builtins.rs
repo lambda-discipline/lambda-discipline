@@ -218,13 +218,12 @@ impl Builtin {
         for (i, &b) in bytes.iter().enumerate() {
             match b {
                 b'(' | b'<' => depth += 1,
-                b')' => depth -= 1,
                 b'>' if i > 0 && bytes[i - 1] == b'-' => {
                     if depth == 0 {
                         arrows += 1;
                     }
                 }
-                b'>' => depth -= 1,
+                b')' | b'>' => depth -= 1,
                 _ => {}
             }
         }

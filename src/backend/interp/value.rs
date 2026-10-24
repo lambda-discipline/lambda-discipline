@@ -15,6 +15,7 @@ use imbl::Vector;
 use crate::builtins::Builtin;
 use crate::core::{Constructor, Expr, Lambda, bool_constructor};
 use crate::hir::ConId;
+use crate::index::to_u32;
 use crate::source::Span;
 use crate::syntax::number::format_float;
 
@@ -103,6 +104,7 @@ impl Value {
         loop {
             let equal = match (&a, &b) {
                 (Value::Int(a), Value::Int(b)) => a == b,
+                #[expect(clippy::float_cmp, reason = "`eq` on floats is exact, as in IEEE 754")]
                 (Value::Float(a), Value::Float(b)) => a == b,
                 (Value::String(a), Value::String(b)) => a == b,
                 (Value::Unit, Value::Unit) => true,
@@ -401,7 +403,7 @@ impl Env {
     pub fn with(size: u32, initial: impl IntoIterator<Item = Thunk>) -> Rc<Env> {
         let env = Env::new(size);
         for (slot, thunk) in initial.into_iter().enumerate() {
-            env.set(slot as u32, thunk);
+            env.set(to_u32(slot), thunk);
         }
         env
     }

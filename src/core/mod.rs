@@ -27,6 +27,7 @@ use std::rc::Rc;
 
 use crate::builtins::Builtin;
 use crate::hir::{ConId, GlobalId};
+use crate::index::to_u32;
 use crate::source::Span;
 use crate::syntax::number::format_float;
 use crate::types::env::builtin_constructors;
@@ -97,7 +98,7 @@ pub fn builtin_constructor(id: ConId) -> Rc<Constructor> {
                 Rc::new(Constructor {
                     id,
                     name: Rc::from(con.name),
-                    arity: con.fields.len() as u32,
+                    arity: to_u32(con.fields.len()),
                 })
             })
             .collect();

@@ -68,7 +68,7 @@ mod tests {
         assert_eq!(format_float(1.5e21), "1.5e+21");
         assert_eq!(format_float(1e20), "100000000000000000000.0");
         assert_eq!(
-            format_float(123456789012345680000.0),
+            format_float(123_456_789_012_345_680_000.0),
             "123456789012345680000.0"
         );
         assert_eq!(format_float(1e-7), "1e-7");

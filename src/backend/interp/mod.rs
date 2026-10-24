@@ -118,18 +118,18 @@ struct Walk {
 impl Walk {
     fn new(root: Value, deep: bool) -> Self {
         let mut walk = Walk {
-            root: root.clone(),
+            root,
             deep,
             pending: Vec::new(),
         };
-        walk.enter(root);
+        walk.enter(&walk.root.clone());
         walk
     }
 
     /// Queues the elements of `value` if it is a list, or its fields if it
     /// is data.
-    fn enter(&mut self, value: Value) {
-        if let Value::List(items) | Value::Data(_, items) = &value {
+    fn enter(&mut self, value: &Value) {
+        if let Value::List(items) | Value::Data(_, items) = value {
             if !items.is_empty() {
                 self.pending.push((items.clone(), 0));
             }
@@ -269,7 +269,7 @@ impl Interpreter {
     fn run_from(&mut self, base: usize, mut control: Control) -> Result<Value, RuntimeError> {
         loop {
             let step = match control {
-                Control::Eval(expr, env) => self.eval_step(expr, env),
+                Control::Eval(expr, env) => self.eval_step(&expr, env),
                 Control::Return(value) => {
                     if self.stack.len() == base {
                         return Ok(value);
@@ -310,7 +310,7 @@ impl Interpreter {
         }
     }
 
-    fn eval_step(&mut self, expr: Rc<Expr>, env: Rc<Env>) -> Result<Control, RuntimeError> {
+    fn eval_step(&mut self, expr: &Rc<Expr>, env: Rc<Env>) -> Result<Control, RuntimeError> {
         Ok(match expr.as_ref() {
             Expr::Lit(literal) => Control::Return(literal_value(literal)),
             Expr::Local(slot) => return self.enter(env.get(*slot)),
@@ -336,7 +336,7 @@ impl Interpreter {
             )),
             Expr::Case(case) => {
                 if let Some(value) = self.known_value(&case.scrutinee, &env) {
-                    return self.select(case, env, value);
+                    return Self::select(case, env, &value);
                 }
                 let scrutinee = case.scrutinee.clone();
                 self.stack.push(Frame::Case {
@@ -347,16 +347,14 @@ impl Interpreter {
             }
             Expr::App { func, args, span } => {
                 let thunks: Vec<Thunk> = args.iter().map(|arg| self.suspend(arg, &env)).collect();
-                match self.known_value(func, &env) {
-                    Some(callee) => return self.apply(callee, thunks, *span),
-                    None => {
-                        self.stack.push(Frame::Apply {
-                            args: thunks,
-                            span: *span,
-                        });
-                        Control::Eval(func.clone(), env)
-                    }
+                if let Some(callee) = self.known_value(func, &env) {
+                    return self.apply(&callee, thunks, *span);
                 }
+                self.stack.push(Frame::Apply {
+                    args: thunks,
+                    span: *span,
+                });
+                Control::Eval(func.clone(), env)
             }
         })
     }
@@ -367,7 +365,7 @@ impl Interpreter {
                 *thunk.0.borrow_mut() = ThunkState::Done(value.clone());
                 Ok(Control::Return(value))
             }
-            Frame::Apply { args, span } => self.apply(value, args, span),
+            Frame::Apply { args, span } => self.apply(&value, args, span),
             Frame::Strict(mut call) => {
                 call.values.push(value);
                 self.continue_builtin(call)
@@ -375,12 +373,12 @@ impl Interpreter {
             Frame::Force { deep } => self.walk(Walk::new(value, deep)),
             Frame::Walk(mut walk) => {
                 if walk.deep {
-                    walk.enter(value);
+                    walk.enter(&value);
                 }
                 self.walk(*walk)
             }
             Frame::Iterate(iteration) => self.iterate(*iteration, value),
-            Frame::Case { case, env } => self.select(&case, env, value),
+            Frame::Case { case, env } => Self::select(&case, env, &value),
             Frame::Fail { builtin, span } => Err(prims::call_error(
                 builtin,
                 span,
@@ -406,14 +404,9 @@ impl Interpreter {
     }
 
     /// Continues with the alternative of `case` that matches `value`.
-    fn select(
-        &mut self,
-        case: &Rc<Case>,
-        env: Rc<Env>,
-        value: Value,
-    ) -> Result<Control, RuntimeError> {
+    fn select(case: &Rc<Case>, env: Rc<Env>, value: &Value) -> Result<Control, RuntimeError> {
         for alt in &case.alts {
-            let matches = match (&alt.pat, &value) {
+            let matches = match (&alt.pat, value) {
                 (AltPat::Con { con, fields }, Value::Data(found, values)) if con.id == found.id => {
                     for (&slot, field) in fields.iter().zip(values.iter()) {
                         env.set(slot, field.clone());
@@ -421,6 +414,7 @@ impl Interpreter {
                     true
                 }
                 (AltPat::Lit(Literal::Int(n)), Value::Int(m)) => n == m,
+                #[expect(clippy::float_cmp, reason = "literal patterns match exactly")]
                 (AltPat::Lit(Literal::Float(n)), Value::Float(m)) => n == m,
                 (AltPat::Lit(Literal::String(s)), Value::String(t)) => s == t,
                 _ => false,
@@ -452,7 +446,7 @@ impl Interpreter {
             };
             *index += 1;
             match item.value() {
-                Some(value) if walk.deep => walk.enter(value),
+                Some(value) if walk.deep => walk.enter(&value),
                 Some(_) => {}
                 None => {
                     self.stack.push(Frame::Walk(Box::new(walk)));
@@ -532,11 +526,11 @@ impl Interpreter {
 
     fn apply(
         &mut self,
-        func: Value,
+        func: &Value,
         mut args: Vec<Thunk>,
         span: Span,
     ) -> Result<Control, RuntimeError> {
-        match &func {
+        match func {
             Value::Closure(closure) => {
                 let arity = closure.lambda.arity as usize;
                 if args.len() < arity {
@@ -555,7 +549,7 @@ impl Interpreter {
             Value::Partial(applied) => {
                 let mut all = applied.args.clone();
                 all.append(&mut args);
-                self.apply(applied.func.clone(), all, span)
+                self.apply(&applied.func, all, span)
             }
             &Value::Builtin(builtin) => {
                 let arity = builtin.arity();
@@ -629,26 +623,32 @@ impl Interpreter {
 
     /// Runs a builtin whose strict arguments are all forced.
     fn run_builtin(&mut self, call: BuiltinCall) -> Result<Control, RuntimeError> {
+        use Builtin as B;
         let BuiltinCall {
             builtin,
             mut args,
             values,
             span,
         } = call;
-        use Builtin as B;
         match builtin {
             B::If => {
                 let index = if prims::bool_of(&values[0])? { 1 } else { 2 };
                 self.tail(args.swap_remove(index))
             }
-            B::And => match prims::bool_of(&values[0])? {
-                true => self.tail(args.swap_remove(1)),
-                false => Ok(Control::Return(Value::bool(false))),
-            },
-            B::Or => match prims::bool_of(&values[0])? {
-                true => Ok(Control::Return(Value::bool(true))),
-                false => self.tail(args.swap_remove(1)),
-            },
+            B::And => {
+                if prims::bool_of(&values[0])? {
+                    self.tail(args.swap_remove(1))
+                } else {
+                    Ok(Control::Return(Value::bool(false)))
+                }
+            }
+            B::Or => {
+                if prims::bool_of(&values[0])? {
+                    Ok(Control::Return(Value::bool(true)))
+                } else {
+                    self.tail(args.swap_remove(1))
+                }
+            }
             B::Print | B::Println => {
                 let mut text = prims::string_of(&values[0])?.to_string();
                 if builtin == B::Println {
@@ -772,7 +772,7 @@ impl Interpreter {
                     ],
                 );
                 let rest = Thunk::delayed(call_of(Expr::Builtin(B::Foldr), 0, 3, span), env);
-                self.apply(values[0].clone(), vec![first, rest], span)
+                self.apply(&values[0], vec![first, rest], span)
             }
             _ => prims::pure(builtin, &values, &args, span).map(Control::Return),
         }
@@ -835,15 +835,14 @@ impl Interpreter {
         span: Span,
     ) -> Result<Control, RuntimeError> {
         self.stack.push(Frame::Perform);
-        match func.value() {
-            Some(func) => self.apply(func, vec![result], span),
-            None => {
-                self.stack.push(Frame::Apply {
-                    args: vec![result],
-                    span,
-                });
-                self.tail(func)
-            }
+        if let Some(func) = func.value() {
+            self.apply(&func, vec![result], span)
+        } else {
+            self.stack.push(Frame::Apply {
+                args: vec![result],
+                span,
+            });
+            self.tail(func)
         }
     }
 
@@ -892,7 +891,7 @@ impl Interpreter {
         };
         let (func, span) = (iteration.func.clone(), iteration.span);
         self.stack.push(Frame::Iterate(Box::new(iteration)));
-        self.apply(func, args, span)
+        self.apply(&func, args, span)
     }
 
     /// Handles the result of one call made by a higher-order builtin.

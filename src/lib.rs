@@ -21,6 +21,7 @@ pub mod cli;
 pub mod core;
 pub mod diagnostics;
 pub mod hir;
+mod index;
 pub mod lint;
 pub mod loader;
 pub mod output;

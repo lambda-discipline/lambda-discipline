@@ -10,6 +10,8 @@ use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
+use crate::index::to_u32;
+
 /// The largest source file the compiler accepts, in bytes: spans store
 /// offsets as `u32`. Loading a larger file is an error.
 pub const MAX_FILE_LEN: usize = u32::MAX as usize;
@@ -41,8 +43,8 @@ impl Span {
     pub fn new(file: FileId, range: Range<usize>) -> Self {
         Self {
             file,
-            start: range.start as u32,
-            end: range.end as u32,
+            start: to_u32(range.start),
+            end: to_u32(range.end),
         }
     }
 
@@ -175,7 +177,7 @@ impl SourceMap {
     }
 
     pub fn add(&mut self, origin: FileOrigin, text: impl Into<Rc<str>>) -> FileId {
-        let id = FileId(self.files.len() as u32);
+        let id = FileId(to_u32(self.files.len()));
         self.files.push(SourceFile::new(origin, text.into()));
         id
     }
@@ -193,7 +195,7 @@ impl SourceMap {
         self.files
             .iter()
             .position(|f| matches!(&f.origin, FileOrigin::Disk(p) if p == canonical))
-            .map(|i| FileId(i as u32))
+            .map(|i| FileId(to_u32(i)))
     }
 
     pub fn snippet(&self, span: Span) -> &str {
